@@ -29,9 +29,25 @@ import { createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
-const root = createRoot(document.getElementById("root"));
-root.render(h("h1", {}, "Hello world again!"));
+const notes = [
+  { noteId: 1, url: "https://electron.org" },
+  { noteId: 2, url: "https://github.com" },
+];
 
-console.log(
-  '👋 This message is being logged by "renderer.ts", included via Vite'
+const root = createRoot(document.getElementById("root"));
+root.render(App());
+
+function App() {
+  return h("div", {}, [
+    h("textarea", {}),
+    h("div", { style: { height: "2000px", width: "100%", color: "gray" } }),
+  ]);
+}
+
+window.addEventListener(
+  "scroll",
+  (e) => {
+    window.electronAPI.setScroll(window.scrollY);
+  },
+  false
 );
