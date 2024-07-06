@@ -25,29 +25,85 @@
  *  });
  * ```
  */
-import { createElement as h } from "react";
+import { createElement as h, useCallback, useReducer } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
-const notes = [
-  { noteId: 1, url: "https://electron.org" },
-  { noteId: 2, url: "https://github.com" },
-];
+import "@blocknote/core/fonts/inter.css";
+import {
+  useCreateBlockNote,
+  SuggestionMenuController,
+  getDefaultReactSlashMenuItems,
+} from "@blocknote/react";
+import { BlockNoteView } from "@blocknote/mantine";
+import "@blocknote/mantine/style.css";
+import {
+  BlockNoteSchema,
+  SuggestionMenuProseMirrorPlugin,
+  defaultBlockSchema,
+  defaultBlockSpecs,
+  filterSuggestionItems,
+  insertOrUpdateBlock,
+} from "@blocknote/core";
+import { site } from "./Browser/Browser";
+import { RiPagesFill } from "react-icons/ri";
+
+// features
+// you can add a note
+// you can edit a note
+// you can click a "go" button which treats a note as a url, opening a browser
+// ...
+// you can add a note in-between old notes
+// you can reorder notes
+// you can delete a note
+
+// getBoundingClientRect
+// IntersectionObserver
+
+// component side-effects:
+// key, url, {rect}
+// key, url, off-screen
 
 const root = createRoot(document.getElementById("root"));
-root.render(App());
+root.render(h(App, {}));
+
+const schema = BlockNoteSchema.create({
+  blockSpecs: {
+    ...defaultBlockSpecs,
+    site: site,
+  },
+});
+
+// slash menu item to insert a Site
+const addSite = (editor: typeof schema.BlockNoteEditor) => ({
+  title: "Site",
+  onItemClick: () => {
+    insertOrUpdateBlock(editor, {
+      type: "site",
+    });
+  },
+  aliases: ["site", "url", "/"],
+  group: "Browser",
+  icon: h(RiPagesFill, {}),
+});
 
 function App() {
+  const editor = useCreateBlockNote({
+    schema,
+  });
+
   return h("div", {}, [
-    h("textarea", {}),
+    h(BlockNoteView, { editor, slashMenu: false }, [
+      // replaces default slash menu
+      h(SuggestionMenuController, {
+        triggerCharacter: "/",
+        getItems: async (query) =>
+          filterSuggestionItems(
+            [...getDefaultReactSlashMenuItems(editor), addSite(editor)],
+            query
+          ),
+      }),
+    ]),
     h("div", { style: { height: "2000px", width: "100%", color: "gray" } }),
   ]);
 }
-
-window.addEventListener(
-  "scroll",
-  (e) => {
-    window.electronAPI.setScroll(window.scrollY);
-  },
-  false
-);

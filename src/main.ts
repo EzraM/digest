@@ -1,5 +1,7 @@
 import { app, BrowserWindow, WebContentsView, ipcMain } from "electron";
 import path from "path";
+import { Subject, tap } from "rxjs";
+import set from "lodash/set";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require("electron-squirrel-startup")) {
@@ -24,37 +26,63 @@ const createWindow = () => {
     );
   }
 
-  const topView = new WebContentsView();
-  topView.webContents.loadURL("https://electronjs.org");
-  win.contentView.addChildView(topView);
-  topView.setBounds({ x: 20, y: 100, width: 1300, height: 400 });
-
-  const bottomView = new WebContentsView();
-  bottomView.webContents.loadURL("https://github.com/electron/electron");
-  win.contentView.addChildView(bottomView);
-  bottomView.setBounds({ x: 20, y: 900, width: 1300, height: 400 });
-
   const devTools = new BrowserWindow();
   win.webContents.setDevToolsWebContents(devTools.webContents);
   win.webContents.openDevTools({ mode: "detach" });
 
-  let resetBounds = createResetBounds(topView, bottomView);
+  const events$ = new Subject();
+  const views = {};
 
-  ipcMain.on("set-scroll", (e, scrollY) => {
-    resetBounds(scrollY);
+  // each block has a WebContentsView
+  // when layout is updated, resize the view bounds
+  // when url is updated, call loadUrl
+  events$
+    .pipe(
+      // first, check if the webcontentsview exists, and make one if we need one
+      tap((ev) => {
+        const { blockId } = ev;
+
+        // put the data in first
+        if (ev.type == "set-url") {
+          set(views, [blockId, "url"], ev.url);
+        }
+        if (ev.type === "set-layout") {
+          set(views, [blockId, "bounds"], ev.bounds);
+        }
+
+        // create view
+        if (
+          views[blockId].url &&
+          views[blockId].bounds &&
+          !views[blockId].contents
+        ) {
+          console.log(`Create view for ${blockId}, ${ev.type}`);
+          const newView = new WebContentsView();
+          console.log(`New view: `, newView);
+          newView.webContents.loadURL(views[blockId].url);
+          newView.setBounds(views[blockId].bounds);
+
+          win.contentView.addChildView(newView);
+          views[blockId].contents = newView;
+        }
+
+        // update bounds
+        if (views[blockId].contents && ev.type === "set-layout") {
+          views[blockId].contents.setBounds(views[blockId].bounds);
+        }
+      })
+    )
+    .subscribe();
+
+  ipcMain.on("update-browser", (e, layout) => {
+    console.log(`update layout`, layout);
+    events$.next({ ...layout, type: "set-layout" });
+  });
+
+  ipcMain.on("update-browser-url", (e, url) => {
+    events$.next({ ...url, type: "set-url" });
   });
 };
-
-// gameLoop
-function createResetBounds(
-  topView: WebContentsView,
-  bottomView: WebContentsView
-) {
-  return (scrollY) => {
-    topView.setBounds({ x: 20, y: 200 - scrollY, width: 1200, height: 600 });
-    bottomView.setBounds({ x: 20, y: 800 - scrollY, width: 1200, height: 800 });
-  };
-}
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
