@@ -6,15 +6,19 @@ declare global {
   // whether you're running in development or production).
   const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
   const MAIN_WINDOW_VITE_NAME: string;
+  const APP_OVERLAY_VITE_DEV_SERVER_URL: string;
+  const APP_OVERLAY_VITE_NAME: string;
 
   namespace NodeJS {
     interface Process {
       // Used for hot reload after preload scripts.
-      viteDevServers: Record<string, import('vite').ViteDevServer>;
+      viteDevServers: Record<string, import("vite").ViteDevServer>;
     }
   }
 
-  type VitePluginConfig = ConstructorParameters<typeof import('@electron-forge/plugin-vite').VitePlugin>[0];
+  type VitePluginConfig = ConstructorParameters<
+    typeof import("@electron-forge/plugin-vite").VitePlugin
+  >[0];
 
   interface VitePluginRuntimeKeys {
     VITE_DEV_SERVER_URL: `${string}_VITE_DEV_SERVER_URL`;
@@ -22,8 +26,10 @@ declare global {
   }
 }
 
-declare module 'vite' {
-  interface ConfigEnv<K extends keyof VitePluginConfig = keyof VitePluginConfig> {
+declare module "vite" {
+  interface ConfigEnv<
+    K extends keyof VitePluginConfig = keyof VitePluginConfig
+  > {
     root: string;
     forgeConfig: VitePluginConfig;
     forgeConfigSelf: VitePluginConfig[K][number];

@@ -3,7 +3,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  setScroll: (scrollY: number) => ipcRenderer.send("set-scroll", scrollY),
+  //setScroll: (scrollY: number) => ipcRenderer.send("set-scroll", scrollY),
   setUrl: (url: string) => ipcRenderer.send("set-url", url),
   updateBrowser: (browserLayout: {
     x: number;
@@ -11,7 +11,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     width: number;
     height: number;
     blockId: string;
-  }) => ipcRenderer.send("update-browser", browserLayout),
+  }) => ipcRenderer.send("set-layout", browserLayout),
   updateBrowserUrl: (browserUrl: { blockId: string; url: string }) =>
     ipcRenderer.send("update-browser-url", browserUrl),
+  addBlockEvent: (e: any) => ipcRenderer.send("add-block-event", e),
 });

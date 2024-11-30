@@ -25,7 +25,7 @@
  *  });
  * ```
  */
-import { createElement as h, useCallback, useReducer } from "react";
+import { createElement as h, useCallback, useEffect, useReducer } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
@@ -34,6 +34,8 @@ import {
   useCreateBlockNote,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
+  SuggestionMenuProps,
+  DefaultReactSuggestionItem,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
@@ -87,6 +89,44 @@ const addSite = (editor: typeof schema.BlockNoteEditor) => ({
   icon: h(RiPagesFill, {}),
 });
 
+function SuggestionStub(
+  props: SuggestionMenuProps<DefaultReactSuggestionItem>
+) {
+  // props.items
+  // props.loadingState
+  // props.onItemClick
+  // props.selectedIndex
+  console.log(`loading state`, props.loadingState);
+  console.log(`items`, props.items);
+  // onItemClick is not serialiable
+  useEffect(() => {
+    console.log("[Suggestion Stub] add block event");
+    window.electronAPI.addBlockEvent({ type: "open" });
+    return () => {
+      window.electronAPI.addBlockEvent({ type: "close" });
+    };
+  }, []);
+
+  // return null;
+  return h(
+    "div",
+    { className: "slash-menu" },
+    props.items.map((item, index) =>
+      h(
+        "div",
+        {
+          key: `item.key-${index}`,
+          className: `slash-menu-item${
+            props.selectedIndex === index ? " selected" : ""
+          }`,
+          onClick: () => props.onItemClick?.(item),
+        },
+        [item.title]
+      )
+    )
+  );
+}
+
 function App() {
   const editor = useCreateBlockNote({
     schema,
@@ -97,6 +137,7 @@ function App() {
       // replaces default slash menu
       h(SuggestionMenuController, {
         triggerCharacter: "/",
+        suggestionMenuComponent: SuggestionStub,
         getItems: async (query) =>
           filterSuggestionItems(
             [...getDefaultReactSlashMenuItems(editor), addSite(editor)],

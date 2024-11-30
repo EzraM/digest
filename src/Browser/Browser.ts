@@ -30,9 +30,9 @@ const useSize = (target) => {
     if (target?.current) {
       setSize(target.current.getBoundingClientRect());
     }
-  }, [target]);
+  }, [target.current]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const listener = () => {
       if (target?.current) {
         setSize(target.current.getBoundingClientRect());
@@ -42,14 +42,12 @@ const useSize = (target) => {
     return () => window.removeEventListener("scroll", listener);
   }, [target]);
 
-  // Where the magic happens
-  useResizeObserver(target, (entry) => setSize(entry.contentRect));
+  // update on resize
+  //useResizeObserver(target, (entry) => setSize(entry.contentRect));
   return size;
 };
 
 export function Page({ blockId }) {
-  const ref = useRef(null);
-  const size = useSize(ref);
   const [state, dispatch] = useReducer(
     (state, action) => {
       switch (action.type) {
@@ -77,14 +75,6 @@ export function Page({ blockId }) {
   };
 
   useEffect(() => {
-    if (size) {
-      const { width, height, x, y } = size;
-      const update = { bounds: { width, height, x, y }, blockId };
-      window.electronAPI.updateBrowser(update);
-    }
-  }, [size, blockId]);
-
-  useEffect(() => {
     window.electronAPI.updateBrowserUrl({ blockId, url: state.url });
   }, [blockId, state.status, state.url]);
 
@@ -101,14 +91,40 @@ export function Page({ blockId }) {
         onKeyPress: handleInput,
       }),
     state.status === "page" &&
-      h("div", {
-        ref,
-        style: {
-          backgroundColor: "#eee",
-          height: 800,
-          width: "calc(95vw - 118px)",
-          border: "2px solid black",
+      h(
+        "div",
+        {
+          style: {
+            border: "2px solid black",
+            width: "calc(96vw - 118px)",
+            height: 800,
+          },
         },
-      }),
+        [h(BrowserSlot, { blockId })]
+      ),
   ]);
+}
+
+function BrowserSlot({ blockId }) {
+  const ref = useRef(null);
+  const size = useSize(ref);
+
+  useEffect(() => {
+    if (size) {
+      const { width, height, x, y } = size;
+      const update = { bounds: { width, height, x, y }, blockId };
+      window.electronAPI.updateBrowser(update);
+    }
+  }, [size, blockId]);
+
+  return [
+    h("div", {
+      ref,
+      style: {
+        background: "#eee",
+        width: "100%",
+        height: "100%",
+      },
+    }),
+  ];
 }
