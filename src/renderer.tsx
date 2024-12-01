@@ -25,7 +25,7 @@
  *  });
  * ```
  */
-import { createElement as h, useCallback, useEffect, useReducer } from "react";
+import React, { useCallback, useEffect, useReducer } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
@@ -41,14 +41,13 @@ import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import {
   BlockNoteSchema,
-  SuggestionMenuProseMirrorPlugin,
-  defaultBlockSchema,
   defaultBlockSpecs,
   filterSuggestionItems,
   insertOrUpdateBlock,
 } from "@blocknote/core";
 import { site } from "./Browser/Browser";
 import { RiPagesFill } from "react-icons/ri";
+import { log } from "./utils/rendererLogger";
 
 // features
 // you can add a note
@@ -67,7 +66,7 @@ import { RiPagesFill } from "react-icons/ri";
 // key, url, off-screen
 
 const root = createRoot(document.getElementById("root"));
-root.render(h(App, {}));
+root.render(<App />);
 
 const schema = BlockNoteSchema.create({
   blockSpecs: {
@@ -79,6 +78,7 @@ const schema = BlockNoteSchema.create({
 // slash menu item to insert a Site
 const addSite = (editor: typeof schema.BlockNoteEditor) => ({
   title: "Site",
+  key: "site",
   onItemClick: () => {
     insertOrUpdateBlock(editor, {
       type: "site",
@@ -86,45 +86,52 @@ const addSite = (editor: typeof schema.BlockNoteEditor) => ({
   },
   aliases: ["site", "url", "/"],
   group: "Browser",
-  icon: h(RiPagesFill, {}),
+  icon: <RiPagesFill />,
 });
 
 function SuggestionStub(
   props: SuggestionMenuProps<DefaultReactSuggestionItem>
-) {
-  // props.items
-  // props.loadingState
-  // props.onItemClick
-  // props.selectedIndex
-  console.log(`loading state`, props.loadingState);
-  console.log(`items`, props.items);
-  // onItemClick is not serialiable
+): JSX.Element | null {
   useEffect(() => {
-    console.log("[Suggestion Stub] add block event");
+    log.debug("Opening block menu", "SuggestionStub");
     window.electronAPI.addBlockEvent({ type: "open" });
-    return () => {
-      window.electronAPI.addBlockEvent({ type: "close" });
-    };
-  }, []);
 
-  // return null;
-  return h(
-    "div",
-    { className: "slash-menu" },
-    props.items.map((item, index) =>
-      h(
-        "div",
-        {
-          key: `item.key-${index}`,
-          className: `slash-menu-item${
-            props.selectedIndex === index ? " selected" : ""
-          }`,
-          onClick: () => props.onItemClick?.(item),
-        },
-        [item.title]
-      )
-    )
-  );
+    const handleBlockSelect = (blockKey: string) => {
+      log.debug(
+        `Finding item with key: ${blockKey} in items: ${JSON.stringify(
+          props.items
+        )}`,
+        "SuggestionStub"
+      );
+
+      const item = props.items.find((item) => {
+        return (item as any).key === blockKey;
+      });
+
+      if (item) {
+        log.debug(
+          `Found matching item: ${JSON.stringify(item)}`,
+          "SuggestionStub"
+        );
+        props.onItemClick(item);
+      } else {
+        log.warn(
+          `No matching item found for key: ${blockKey}`,
+          "SuggestionStub"
+        );
+      }
+    };
+
+    const cleanup = window.electronAPI.onSelectBlockType(handleBlockSelect);
+
+    return () => {
+      log.debug("Closing block menu", "SuggestionStub");
+      window.electronAPI.addBlockEvent({ type: "close" });
+      cleanup?.();
+    };
+  }, [props.items, props.onItemClick]);
+
+  return null;
 }
 
 function App() {
@@ -132,19 +139,21 @@ function App() {
     schema,
   });
 
-  return h("div", {}, [
-    h(BlockNoteView, { editor, slashMenu: false }, [
-      // replaces default slash menu
-      h(SuggestionMenuController, {
-        triggerCharacter: "/",
-        suggestionMenuComponent: SuggestionStub,
-        getItems: async (query) =>
-          filterSuggestionItems(
-            [...getDefaultReactSlashMenuItems(editor), addSite(editor)],
-            query
-          ),
-      }),
-    ]),
-    h("div", { style: { height: "2000px", width: "100%", color: "gray" } }),
-  ]);
+  return (
+    <div>
+      <BlockNoteView editor={editor} slashMenu={false}>
+        <SuggestionMenuController
+          triggerCharacter="/"
+          suggestionMenuComponent={SuggestionStub}
+          getItems={async (query) =>
+            filterSuggestionItems(
+              [...getDefaultReactSlashMenuItems(editor), addSite(editor)],
+              query
+            )
+          }
+        />
+      </BlockNoteView>
+      <div style={{ height: "2000px", width: "100%", color: "gray" }} />
+    </div>
+  );
 }

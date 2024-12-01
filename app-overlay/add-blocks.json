@@ -116,14 +116,16 @@
     "group": "Media"
   },
   {
-    "key": "image",
+    "key": "file",
     "title": "File",
     "subtext": "Insert a file",
     "aliases": ["file", "upload", "embed", "media", "url"],
     "group": "Media"
   },
   {
+    "key": "site",
     "title": "Site",
+    "subtext": "Open a page from the web",
     "aliases": ["site", "url", "/"],
     "group": "Browser"
   }
