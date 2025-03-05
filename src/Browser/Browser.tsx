@@ -151,6 +151,14 @@ export function Page({ blockId }: PageProps) {
     }
   }, [blockId, state.status, state.url]);
 
+  // Cleanup when component unmounts
+  useEffect(() => {
+    return () => {
+      console.log(`[Browser] Cleaning up browser for blockId: ${blockId}`);
+      window.electronAPI.removeBrowser(blockId);
+    };
+  }, [blockId]);
+
   return (
     <div>
       {state.status === "entry" && (

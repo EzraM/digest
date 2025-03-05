@@ -33,4 +33,9 @@ export interface UrlEvent {
   url: string;
 }
 
-export type BlockEvent = LayoutEvent | UrlEvent;
+export interface RemoveEvent {
+  type: "remove-view";
+  blockId: string;
+}
+
+export type BlockEvent = LayoutEvent | UrlEvent | RemoveEvent;

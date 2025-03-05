@@ -64,6 +64,11 @@ const createWindow = () => {
     viewManager.handleUrlUpdate(url);
   });
 
+  ipcMain.on("remove-browser", (_, blockId) => {
+    log.debug(`Received remove-browser event for blockId: ${blockId}`, "main");
+    viewManager.handleRemoveView(blockId);
+  });
+
   baseWindow.webContents.on("did-finish-load", () => {
     log.debug("Main window finished loading", "main");
   });

@@ -50,6 +50,11 @@ export class ViewManager {
           "ViewManager"
         );
       }
+      if (ev.type === "remove-view") {
+        log.debug(`Removing view for blockId: ${blockId}`, "ViewManager");
+        this.handleViewRemoval(blockId);
+        return; // Skip view creation and update for removal events
+      }
 
       this.handleViewCreation(blockId);
       this.handleViewUpdate(blockId, ev);
@@ -254,5 +259,56 @@ export class ViewManager {
       log.debug(`URL validation failed: ${e}`, "ViewManager");
       return false;
     }
+  }
+
+  private handleViewRemoval(blockId: string) {
+    const view = this.views[blockId];
+    if (!view) {
+      log.debug(
+        `No view found for blockId: ${blockId} to remove`,
+        "ViewManager"
+      );
+      return;
+    }
+
+    if (view.contents) {
+      try {
+        log.debug(
+          `Removing WebContentsView for blockId: ${blockId}`,
+          "ViewManager"
+        );
+        // Remove the view from the window
+        this.baseWindow.contentView.removeChildView(view.contents);
+        // Clean up any event listeners or resources
+        view.contents.webContents.close();
+        // Remove the view from our state
+        delete this.views[blockId];
+        log.debug(
+          `Successfully removed WebContentsView for blockId: ${blockId}`,
+          "ViewManager"
+        );
+      } catch (error) {
+        log.debug(
+          `Failed to remove WebContentsView for blockId: ${blockId}. Error: ${error}`,
+          "ViewManager"
+        );
+      }
+    } else {
+      // If there's no contents but we have the blockId in our state, clean it up
+      delete this.views[blockId];
+      log.debug(
+        `Removed view state for blockId: ${blockId} (no WebContentsView)`,
+        "ViewManager"
+      );
+    }
+  }
+
+  public handleRemoveView(blockId: string) {
+    log.debug(`Handling view removal for blockId: ${blockId}`, "ViewManager");
+
+    this.events$.next({
+      type: "remove-view",
+      blockId,
+    });
   }
 }

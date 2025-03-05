@@ -15,6 +15,7 @@ declare global {
         blockId: string;
       }) => void;
       updateBrowserUrl: (browserUrl: { blockId: string; url: string }) => void;
+      removeBrowser: (blockId: string) => void;
       addBlockEvent: (e: { type: "open" | "close" }) => void;
       onSelectBlockType: (callback: (blockKey: string) => void) => void;
       onBrowserInitialized: (
@@ -52,6 +53,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   }) => ipcRenderer.send("set-layout", browserLayout),
   updateBrowserUrl: (browserUrl: { blockId: string; url: string }) =>
     ipcRenderer.send("update-browser-url", browserUrl),
+  removeBrowser: (blockId: string) =>
+    ipcRenderer.send("remove-browser", blockId),
   addBlockEvent: (e: { type: "open" | "close" }) => {
     const eventName =
       e.type === "open" ? EVENTS.BLOCK_MENU.OPEN : EVENTS.BLOCK_MENU.CLOSE;
