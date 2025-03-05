@@ -17,6 +17,14 @@ declare global {
       updateBrowserUrl: (browserUrl: { blockId: string; url: string }) => void;
       addBlockEvent: (e: { type: "open" | "close" }) => void;
       onSelectBlockType: (callback: (blockKey: string) => void) => void;
+      onBrowserInitialized: (
+        callback: (data: {
+          blockId: string;
+          success: boolean;
+          error?: string;
+          status?: "created" | "loaded" | "existing";
+        }) => void
+      ) => () => void;
     };
   }
 }
@@ -26,6 +34,9 @@ const EVENTS = {
     OPEN: "block-menu:open",
     CLOSE: "block-menu:close",
     SELECT: "block-menu:select",
+  },
+  BROWSER: {
+    INITIALIZED: "browser:initialized",
   },
 } as const;
 
@@ -55,6 +66,36 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(EVENTS.BLOCK_MENU.SELECT, subscription);
     return () => {
       ipcRenderer.removeListener(EVENTS.BLOCK_MENU.SELECT, subscription);
+    };
+  },
+  onBrowserInitialized: (
+    callback: (data: {
+      blockId: string;
+      success: boolean;
+      error?: string;
+      status?: "created" | "loaded" | "existing";
+    }) => void
+  ) => {
+    const subscription = (
+      _: any,
+      data: {
+        blockId: string;
+        success: boolean;
+        error?: string;
+        status?: "created" | "loaded" | "existing";
+      }
+    ) => {
+      log.debug(
+        `Browser initialization status for ${data.blockId}: ${data.success}${
+          data.status ? ` (${data.status})` : ""
+        }`,
+        "preload"
+      );
+      callback(data);
+    };
+    ipcRenderer.on(EVENTS.BROWSER.INITIALIZED, subscription);
+    return () => {
+      ipcRenderer.removeListener(EVENTS.BROWSER.INITIALIZED, subscription);
     };
   },
 });

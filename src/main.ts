@@ -51,12 +51,22 @@ const createWindow = () => {
   const viewManager = new ViewManager(baseWindow);
   const appOverlay = new AppOverlay({}, baseWindow);
 
-  ipcMain.on("set-layout", (_, layout) =>
-    viewManager.handleLayoutUpdate(layout)
-  );
-  ipcMain.on("update-browser-url", (_, url) =>
-    viewManager.handleUrlUpdate(url)
-  );
+  ipcMain.on("set-layout", (_, layout) => {
+    log.debug(`Received set-layout event: ${JSON.stringify(layout)}`, "main");
+    viewManager.handleLayoutUpdate(layout);
+  });
+
+  ipcMain.on("update-browser-url", (_, url) => {
+    log.debug(
+      `Received update-browser-url event: ${JSON.stringify(url)}`,
+      "main"
+    );
+    viewManager.handleUrlUpdate(url);
+  });
+
+  baseWindow.webContents.on("did-finish-load", () => {
+    log.debug("Main window finished loading", "main");
+  });
 
   ipcMain.on(EVENTS.BLOCK_MENU.OPEN, () => {
     log.debug("Opening block menu", "main");
