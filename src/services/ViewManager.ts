@@ -7,15 +7,22 @@ import { log } from "../utils/mainLogger";
 const EVENTS = {
   BROWSER: {
     INITIALIZED: "browser:initialized",
+    NEW_BLOCK: "browser:new-block",
   },
 };
 
 export class ViewManager {
   private views: BlockViewState = {};
   private events$ = new Subject<BlockEvent>();
+  private onLinkClickCallback?: (url: string) => void;
 
   constructor(private baseWindow: BrowserWindow) {
     this.setupEventHandlers();
+  }
+
+  // Method to set the link click callback
+  public setLinkClickCallback(callback: (url: string) => void) {
+    this.onLinkClickCallback = callback;
   }
 
   private setupEventHandlers() {
@@ -108,9 +115,40 @@ export class ViewManager {
           "ViewManager"
         );
 
-        const newView = new WebContentsView();
+        const newView = new WebContentsView({
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            webSecurity: true,
+            allowRunningInsecureContent: false,
+          },
+        });
 
-        // Add event listeners before loading URL
+        // Set up permissive CSP for browser blocks to allow external sites to load their resources
+        newView.webContents.session.webRequest.onHeadersReceived(
+          (details: any, callback: any) => {
+            callback({
+              responseHeaders: {
+                ...details.responseHeaders,
+                // Remove or override restrictive CSP for browser blocks
+                "Content-Security-Policy": [
+                  "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+                    "script-src * 'unsafe-inline' 'unsafe-eval'; " +
+                    "style-src * 'unsafe-inline'; " +
+                    "img-src * data: blob:; " +
+                    "font-src * data:; " +
+                    "connect-src *; " +
+                    "media-src *; " +
+                    "object-src *; " +
+                    "child-src *; " +
+                    "frame-src *;",
+                ],
+              },
+            });
+          }
+        );
+
+        // Add comprehensive event listeners for debugging
         newView.webContents.on("did-start-loading", () => {
           log.debug(
             `WebContents started loading for blockId: ${blockId}`,
@@ -118,11 +156,84 @@ export class ViewManager {
           );
         });
 
+        // Log console messages from the WebContents
+        newView.webContents.on(
+          "console-message",
+          (event, level, message, line, sourceId) => {
+            log.debug(
+              `[${blockId}] Console ${level}: ${message} (${sourceId}:${line})`,
+              "ViewManager"
+            );
+          }
+        );
+
+        // Log all navigation attempts
+        newView.webContents.on(
+          "did-start-navigation",
+          (event, url, isInPlace, isMainFrame) => {
+            log.debug(
+              `[${blockId}] Navigation started: ${url} [inPlace: ${isInPlace}, mainFrame: ${isMainFrame}]`,
+              "ViewManager"
+            );
+          }
+        );
+
+        // Log when DOM is ready (but resources might still be loading)
+        newView.webContents.on("dom-ready", () => {
+          log.debug(
+            `[${blockId}] DOM ready for ${newView.webContents.getURL()}`,
+            "ViewManager"
+          );
+
+          // Inject script to monitor for CSS loading issues
+          newView.webContents
+            .executeJavaScript(
+              `
+            console.log('[Digest Debug] DOM ready, checking for style issues...');
+            
+            // Count stylesheets
+            const stylesheets = document.querySelectorAll('link[rel="stylesheet"], style');
+            console.log(\`[Digest Debug] Found \${stylesheets.length} stylesheets\`);
+            
+            // Check for failed CSS loads
+            document.querySelectorAll('link[rel="stylesheet"]').forEach((link, index) => {
+              link.addEventListener('error', () => {
+                console.error(\`[Digest Debug] Failed to load stylesheet \${index}: \${link.href}\`);
+              });
+              link.addEventListener('load', () => {
+                console.log(\`[Digest Debug] Successfully loaded stylesheet \${index}: \${link.href}\`);
+              });
+            });
+            
+            // Log current computed styles on body
+            const bodyStyles = window.getComputedStyle(document.body);
+            console.log(\`[Digest Debug] Body background: \${bodyStyles.background || 'none'}\`);
+            console.log(\`[Digest Debug] Body color: \${bodyStyles.color || 'inherit'}\`);
+            console.log(\`[Digest Debug] Body font: \${bodyStyles.font || 'inherit'}\`);
+          `
+            )
+            .catch((error) => {
+              log.debug(
+                `[${blockId}] Failed to inject debugging script: ${error}`,
+                "ViewManager"
+              );
+            });
+        });
+
         newView.webContents.on("did-finish-load", () => {
           log.debug(
             `WebContents finished loading for blockId: ${blockId}`,
             "ViewManager"
           );
+
+          // Log additional debugging info about the loaded page
+          const url = newView.webContents.getURL();
+          const title = newView.webContents.getTitle();
+          log.debug(
+            `[${blockId}] Page loaded: "${title}" at ${url}`,
+            "ViewManager"
+          );
+
           // Send success notification when page is fully loaded
           this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
             blockId,
@@ -135,20 +246,109 @@ export class ViewManager {
           );
         });
 
-        newView.webContents.on(
-          "did-fail-load",
-          (event, errorCode, errorDescription) => {
+        // Add devtools support for each browser block
+        if (process.env.NODE_ENV === "development") {
+          try {
             log.debug(
-              `WebContents failed to load for blockId: ${blockId}. Error: ${errorDescription} (${errorCode})`,
+              `Attaching devtools for browser block ${blockId}`,
               "ViewManager"
             );
-            this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-              blockId,
-              success: false,
-              error: `Failed to load: ${errorDescription} (${errorCode})`,
-            });
+            newView.webContents.openDevTools({ mode: "detach" });
+          } catch (error) {
+            log.debug(
+              `Failed to attach devtools for ${blockId}: ${error}`,
+              "ViewManager"
+            );
+          }
+        }
+
+        // Update the main page load failure handler to be more specific
+        newView.webContents.on(
+          "did-fail-load",
+          (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+            if (isMainFrame) {
+              log.debug(
+                `Main frame failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
+                "ViewManager"
+              );
+              this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+                blockId,
+                success: false,
+                error: `Failed to load: ${errorDescription} (${errorCode})`,
+              });
+            } else {
+              log.debug(
+                `Resource failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
+                "ViewManager"
+              );
+            }
           }
         );
+
+        // Handle new window requests (e.g., link clicks with target="_blank")
+        newView.webContents.setWindowOpenHandler(({ url }) => {
+          log.debug(
+            `New window request in blockId: ${blockId}, URL: ${url}`,
+            "ViewManager"
+          );
+          this.handleLinkClick(url);
+          return { action: "deny" }; // Prevent the default window open behavior
+        });
+
+        // Handle regular link navigation
+        newView.webContents.on("will-navigate", (event, url) => {
+          const currentUrl = newView.webContents.getURL();
+
+          log.debug(
+            `Navigation event in blockId: ${blockId}, from: ${
+              currentUrl || "unknown"
+            } to: ${url}`,
+            "ViewManager"
+          );
+
+          // Only intercept external links, not page refreshes or internal navigation
+          if (currentUrl && this.isExternalNavigation(currentUrl, url)) {
+            log.debug(
+              `Navigation intercepted in blockId: ${blockId}, from: ${currentUrl} to: ${url}`,
+              "ViewManager"
+            );
+            event.preventDefault();
+            this.handleLinkClick(url);
+          } else {
+            log.debug(
+              `Allowing internal navigation in blockId: ${blockId}, from: ${
+                currentUrl || "unknown"
+              } to: ${url}`,
+              "ViewManager"
+            );
+          }
+        });
+
+        // Also listen for page redirects to catch server-side redirects
+        newView.webContents.on(
+          "did-navigate",
+          (event, url, httpResponseCode, httpStatusText) => {
+            log.debug(
+              `Did navigate in blockId: ${blockId}, to: ${url}, status: ${httpResponseCode} ${httpStatusText}`,
+              "ViewManager"
+            );
+          }
+        );
+
+        // Listen for click events
+        newView.webContents.on("before-input-event", (event, input) => {
+          if (
+            input.type === "keyDown" &&
+            input.key === "Enter" &&
+            input.control
+          ) {
+            log.debug(
+              `Detected Ctrl+Enter in blockId: ${blockId}`,
+              "ViewManager"
+            );
+            // This could be used for special key combinations to force new window
+          }
+        });
 
         // Set bounds before loading URL
         log.debug(
@@ -258,6 +458,64 @@ export class ViewManager {
     } catch (e) {
       log.debug(`URL validation failed: ${e}`, "ViewManager");
       return false;
+    }
+  }
+
+  // Helper method to determine if navigation is to an external URL
+  private isExternalNavigation(currentUrl: string, targetUrl: string): boolean {
+    try {
+      const current = new URL(currentUrl);
+      const target = new URL(targetUrl);
+
+      // Check if it's the same origin (hostname and port)
+      if (current.origin !== target.origin) {
+        return true;
+      }
+
+      // Same origin but different path (ignoring hash changes)
+      const currentPathAndQuery = current.pathname + current.search;
+      const targetPathAndQuery = target.pathname + target.search;
+
+      return currentPathAndQuery !== targetPathAndQuery;
+    } catch (e) {
+      // If there's any error in parsing URLs, treat as external
+      log.debug(`Error comparing URLs: ${e}`, "ViewManager");
+      return true;
+    }
+  }
+
+  // Handle link clicks by creating a new browser block
+  private handleLinkClick(url: string) {
+    log.debug(`Handling link click to URL: ${url}`, "ViewManager");
+
+    try {
+      // Ensure the URL is valid before sending
+      if (!this.isValidUrl(url)) {
+        log.debug(
+          `Invalid URL, cannot create browser block: ${url}`,
+          "ViewManager"
+        );
+        return;
+      }
+
+      log.debug(
+        `Sending new browser block event for URL: ${url}`,
+        "ViewManager"
+      );
+
+      // Call the callback function to create a new browser block
+      // This will be set by main.ts to properly target the correct WebContents
+      if (this.onLinkClickCallback) {
+        this.onLinkClickCallback(url);
+        log.debug(`Successfully sent new browser block event`, "ViewManager");
+      } else {
+        log.debug(
+          `No link click callback available, cannot create browser block`,
+          "ViewManager"
+        );
+      }
+    } catch (error) {
+      log.debug(`Error handling link click: ${error}`, "ViewManager");
     }
   }
 

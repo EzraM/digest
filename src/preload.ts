@@ -3,32 +3,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { log } from "./utils/mainLogger";
 
-declare global {
-  interface Window {
-    electronAPI: {
-      setUrl: (url: string) => void;
-      updateBrowser: (browserLayout: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        blockId: string;
-      }) => void;
-      updateBrowserUrl: (browserUrl: { blockId: string; url: string }) => void;
-      removeBrowser: (blockId: string) => void;
-      addBlockEvent: (e: { type: "open" | "close" }) => void;
-      onSelectBlockType: (callback: (blockKey: string) => void) => void;
-      onBrowserInitialized: (
-        callback: (data: {
-          blockId: string;
-          success: boolean;
-          error?: string;
-          status?: "created" | "loaded" | "existing";
-        }) => void
-      ) => () => void;
-    };
-  }
-}
+log.debug("Preload script initialized", "preload");
 
 const EVENTS = {
   BLOCK_MENU: {
@@ -38,11 +13,11 @@ const EVENTS = {
   },
   BROWSER: {
     INITIALIZED: "browser:initialized",
+    NEW_BLOCK: "browser:new-block",
   },
 } as const;
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  //setScroll: (scrollY: number) => ipcRenderer.send("set-scroll", scrollY),
   setUrl: (url: string) => ipcRenderer.send("set-url", url),
   updateBrowser: (browserLayout: {
     x: number;
@@ -50,16 +25,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     width: number;
     height: number;
     blockId: string;
-  }) => ipcRenderer.send("set-layout", browserLayout),
-  updateBrowserUrl: (browserUrl: { blockId: string; url: string }) =>
-    ipcRenderer.send("update-browser-url", browserUrl),
-  removeBrowser: (blockId: string) =>
-    ipcRenderer.send("remove-browser", blockId),
+  }) => {
+    ipcRenderer.send("update-browser", browserLayout);
+  },
+  updateBrowserUrl: (browserUrl: { blockId: string; url: string }) => {
+    ipcRenderer.send("update-browser-url", browserUrl);
+  },
+  removeBrowser: (blockId: string) => {
+    ipcRenderer.send("remove-browser", blockId);
+  },
   addBlockEvent: (e: { type: "open" | "close" }) => {
-    const eventName =
-      e.type === "open" ? EVENTS.BLOCK_MENU.OPEN : EVENTS.BLOCK_MENU.CLOSE;
-    log.debug(`Sending event: ${eventName}`, "preload");
-    ipcRenderer.send(eventName);
+    log.debug(`Sending event: block-menu:${e.type}`, "preload");
+    ipcRenderer.send(`block-menu:${e.type}`);
   },
   onSelectBlockType: (callback: (blockKey: string) => void) => {
     const subscription = (_: any, blockKey: string) => {
@@ -99,6 +76,29 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(EVENTS.BROWSER.INITIALIZED, subscription);
     return () => {
       ipcRenderer.removeListener(EVENTS.BROWSER.INITIALIZED, subscription);
+    };
+  },
+  onNewBrowserBlock: (callback: (data: { url: string }) => void) => {
+    const subscription = (_: any, data: any) => {
+      // Handle both string and object formats
+      const url = typeof data === "string" ? data : data?.url;
+
+      if (!url) {
+        console.error("Invalid data format for browser:new-block event:", data);
+        return;
+      }
+
+      log.debug(
+        `Received request to create new browser block with URL: ${url}`,
+        "preload"
+      );
+      callback({ url });
+    };
+
+    ipcRenderer.on(EVENTS.BROWSER.NEW_BLOCK, subscription);
+
+    return () => {
+      ipcRenderer.removeListener(EVENTS.BROWSER.NEW_BLOCK, subscription);
     };
   },
 });

@@ -1,4 +1,10 @@
-import { app, BrowserWindow, WebContentsView, ipcMain } from "electron";
+import {
+  app,
+  BrowserWindow,
+  WebContentsView,
+  ipcMain,
+  globalShortcut,
+} from "electron";
 import path from "path";
 import { ViewManager } from "./services/ViewManager";
 import { viteConfig } from "./config/vite";
@@ -15,7 +21,16 @@ const EVENTS = {
     CLOSE: "block-menu:close",
     SELECT: "block-menu:select",
   },
+  BROWSER: {
+    INITIALIZED: "browser:initialized",
+    NEW_BLOCK: "browser:new-block",
+  },
 } as const;
+
+// Global reference to keep the window from being garbage collected
+let mainWindow: BrowserWindow | null = null;
+let globalViewManager: ViewManager | null = null;
+let globalAppView: WebContentsView | null = null;
 
 const createWindow = () => {
   const baseWindow = new BrowserWindow({
@@ -23,20 +38,44 @@ const createWindow = () => {
     height: 900,
   });
 
-  const appView = new WebContentsView({
+  const appViewInstance = new WebContentsView({
     webPreferences: {
       preload: path.join(__dirname, `preload.js`),
-      nodeIntegration: true,
+      // Security best practices for Electron
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false, // Need to disable sandbox to use contextBridge
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
-  appView.setBounds({ x: 0, y: 0, height: 900, width: 1400 });
+  appViewInstance.setBounds({ x: 0, y: 0, height: 900, width: 1400 });
 
-  baseWindow.contentView.addChildView(appView);
+  // Set Content-Security-Policy
+  appViewInstance.webContents.session.webRequest.onHeadersReceived(
+    (details: any, callback: any) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self'; " +
+              "script-src 'self' 'unsafe-inline'; " + // Allow inline scripts for development
+              "style-src 'self' 'unsafe-inline'; " + // Allow inline styles
+              "connect-src 'self' https://example.com; " + // Allow connections to example.com
+              "img-src 'self' data: https:; " + // Allow images from https and data URLs
+              "font-src 'self' data:;", // Allow fonts from data URLs
+          ],
+        },
+      });
+    }
+  );
+
+  baseWindow.contentView.addChildView(appViewInstance);
 
   if (viteConfig.mainWindow.devServerUrl) {
-    appView.webContents.loadURL(viteConfig.mainWindow.devServerUrl);
+    appViewInstance.webContents.loadURL(viteConfig.mainWindow.devServerUrl);
   } else {
-    appView.webContents.loadFile(
+    appViewInstance.webContents.loadFile(
       path.join(
         __dirname,
         `../renderer/${viteConfig.mainWindow.name}/index.html`
@@ -45,52 +84,120 @@ const createWindow = () => {
   }
 
   const devTools = new BrowserWindow();
-  appView.webContents.setDevToolsWebContents(devTools.webContents);
-  appView.webContents.openDevTools({ mode: "detach" });
+  appViewInstance.webContents.setDevToolsWebContents(devTools.webContents);
+  appViewInstance.webContents.openDevTools({ mode: "detach" });
+
+  // Store global references
+  globalAppView = appViewInstance;
 
   const viewManager = new ViewManager(baseWindow);
   const appOverlay = new AppOverlay({}, baseWindow);
 
-  ipcMain.on("set-layout", (_, layout) => {
-    log.debug(`Received set-layout event: ${JSON.stringify(layout)}`, "main");
-    viewManager.handleLayoutUpdate(layout);
+  // Set up the link click callback for ViewManager to properly target the correct WebContents
+  viewManager.setLinkClickCallback((url: string) => {
+    log.debug(`Link click callback called with URL: ${url}`, "main");
+
+    // Forward the new block event to the main renderer (appView, not mainWindow)
+    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
+      log.debug(`Forwarding new block event to appView: ${url}`, "main");
+      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url });
+    } else {
+      log.debug(
+        "Cannot forward new block event - appView not available",
+        "main"
+      );
+    }
   });
 
-  ipcMain.on("update-browser-url", (_, url) => {
-    log.debug(
-      `Received update-browser-url event: ${JSON.stringify(url)}`,
-      "main"
-    );
-    viewManager.handleUrlUpdate(url);
-  });
+  // Store global references
+  mainWindow = baseWindow;
+  globalViewManager = viewManager;
 
-  ipcMain.on("remove-browser", (_, blockId) => {
-    log.debug(`Received remove-browser event for blockId: ${blockId}`, "main");
-    viewManager.handleRemoveView(blockId);
-  });
+  // Set up IPC handlers
+  setupIpcHandlers(viewManager, appOverlay);
 
-  baseWindow.webContents.on("did-finish-load", () => {
-    log.debug("Main window finished loading", "main");
-  });
-
-  ipcMain.on(EVENTS.BLOCK_MENU.OPEN, () => {
-    log.debug("Opening block menu", "main");
-    appOverlay.show();
-  });
-
-  ipcMain.on(EVENTS.BLOCK_MENU.CLOSE, () => {
-    log.debug("Closing block menu", "main");
-    appOverlay.hide();
-  });
-
-  ipcMain.on(EVENTS.BLOCK_MENU.SELECT, (_, blockKey) => {
-    log.debug(`Block selected: ${blockKey}`, "main");
-    appView.webContents.send(EVENTS.BLOCK_MENU.SELECT, blockKey);
-    appOverlay.hide();
+  baseWindow.on("closed", () => {
+    mainWindow = null;
+    globalViewManager = null;
+    globalAppView = null;
   });
 };
 
-app.on("ready", createWindow);
+const setupIpcHandlers = (viewManager: ViewManager, appOverlay: AppOverlay) => {
+  // Handle URL setting
+  ipcMain.on("set-url", (_, url) => {
+    log.debug(`Received set-url event with URL: ${url}`, "main");
+  });
+
+  // Handle browser updates
+  ipcMain.on("update-browser", (_, browserLayout) => {
+    log.debug(`Received update-browser event`, "main");
+    viewManager.handleLayoutUpdate(browserLayout);
+  });
+
+  // Handle browser URL updates
+  ipcMain.on("update-browser-url", (_, data) => {
+    log.debug(
+      `Received update-browser-url event for block ${data.blockId}`,
+      "main"
+    );
+    viewManager.handleUrlUpdate(data);
+  });
+
+  // Handle browser removal
+  ipcMain.on("remove-browser", (_, blockId) => {
+    log.debug(`Received remove-browser event for block ${blockId}`, "main");
+    viewManager.handleRemoveView(blockId);
+  });
+
+  // Handle block menu events - now properly connected to HUD
+  ipcMain.on("block-menu:open", () => {
+    log.debug("Block menu open event received - showing HUD", "main");
+    appOverlay.show();
+  });
+
+  ipcMain.on("block-menu:close", () => {
+    log.debug("Block menu close event received - hiding HUD", "main");
+    appOverlay.hide();
+  });
+
+  // Handle block selection from HUD
+  ipcMain.on("block-menu:select", (_, blockKey) => {
+    log.debug(`Block selected from HUD: ${blockKey}`, "main");
+    appOverlay.hide();
+
+    // Forward the selection back to the main renderer (appView, not mainWindow)
+    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
+      log.debug(`Forwarding block selection to appView: ${blockKey}`, "main");
+      globalAppView.webContents.send(EVENTS.BLOCK_MENU.SELECT, blockKey);
+    } else {
+      log.debug(
+        "Cannot forward block selection - appView not available",
+        "main"
+      );
+    }
+  });
+};
+
+// Create a new browser block for testing
+const testNewBrowserBlock = (url = "https://example.com") => {
+  log.debug("Creating test browser block", "main");
+
+  if (globalAppView && !globalAppView.webContents.isDestroyed()) {
+    globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url });
+  }
+};
+
+// Register the global shortcut when the app is ready
+app.whenReady().then(() => {
+  createWindow();
+
+  // Register a Cmd+Shift+N shortcut for testing new browser block creation
+  globalShortcut.register("CommandOrControl+Shift+N", () => {
+    log.debug("Shortcut triggered for new browser block", "main");
+    testNewBrowserBlock();
+  });
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
@@ -102,4 +209,9 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+// Clean up global shortcuts when quitting
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });

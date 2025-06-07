@@ -11,6 +11,32 @@ const EVENTS = {
   },
 } as const;
 
+// Add logging for all IPC events
+const originalSend = ipcRenderer.send;
+ipcRenderer.send = function (channel: string, ...args: any[]) {
+  log.debug(
+    `Sending IPC event on channel: ${channel}, args: ${JSON.stringify(args)}`,
+    "app-overlay:preload"
+  );
+  return originalSend.apply(ipcRenderer, [channel, ...args]);
+};
+
+// Add logging for window events
+window.addEventListener("blur", () => {
+  log.debug("Window blur event in preload context", "app-overlay:preload");
+});
+
+window.addEventListener("focus", () => {
+  log.debug("Window focus event in preload context", "app-overlay:preload");
+});
+
+window.addEventListener("click", (event) => {
+  log.debug(
+    `Window click event in preload context, target: ${event.target}`,
+    "app-overlay:preload"
+  );
+});
+
 contextBridge.exposeInMainWorld("electronAPI", {
   selectBlockType: (blockKey: string) => {
     log.debug(`Selecting block with key: ${blockKey}`, "app-overlay:preload");
