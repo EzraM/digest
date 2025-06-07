@@ -140,7 +140,8 @@ export class ViewManager {
                     "connect-src *; " +
                     "media-src *; " +
                     "object-src *; " +
-                    "child-src *; " +
+                    "child-src * blob:; " +
+                    "worker-src * blob: data:; " +
                     "frame-src *;",
                 ],
               },
