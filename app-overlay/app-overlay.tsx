@@ -18,6 +18,7 @@ declare global {
   interface Window {
     electronAPI: {
       selectBlockType: (blockKey: string) => void;
+      cancelSlashCommand: () => void;
     };
   }
 }
@@ -38,16 +39,25 @@ const theme = createTheme({
     Combobox: {
       styles: {
         dropdown: {
-          border: "1px solid var(--mantine-color-gray-3)",
-          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.1)",
+          border: "none",
+          boxShadow: "none",
+          padding: 0,
+          background: "transparent",
+        },
+        options: {
+          padding: 0,
+          margin: 0,
         },
         option: {
-          "&[dataSelected='true']": {
+          "&[data-combobox-selected]": {
             backgroundColor: "var(--mantine-color-blue-0)",
+            color: "var(--mantine-color-blue-9)",
           },
           "&:hover": {
-            backgroundColor: "var(--mantine-color-blue-0)",
+            backgroundColor: "var(--mantine-color-gray-0)",
           },
+          borderRadius: "6px",
+          margin: "1px 0",
         },
       },
     },
@@ -72,12 +82,60 @@ const App = () => {
 
   // Focus the input field when the component mounts
   useEffect(() => {
-    // Short timeout to ensure the DOM is fully rendered
-    const timer = setTimeout(() => {
+    console.log("[HUD Focus] Setting up focus for HUD input");
+    log.debug("Setting up focus for HUD input", "app-overlay");
+
+    // Try multiple times to ensure focus works
+    const attemptFocus = (attempt = 1, maxAttempts = 5) => {
+      console.log(
+        `[HUD Focus] Attempt ${attempt}, inputRef.current:`,
+        !!inputRef.current
+      );
+
       if (inputRef.current) {
-        inputRef.current.focus();
+        console.log(`[HUD Focus] Focus attempt ${attempt} for HUD input`);
+        log.debug(`Focus attempt ${attempt} for HUD input`, "app-overlay");
+        try {
+          inputRef.current.focus();
+
+          // Check if focus was successful
+          const focused = document.activeElement === inputRef.current;
+          console.log(
+            `[HUD Focus] Focus success:`,
+            focused,
+            "activeElement:",
+            document.activeElement
+          );
+
+          if (focused) {
+            console.log("[HUD Focus] Successfully focused HUD input");
+            log.debug("Successfully focused HUD input", "app-overlay");
+            return;
+          }
+        } catch (error) {
+          console.log(`[HUD Focus] Focus attempt ${attempt} failed:`, error);
+          log.debug(`Focus attempt ${attempt} failed: ${error}`, "app-overlay");
+        }
+      } else {
+        console.log(
+          `[HUD Focus] inputRef.current is null on attempt ${attempt}`
+        );
       }
-    }, 50);
+
+      // If focus failed and we haven't exceeded max attempts, try again
+      if (attempt < maxAttempts) {
+        setTimeout(() => attemptFocus(attempt + 1, maxAttempts), 50);
+      } else {
+        console.log("[HUD Focus] All focus attempts failed");
+        log.debug("All focus attempts failed", "app-overlay");
+      }
+    };
+
+    // Start focus attempts after a brief delay to let the DOM settle
+    const timer = setTimeout(() => {
+      console.log("[HUD Focus] Starting focus attempts");
+      attemptFocus();
+    }, 100);
 
     return () => clearTimeout(timer);
   }, []);
@@ -121,8 +179,17 @@ const App = () => {
         "app-overlay"
       );
       window.electronAPI.selectBlockType(selectedOption.key);
+
+      // Clear search after selection to close the HUD
+      setSearch("");
+
+      // Note: Focus will be returned to main window by AppOverlay.hide()
+      // when the HUD closes automatically after this selection
+      log.debug(
+        "Block selection sent, HUD should close and return focus",
+        "app-overlay"
+      );
     }
-    setSearch("");
   };
 
   // Add logging for window events
@@ -157,12 +224,25 @@ const App = () => {
           display: "flex",
           flexDirection: "column",
           height: "100vh",
-          padding: "0.75rem",
+          padding: "12px",
           backgroundColor: "#fff",
+          boxSizing: "border-box",
         }}
         onClick={(e) => {
           log.debug(`Container div clicked: ${e.target}`, "app-overlay");
         }}
+        onKeyDown={(e) => {
+          // Handle escape key to cancel slash command
+          if (e.key === "Escape") {
+            log.debug(
+              "Escape key pressed in HUD, cancelling slash command",
+              "app-overlay"
+            );
+            // Cancel the entire slash command, which will hide the HUD
+            window.electronAPI?.cancelSlashCommand();
+          }
+        }}
+        tabIndex={-1} // Make container focusable for keyboard events
       >
         <div style={{ flexShrink: 0, width: "100%" }}>
           <TextInput
@@ -181,25 +261,13 @@ const App = () => {
             }}
             onClick={(event) => {
               log.debug("TextInput onClick event", "app-overlay");
-              log.debug(`Event target: ${event.target}`, "app-overlay");
-              log.debug(
-                `Event currentTarget: ${event.currentTarget}`,
-                "app-overlay"
-              );
 
-              // Log all event properties for debugging
-              const eventProps = Object.keys(event).filter(
-                (key) =>
-                  typeof event[key] !== "function" &&
-                  key !== "target" &&
-                  key !== "currentTarget"
-              );
-              log.debug(
-                `Event properties: ${JSON.stringify(eventProps)}`,
-                "app-overlay"
-              );
+              // Ensure input gets focus when clicked
+              if (inputRef.current) {
+                log.debug("Focusing input after click", "app-overlay");
+                inputRef.current.focus();
+              }
 
-              // Prevent event propagation to see if this helps identify the issue
               event.stopPropagation();
             }}
             size="md"
@@ -218,12 +286,31 @@ const App = () => {
           style={{
             flexGrow: 1,
             overflowY: "auto",
-            marginTop: "0.75rem",
+            marginTop: "8px",
             width: "100%",
+            minHeight: 0, // Important for flex scroll containers
           }}
         >
-          <Combobox store={combobox} onOptionSubmit={handleOptionSelect}>
-            <Combobox.Options>
+          <Combobox
+            store={combobox}
+            onOptionSubmit={handleOptionSelect}
+            styles={{
+              dropdown: {
+                border: "none",
+                padding: 0,
+                background: "transparent",
+                boxShadow: "none",
+              },
+            }}
+          >
+            <Combobox.Options
+              style={{
+                maxHeight: "none", // Remove height restrictions
+                overflow: "visible", // Remove internal scrollbars
+                padding: 0,
+                margin: 0,
+              }}
+            >
               {filteredOptions.length === 0 ? (
                 <Combobox.Empty>No results found</Combobox.Empty>
               ) : (
@@ -232,9 +319,10 @@ const App = () => {
                     value={option.key}
                     key={option.key}
                     style={{
-                      padding: "8px 12px",
-                      borderRadius: "4px",
-                      margin: "2px 0",
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      margin: "1px 0",
+                      cursor: "pointer",
                     }}
                   >
                     <div
@@ -312,7 +400,19 @@ const App = () => {
   );
 };
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+// Create root only if it doesn't exist to prevent the duplicate root warning
+const rootElement = document.getElementById("root")!;
+let root = (rootElement as any)._reactRoot;
+
+if (!root) {
+  root = ReactDOM.createRoot(rootElement);
+  (rootElement as any)._reactRoot = root;
+  log.debug("Created new React root for HUD", "app-overlay");
+} else {
+  log.debug("Reusing existing React root for HUD", "app-overlay");
+}
+
+root.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>

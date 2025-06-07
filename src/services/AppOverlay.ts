@@ -8,10 +8,16 @@ export class AppOverlay {
   private overlay: WebContentsView | null = null;
   private baseWindow: BrowserWindow;
   private state: OverlayState;
+  private globalAppView: any; // WebContentsView reference
 
-  constructor(state: OverlayState, baseWindow: BrowserWindow) {
+  constructor(
+    state: OverlayState,
+    baseWindow: BrowserWindow,
+    globalAppView: any
+  ) {
     this.state = state;
     this.baseWindow = baseWindow;
+    this.globalAppView = globalAppView;
     log.debug("AppOverlay service initialized", "AppOverlay");
   }
 
@@ -37,12 +43,14 @@ export class AppOverlay {
             responseHeaders: {
               ...details.responseHeaders,
               "Content-Security-Policy": [
-                "default-src 'self'; " +
-                  "script-src 'self' 'unsafe-inline'; " + // Allow inline scripts for development
-                  "style-src 'self' 'unsafe-inline'; " + // Allow inline styles
-                  "connect-src 'self' https://example.com; " + // Allow connections to example.com
-                  "img-src 'self' data: https:; " + // Allow images from https and data URLs
-                  "font-src 'self' data:;", // Allow fonts from data URLs
+                "default-src 'self' 'unsafe-inline' data: blob:; " +
+                  "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " + // Allow inline scripts and eval for Vite
+                  "style-src 'self' 'unsafe-inline' data: blob: https:; " + // Allow external stylesheets for Mantine
+                  "connect-src 'self' wss: ws: https:; " + // Allow websockets for HMR and external connections
+                  "img-src 'self' data: https: blob:; " + // Allow images from various sources
+                  "font-src 'self' data: https: blob:; " + // Allow fonts from various sources including Google Fonts
+                  "worker-src 'self' blob:; " + // Allow web workers
+                  "child-src 'self';", // Allow child contexts
               ],
             },
           });
@@ -65,7 +73,7 @@ export class AppOverlay {
         );
       }
 
-      // Add event listeners to track overlay webContents events
+      // Add comprehensive event listeners to track overlay webContents events
       appOverlay.webContents.on("blur", () => {
         log.debug("Overlay webContents blur event", "AppOverlay");
       });
@@ -76,7 +84,68 @@ export class AppOverlay {
 
       appOverlay.webContents.on("did-finish-load", () => {
         log.debug("Overlay webContents did-finish-load event", "AppOverlay");
+
+        // Inject CSS debugging script for HUD styling issues
+        appOverlay.webContents
+          .executeJavaScript(
+            `
+          console.log('[HUD Debug] DOM ready, checking Mantine styling...');
+          
+          // Count stylesheets
+          const stylesheets = document.querySelectorAll('link[rel="stylesheet"], style');
+          console.log(\`[HUD Debug] Found \${stylesheets.length} stylesheets\`);
+          
+          // Check for failed CSS loads
+          document.querySelectorAll('link[rel="stylesheet"]').forEach((link, index) => {
+            link.addEventListener('error', () => {
+              console.error(\`[HUD Debug] Failed to load stylesheet \${index}: \${link.href}\`);
+            });
+            link.addEventListener('load', () => {
+              console.log(\`[HUD Debug] Successfully loaded stylesheet \${index}: \${link.href}\`);
+            });
+          });
+          
+          // Check for Mantine CSS variables
+          const rootElement = document.documentElement;
+          const computedStyle = window.getComputedStyle(rootElement);
+          const mantineColorBlue = computedStyle.getPropertyValue('--mantine-color-blue-6');
+          console.log(\`[HUD Debug] Mantine blue color variable: \${mantineColorBlue || 'NOT FOUND'}\`);
+          
+          // Log body styles
+          const bodyStyles = window.getComputedStyle(document.body);
+          console.log(\`[HUD Debug] Body background: \${bodyStyles.background || 'none'}\`);
+          console.log(\`[HUD Debug] Body font-family: \${bodyStyles.fontFamily || 'inherit'}\`);
+        `
+          )
+          .catch((error) => {
+            log.debug(
+              `Failed to inject HUD debugging script: ${error}`,
+              "AppOverlay"
+            );
+          });
       });
+
+      // Log console messages from the HUD
+      appOverlay.webContents.on(
+        "console-message",
+        (event, level, message, line, sourceId) => {
+          log.debug(
+            `[HUD] Console ${level}: ${message} (${sourceId}:${line})`,
+            "AppOverlay"
+          );
+        }
+      );
+
+      // Log resource loading failures
+      appOverlay.webContents.on(
+        "did-fail-load",
+        (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+          log.debug(
+            `[HUD] Resource failed to load: ${validatedURL} - ${errorDescription} (${errorCode}) [mainFrame: ${isMainFrame}]`,
+            "AppOverlay"
+          );
+        }
+      );
 
       if (process.env.NODE_ENV === "development") {
         const devTools = new BrowserWindow();
@@ -96,6 +165,23 @@ export class AppOverlay {
     if (this.overlay) {
       this.baseWindow.contentView.addChildView(this.overlay);
       log.debug("Overlay added to baseWindow contentView", "AppOverlay");
+
+      // Transfer focus to the HUD WebContents so keyboard input goes there
+      // Use a small delay to let the BlockNote suggestion menu stabilize
+      setTimeout(() => {
+        if (this.overlay && !this.overlay.webContents.isDestroyed()) {
+          log.debug("Transferring focus to HUD WebContents", "AppOverlay");
+          try {
+            this.overlay.webContents.focus();
+            log.debug("Successfully focused HUD WebContents", "AppOverlay");
+          } catch (error) {
+            log.debug(
+              `Failed to focus HUD WebContents: ${error}`,
+              "AppOverlay"
+            );
+          }
+        }
+      }, 100); // Brief delay to let suggestion menu stabilize
     }
   }
 
@@ -104,6 +190,23 @@ export class AppOverlay {
     if (this.overlay) {
       this.baseWindow.contentView.removeChildView(this.overlay);
       log.debug("Overlay removed from baseWindow contentView", "AppOverlay");
+
+      // Return focus to the app view (where React/BlockNote runs) when HUD is hidden
+      try {
+        if (
+          this.globalAppView &&
+          !this.globalAppView.webContents.isDestroyed()
+        ) {
+          this.globalAppView.webContents.focus();
+          log.debug("Returned focus to app view", "AppOverlay");
+        } else {
+          // Fallback to base window if app view not available
+          this.baseWindow.webContents.focus();
+          log.debug("Returned focus to base window (fallback)", "AppOverlay");
+        }
+      } catch (error) {
+        log.debug(`Failed to return focus: ${error}`, "AppOverlay");
+      }
     }
   }
 

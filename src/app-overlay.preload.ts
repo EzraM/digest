@@ -42,4 +42,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     log.debug(`Selecting block with key: ${blockKey}`, "app-overlay:preload");
     ipcRenderer.send(EVENTS.BLOCK_MENU.SELECT, blockKey);
   },
+  cancelSlashCommand: () => {
+    log.debug("Cancelling slash command from HUD", "app-overlay:preload");
+    ipcRenderer.send("slash-command:cancel");
+  },
 });

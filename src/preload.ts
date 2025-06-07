@@ -38,6 +38,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     log.debug(`Sending event: block-menu:${e.type}`, "preload");
     ipcRenderer.send(`block-menu:${e.type}`);
   },
+  startSlashCommand: () => {
+    log.debug("Starting slash command", "preload");
+    ipcRenderer.send("slash-command:start");
+  },
+  cancelSlashCommand: () => {
+    log.debug("Cancelling slash command", "preload");
+    ipcRenderer.send("slash-command:cancel");
+  },
   onSelectBlockType: (callback: (blockKey: string) => void) => {
     const subscription = (_: any, blockKey: string) => {
       log.debug(`Received block selection: ${blockKey}`, "preload");
@@ -46,6 +54,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(EVENTS.BLOCK_MENU.SELECT, subscription);
     return () => {
       ipcRenderer.removeListener(EVENTS.BLOCK_MENU.SELECT, subscription);
+    };
+  },
+  onSlashCommandInsert: (callback: (blockKey: string) => void) => {
+    const subscription = (_: any, blockKey: string) => {
+      log.debug(
+        `Received slash command block insertion: ${blockKey}`,
+        "preload"
+      );
+      callback(blockKey);
+    };
+    ipcRenderer.on("slash-command:insert-block", subscription);
+    return () => {
+      ipcRenderer.removeListener("slash-command:insert-block", subscription);
     };
   },
   onBrowserInitialized: (

@@ -1,5 +1,12 @@
 [
   {
+    "key": "site",
+    "title": "Site",
+    "subtext": "Open a page from the web",
+    "aliases": ["site", "url", "/"],
+    "group": "Browser"
+  },
+  {
     "badge": "⌘-Alt-1",
     "key": "heading",
     "title": "Heading 1",
@@ -121,12 +128,5 @@
     "subtext": "Insert a file",
     "aliases": ["file", "upload", "embed", "media", "url"],
     "group": "Media"
-  },
-  {
-    "key": "site",
-    "title": "Site",
-    "subtext": "Open a page from the web",
-    "aliases": ["site", "url", "/"],
-    "group": "Browser"
   }
 ]

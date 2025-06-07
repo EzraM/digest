@@ -74,8 +74,6 @@ const addSite = (editor: any) => ({
 
 // Store a reference to the current editor for use in IPC handlers
 let currentEditor: any | null = null;
-// Store the cursor position when slash command is triggered
-let savedCursorPosition: any = null;
 
 // Handler for creating a new browser block
 const createNewBrowserBlock = (url: string): void => {
@@ -104,40 +102,102 @@ const createNewBrowserBlock = (url: string): void => {
   }
 };
 
-function SuggestionStub(props: SuggestionMenuProps<any>): JSX.Element | null {
-  const { onItemClick, items } = props;
-
-  // Send open event when suggestion menu appears
+// Custom key handler for slash commands - bypasses BlockNote's suggestion system
+const useSlashCommandHandler = (editor: any) => {
   useEffect(() => {
-    if (items && items.length > 0) {
-      // Capture the current cursor position before opening HUD
-      if (currentEditor) {
+    if (!editor) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle "/" when starting a new block (empty paragraph at cursor position 0)
+      if (event.key === "/" && event.target) {
+        // Don't trigger slash command if the event comes from an input field, textarea, or other form elements
+        const target = event.target as HTMLElement;
+        if (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable === false
+        ) {
+          log.debug(
+            `Slash key pressed in form element (${target.tagName}), ignoring`,
+            "renderer"
+          );
+          return;
+        }
+
         try {
-          savedCursorPosition = currentEditor.getTextCursorPosition();
-          log.debug("Captured cursor position for HUD insertion", "renderer");
+          const selection = editor.getTextCursorPosition();
+          const currentBlock = selection?.block;
+
+          // Debug: log the full selection object to understand its structure
+          log.debug(
+            `Selection object: ${JSON.stringify(selection, null, 2)}`,
+            "renderer"
+          );
+          log.debug(
+            `Current block: ${JSON.stringify(currentBlock, null, 2)}`,
+            "renderer"
+          );
+
+          // Only trigger slash command if:
+          // 1. We're in a paragraph block
+          // 2. The block is completely empty (no content)
+          const isEmptyParagraph =
+            currentBlock?.type === "paragraph" &&
+            (!currentBlock.content || currentBlock.content.length === 0);
+
+          // Try different ways to check if cursor is at start
+          const textContent = currentBlock?.content?.[0]?.text || "";
+          const isCursorAtStart = textContent.length === 0;
+
+          log.debug(
+            `Slash analysis - Block type: ${currentBlock?.type}, Content: "${textContent}", Is empty paragraph: ${isEmptyParagraph}, Cursor at start: ${isCursorAtStart}`,
+            "renderer"
+          );
+
+          if (isEmptyParagraph && isCursorAtStart) {
+            event.preventDefault(); // Prevent "/" from being typed
+            log.debug(
+              "Slash command detected at start of empty paragraph",
+              "renderer"
+            );
+
+            // Start slash command mode
+            window.electronAPI?.startSlashCommand();
+            return;
+          }
+
+          log.debug(
+            "Slash key pressed but conditions not met for slash command",
+            "renderer"
+          );
         } catch (error) {
-          log.debug(`Error capturing cursor position: ${error}`, "renderer");
+          log.debug(
+            `Error checking slash command conditions: ${error}`,
+            "renderer"
+          );
         }
       }
-      log.debug("Slash menu opened, triggering HUD", "renderer");
-      window.electronAPI?.addBlockEvent({ type: "open" });
-    } else {
-      log.debug("Slash menu closed, hiding HUD", "renderer");
-      window.electronAPI?.addBlockEvent({ type: "close" });
-    }
-  }, [items]);
 
-  // Handle cleanup when component unmounts (menu closes)
-  useEffect(() => {
-    return () => {
-      log.debug("Suggestion menu unmounting, hiding HUD", "renderer");
-      window.electronAPI?.addBlockEvent({ type: "close" });
+      // Handle escape to cancel slash command
+      if (event.key === "Escape") {
+        log.debug("Escape pressed, cancelling slash command", "renderer");
+        window.electronAPI?.cancelSlashCommand();
+      }
     };
-  }, []);
 
-  // Don't render anything - the HUD will handle the UI
-  return null;
-}
+    // Add event listener to the editor's DOM element
+    const editorDOM = editor._tiptapEditor?.view?.dom;
+    if (editorDOM) {
+      editorDOM.addEventListener("keydown", handleKeyDown);
+      log.debug("Slash command key handler attached", "renderer");
+
+      return () => {
+        editorDOM.removeEventListener("keydown", handleKeyDown);
+        log.debug("Slash command key handler removed", "renderer");
+      };
+    }
+  }, [editor]);
+};
 
 function App() {
   const editor = useCreateBlockNote({
@@ -158,6 +218,9 @@ function App() {
     };
   }, [editor]);
 
+  // Use the new slash command handler
+  useSlashCommandHandler(editor);
+
   // Set up IPC listener for new browser blocks
   useEffect(() => {
     if (!window.electronAPI?.onNewBrowserBlock) {
@@ -173,15 +236,18 @@ function App() {
     return unsubscribe;
   }, []);
 
-  // Set up IPC listener for block selection from HUD
+  // Set up IPC listener for block insertion from slash command manager
   useEffect(() => {
-    if (!window.electronAPI?.onSelectBlockType) {
+    if (!window.electronAPI?.onSlashCommandInsert) {
       return;
     }
 
-    const unsubscribe = window.electronAPI.onSelectBlockType(
+    const unsubscribe = window.electronAPI.onSlashCommandInsert(
       (blockKey: string) => {
-        log.debug(`Received block selection from HUD: ${blockKey}`, "renderer");
+        log.debug(
+          `Received block insertion from slash command: ${blockKey}`,
+          "renderer"
+        );
 
         // Handle the block insertion based on the selected block type
         if (currentEditor) {
@@ -220,25 +286,19 @@ function App() {
 
                 const blockConfig = blockTypeMapping[blockKey];
                 if (blockConfig) {
-                  // Insert at the end of the document to avoid cursor position issues
+                  // Insert at the current cursor position
                   const newBlocks = currentEditor.insertBlocks(
                     [blockConfig],
-                    currentEditor.document[currentEditor.document.length - 1],
+                    currentEditor.getTextCursorPosition().block,
                     "after"
                   );
                   log.debug(
                     `Successfully inserted block: ${blockKey}`,
                     "renderer"
                   );
-
-                  // Don't try to set cursor position - let BlockNote handle it naturally
-                  // The setTextCursorPosition call was causing the "TextSelection endpoint" error
                 } else {
                   log.debug(`Unknown block type: ${blockKey}`, "renderer");
                 }
-
-                // Clear the saved position after using it
-                savedCursorPosition = null;
               } catch (error) {
                 log.debug(
                   `Error inserting block ${blockKey}: ${error}`,
@@ -272,18 +332,7 @@ function App() {
 
   return (
     <div className="App">
-      <BlockNoteView editor={editor} slashMenu={false}>
-        <SuggestionMenuController
-          triggerCharacter="/"
-          suggestionMenuComponent={SuggestionStub}
-          getItems={async (query) =>
-            filterSuggestionItems(
-              [...getDefaultReactSlashMenuItems(editor), addSite(editor)],
-              query
-            )
-          }
-        />
-      </BlockNoteView>
+      <BlockNoteView editor={editor} slashMenu={false} />
       <div style={{ height: "2000px", width: "100%", color: "gray" }} />
     </div>
   );
@@ -297,9 +346,12 @@ declare global {
       updateBrowserUrl: (data: { blockId: string; url: string }) => void;
       removeBrowser: (blockId: string) => void;
       addBlockEvent: (event: any) => void;
+      startSlashCommand: () => void;
+      cancelSlashCommand: () => void;
       onBrowserUpdate: (callback: (data: any) => void) => void;
       onBrowserRemove: (callback: (blockId: string) => void) => void;
       onNewBrowserBlock: (callback: (data: { url: string }) => void) => void;
+      onSlashCommandInsert: (callback: (blockKey: string) => void) => void;
       debugLinkClick: (url: string) => void;
       testNewBrowserBlock: (url: string) => void;
       testCommunication: (callback?: (result: string) => void) => string | void;

@@ -9,6 +9,7 @@ import path from "path";
 import { ViewManager } from "./services/ViewManager";
 import { viteConfig } from "./config/vite";
 import { AppOverlay } from "./services/AppOverlay";
+import { SlashCommandManager } from "./services/SlashCommandManager";
 import { log } from "./utils/mainLogger";
 
 if (require("electron-squirrel-startup")) {
@@ -91,7 +92,11 @@ const createWindow = () => {
   globalAppView = appViewInstance;
 
   const viewManager = new ViewManager(baseWindow);
-  const appOverlay = new AppOverlay({}, baseWindow);
+  const appOverlay = new AppOverlay({}, baseWindow, globalAppView);
+  const slashCommandManager = new SlashCommandManager(
+    appOverlay,
+    globalAppView
+  );
 
   // Set up the link click callback for ViewManager to properly target the correct WebContents
   viewManager.setLinkClickCallback((url: string) => {
@@ -114,7 +119,7 @@ const createWindow = () => {
   globalViewManager = viewManager;
 
   // Set up IPC handlers
-  setupIpcHandlers(viewManager, appOverlay);
+  setupIpcHandlers(viewManager, slashCommandManager);
 
   baseWindow.on("closed", () => {
     mainWindow = null;
@@ -123,7 +128,10 @@ const createWindow = () => {
   });
 };
 
-const setupIpcHandlers = (viewManager: ViewManager, appOverlay: AppOverlay) => {
+const setupIpcHandlers = (
+  viewManager: ViewManager,
+  slashCommandManager: SlashCommandManager
+) => {
   // Handle URL setting
   ipcMain.on("set-url", (_, url) => {
     log.debug(`Received set-url event with URL: ${url}`, "main");
@@ -150,32 +158,21 @@ const setupIpcHandlers = (viewManager: ViewManager, appOverlay: AppOverlay) => {
     viewManager.handleRemoveView(blockId);
   });
 
-  // Handle block menu events - now properly connected to HUD
-  ipcMain.on("block-menu:open", () => {
-    log.debug("Block menu open event received - showing HUD", "main");
-    appOverlay.show();
+  // Handle slash command events through the new state manager
+  ipcMain.on("slash-command:start", () => {
+    log.debug("Slash command start event received", "main");
+    slashCommandManager.startSlashCommand();
   });
 
-  ipcMain.on("block-menu:close", () => {
-    log.debug("Block menu close event received - hiding HUD", "main");
-    appOverlay.hide();
+  ipcMain.on("slash-command:cancel", () => {
+    log.debug("Slash command cancel event received", "main");
+    slashCommandManager.cancelSlashCommand();
   });
 
-  // Handle block selection from HUD
+  // Handle block selection from HUD through the state manager
   ipcMain.on("block-menu:select", (_, blockKey) => {
     log.debug(`Block selected from HUD: ${blockKey}`, "main");
-    appOverlay.hide();
-
-    // Forward the selection back to the main renderer (appView, not mainWindow)
-    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-      log.debug(`Forwarding block selection to appView: ${blockKey}`, "main");
-      globalAppView.webContents.send(EVENTS.BLOCK_MENU.SELECT, blockKey);
-    } else {
-      log.debug(
-        "Cannot forward block selection - appView not available",
-        "main"
-      );
-    }
+    slashCommandManager.selectBlock(blockKey);
   });
 };
 
