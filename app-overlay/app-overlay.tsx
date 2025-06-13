@@ -146,7 +146,6 @@ const App = () => {
         style={{
           padding: "12px",
           backgroundColor: "#fff",
-          minHeight: "200px",
         }}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
@@ -159,7 +158,11 @@ const App = () => {
         }}
         tabIndex={-1}
       >
-        <Combobox store={combobox} onOptionSubmit={handleOptionSelect}>
+        <Combobox
+          store={combobox}
+          onOptionSubmit={handleOptionSelect}
+          withinPortal={false}
+        >
           <Combobox.Target>
             <TextInput
               ref={inputRef}
@@ -211,12 +214,16 @@ const App = () => {
           <Combobox.Dropdown
             style={{
               marginTop: "8px",
+              border: "1px solid var(--mantine-color-gray-3)",
+              borderRadius: "8px",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
             }}
           >
             <Combobox.Options
               style={{
-                maxHeight: "400px",
-                padding: "4px",
+                maxHeight: "320px", // Reduced to account for input field + padding (400px total - 80px for input/spacing)
+                padding: "0px", // Remove padding that might cause gaps
+                overflowY: "auto", // Ensure scrolling works properly
               }}
             >
               {filteredOptions.length === 0 ? (
@@ -227,10 +234,14 @@ const App = () => {
                     value={option.key!}
                     key={option.key || `option-${index}`}
                     style={{
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      margin: "1px 0",
+                      padding: "8px 12px",
+                      borderRadius: "0px",
+                      margin: "0px",
                       cursor: "pointer",
+                      borderBottom:
+                        index < filteredOptions.length - 1
+                          ? "1px solid var(--mantine-color-gray-2)"
+                          : "none",
                     }}
                   >
                     <div
