@@ -35,7 +35,19 @@ export class AppOverlay {
         },
       });
 
-      appOverlay.setBounds({ x: 800, y: 300, height: 400, width: 500 });
+      // Center the HUD overlay on the screen
+      const windowBounds = this.baseWindow.getBounds();
+      const overlayWidth = 500;
+      const overlayHeight = 400;
+      const centerX = Math.floor((windowBounds.width - overlayWidth) / 2);
+      const centerY = Math.floor((windowBounds.height - overlayHeight) / 2);
+
+      appOverlay.setBounds({
+        x: centerX,
+        y: centerY,
+        width: overlayWidth,
+        height: overlayHeight,
+      });
 
       appOverlay.webContents.session.webRequest.onHeadersReceived(
         (details, callback) => {
