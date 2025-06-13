@@ -1,19 +1,18 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom/client";
 import {
   MantineProvider,
-  Combobox,
   TextInput,
+  Combobox,
   useCombobox,
   Highlight,
   Chip,
-  createTheme,
   rem,
 } from "@mantine/core";
-import blockOptions from "./add-blocks.json";
+import addBlocksData from "./add-blocks.json";
 import { log } from "../src/utils/rendererLogger";
 
-// Add type definition for window.electronAPI
+// Ensure TypeScript recognizes the electronAPI on window
 declare global {
   interface Window {
     electronAPI: {
@@ -23,46 +22,21 @@ declare global {
   }
 }
 
-// Create a theme that matches BlockNote's Mantine styling
-const theme = createTheme({
-  primaryColor: "blue",
+// Custom theme for better styling
+const theme = {
   components: {
-    TextInput: {
-      styles: {
-        input: {
-          "&:focus": {
-            borderColor: "var(--mantine-color-blue-6)",
-          },
-        },
-      },
-    },
     Combobox: {
       styles: {
-        dropdown: {
-          border: "none",
-          boxShadow: "none",
-          padding: 0,
-          background: "transparent",
-        },
-        options: {
-          padding: 0,
-          margin: 0,
-        },
         option: {
           "&[data-combobox-selected]": {
-            backgroundColor: "var(--mantine-color-blue-0)",
+            backgroundColor: "var(--mantine-color-blue-1)",
             color: "var(--mantine-color-blue-9)",
           },
-          "&:hover": {
-            backgroundColor: "var(--mantine-color-gray-0)",
-          },
-          borderRadius: "6px",
-          margin: "1px 0",
         },
       },
     },
   },
-});
+};
 
 interface BlockOption {
   badge?: string;
@@ -75,54 +49,35 @@ interface BlockOption {
 
 const App = () => {
   const [search, setSearch] = useState("");
+  const [blockOptions] = useState<BlockOption[]>(addBlocksData);
   const inputRef = useRef<HTMLInputElement>(null);
+
   const combobox = useCombobox({
-    defaultOpened: true,
+    onDropdownClose: () => {
+      log.debug("Combobox dropdown closing", "app-overlay");
+      combobox.resetSelectedOption();
+    },
+    onDropdownOpen: () => {
+      log.debug("Combobox dropdown opening", "app-overlay");
+      combobox.selectFirstOption();
+    },
   });
 
-  // Focus the input field when the component mounts
+  // Focus management
   useEffect(() => {
-    console.log("[HUD Focus] Setting up focus for HUD input");
-    log.debug("Setting up focus for HUD input", "app-overlay");
-
-    // Try multiple times to ensure focus works
     const attemptFocus = (attempt = 1, maxAttempts = 5) => {
-      console.log(
-        `[HUD Focus] Attempt ${attempt}, inputRef.current:`,
-        !!inputRef.current
-      );
-
       if (inputRef.current) {
-        console.log(`[HUD Focus] Focus attempt ${attempt} for HUD input`);
-        log.debug(`Focus attempt ${attempt} for HUD input`, "app-overlay");
-        try {
-          inputRef.current.focus();
+        console.log(`[HUD Focus] Attempt ${attempt}: Focusing input`);
+        inputRef.current.focus();
 
-          // Check if focus was successful
-          const focused = document.activeElement === inputRef.current;
-          console.log(
-            `[HUD Focus] Focus success:`,
-            focused,
-            "activeElement:",
-            document.activeElement
-          );
-
-          if (focused) {
-            console.log("[HUD Focus] Successfully focused HUD input");
-            log.debug("Successfully focused HUD input", "app-overlay");
-            return;
-          }
-        } catch (error) {
-          console.log(`[HUD Focus] Focus attempt ${attempt} failed:`, error);
-          log.debug(`Focus attempt ${attempt} failed: ${error}`, "app-overlay");
+        // Check if focus was successful
+        if (document.activeElement === inputRef.current) {
+          console.log(`[HUD Focus] Success on attempt ${attempt}`);
+          log.debug(`Focus successful on attempt ${attempt}`, "app-overlay");
+          return;
         }
-      } else {
-        console.log(
-          `[HUD Focus] inputRef.current is null on attempt ${attempt}`
-        );
       }
 
-      // If focus failed and we haven't exceeded max attempts, try again
       if (attempt < maxAttempts) {
         setTimeout(() => attemptFocus(attempt + 1, maxAttempts), 50);
       } else {
@@ -131,7 +86,6 @@ const App = () => {
       }
     };
 
-    // Start focus attempts after a brief delay to let the DOM settle
     const timer = setTimeout(() => {
       console.log("[HUD Focus] Starting focus attempts");
       attemptFocus();
@@ -140,26 +94,18 @@ const App = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Add logging for component mount and unmount
+  // Open dropdown when component mounts
   useEffect(() => {
-    log.debug("App overlay component mounted", "app-overlay");
-
-    return () => {
-      log.debug("App overlay component unmounted", "app-overlay");
-    };
+    combobox.openDropdown();
+    log.debug("Opened combobox dropdown on mount", "app-overlay");
   }, []);
 
   const filteredOptions = blockOptions.filter((option) => {
     const searchLower = search.toLowerCase();
     if (!searchLower) return true;
 
-    // Check title
     if (option.title.toLowerCase().includes(searchLower)) return true;
-
-    // Check subtext
     if (option.subtext?.toLowerCase().includes(searchLower)) return true;
-
-    // Check aliases - show if any alias matches exactly or includes the search
     if (
       option.aliases?.some((alias) => {
         const aliasLower = alias.toLowerCase();
@@ -172,152 +118,114 @@ const App = () => {
   });
 
   const handleOptionSelect = (value: string) => {
+    log.debug(
+      `🟢 onOptionSubmit triggered with value: ${value}`,
+      "app-overlay"
+    );
+
     const selectedOption = blockOptions.find((opt) => opt.key === value);
     if (selectedOption) {
       log.debug(
-        `Selected option: ${JSON.stringify(selectedOption)}`,
+        `🟢 Selected option: ${JSON.stringify(selectedOption)}`,
         "app-overlay"
       );
-      window.electronAPI.selectBlockType(selectedOption.key);
-
-      // Clear search after selection to close the HUD
+      window.electronAPI.selectBlockType(selectedOption.key!);
       setSearch("");
-
-      // Note: Focus will be returned to main window by AppOverlay.hide()
-      // when the HUD closes automatically after this selection
       log.debug(
-        "Block selection sent, HUD should close and return focus",
+        "🟢 Block selection sent, HUD should close and return focus",
         "app-overlay"
       );
+    } else {
+      log.error(`❌ Could not find option with key: ${value}`, "app-overlay");
     }
   };
-
-  // Add logging for window events
-  useEffect(() => {
-    const handleBlur = () => {
-      log.debug("Window blur event detected", "app-overlay");
-    };
-
-    const handleFocus = () => {
-      log.debug("Window focus event detected", "app-overlay");
-    };
-
-    const handleClick = () => {
-      log.debug("Window click event detected", "app-overlay");
-    };
-
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("click", handleClick);
-
-    return () => {
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("click", handleClick);
-    };
-  }, []);
 
   return (
     <MantineProvider theme={theme}>
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100vh",
           padding: "12px",
           backgroundColor: "#fff",
-          boxSizing: "border-box",
-        }}
-        onClick={(e) => {
-          log.debug(`Container div clicked: ${e.target}`, "app-overlay");
+          minHeight: "200px",
         }}
         onKeyDown={(e) => {
-          // Handle escape key to cancel slash command
           if (e.key === "Escape") {
             log.debug(
               "Escape key pressed in HUD, cancelling slash command",
               "app-overlay"
             );
-            // Cancel the entire slash command, which will hide the HUD
             window.electronAPI?.cancelSlashCommand();
           }
         }}
-        tabIndex={-1} // Make container focusable for keyboard events
+        tabIndex={-1}
       >
-        <div style={{ flexShrink: 0, width: "100%" }}>
-          <TextInput
-            ref={inputRef}
-            placeholder="Search blocks..."
-            value={search}
-            onChange={(event) => {
-              log.debug("TextInput onChange event", "app-overlay");
-              setSearch(event.currentTarget.value);
-            }}
-            onFocus={(event) => {
-              log.debug("TextInput onFocus event", "app-overlay");
-            }}
-            onBlur={(event) => {
-              log.debug("TextInput onBlur event", "app-overlay");
-            }}
-            onClick={(event) => {
-              log.debug("TextInput onClick event", "app-overlay");
+        <Combobox store={combobox} onOptionSubmit={handleOptionSelect}>
+          <Combobox.Target>
+            <TextInput
+              ref={inputRef}
+              placeholder="Search blocks..."
+              value={search}
+              onChange={(event) => {
+                log.debug("TextInput onChange event", "app-overlay");
+                setSearch(event.currentTarget.value);
+                combobox.openDropdown();
+                combobox.updateSelectedOptionIndex();
+              }}
+              onFocus={(event) => {
+                log.debug("TextInput onFocus event", "app-overlay");
+                combobox.openDropdown();
+              }}
+              onBlur={(event) => {
+                log.debug("TextInput onBlur event", "app-overlay");
+                combobox.closeDropdown();
+              }}
+              onClick={() => {
+                log.debug("TextInput onClick event", "app-overlay");
+                combobox.openDropdown();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  log.debug("Enter pressed in search input", "app-overlay");
+                  const selectedValue = combobox.selectActiveOption();
+                  log.debug(
+                    `combobox.selectActiveOption() returned: ${selectedValue}`,
+                    "app-overlay"
+                  );
+                } else {
+                  combobox.updateSelectedOptionIndex(event as any);
+                }
+              }}
+              size="md"
+              radius="md"
+              styles={{
+                input: {
+                  width: "100%",
+                  fontSize: rem(14),
+                  fontWeight: 500,
+                },
+              }}
+            />
+          </Combobox.Target>
 
-              // Ensure input gets focus when clicked
-              if (inputRef.current) {
-                log.debug("Focusing input after click", "app-overlay");
-                inputRef.current.focus();
-              }
-
-              event.stopPropagation();
-            }}
-            size="md"
-            radius="md"
-            styles={{
-              input: {
-                width: "100%",
-                fontSize: rem(14),
-                fontWeight: 500,
-              },
-            }}
-          />
-        </div>
-
-        <div
-          style={{
-            flexGrow: 1,
-            overflowY: "auto",
-            marginTop: "8px",
-            width: "100%",
-            minHeight: 0, // Important for flex scroll containers
-          }}
-        >
-          <Combobox
-            store={combobox}
-            onOptionSubmit={handleOptionSelect}
-            styles={{
-              dropdown: {
-                border: "none",
-                padding: 0,
-                background: "transparent",
-                boxShadow: "none",
-              },
+          <Combobox.Dropdown
+            style={{
+              marginTop: "8px",
             }}
           >
             <Combobox.Options
               style={{
-                maxHeight: "none", // Remove height restrictions
-                overflow: "visible", // Remove internal scrollbars
-                padding: 0,
-                margin: 0,
+                maxHeight: "400px",
+                padding: "4px",
               }}
             >
               {filteredOptions.length === 0 ? (
                 <Combobox.Empty>No results found</Combobox.Empty>
               ) : (
-                filteredOptions.map((option) => (
+                filteredOptions.map((option, index) => (
                   <Combobox.Option
-                    value={option.key}
-                    key={option.key}
+                    value={option.key!}
+                    key={option.key || `option-${index}`}
                     style={{
                       padding: "6px 12px",
                       borderRadius: "6px",
@@ -393,8 +301,8 @@ const App = () => {
                 ))
               )}
             </Combobox.Options>
-          </Combobox>
-        </div>
+          </Combobox.Dropdown>
+        </Combobox>
       </div>
     </MantineProvider>
   );

@@ -32,13 +32,7 @@ import "./index.css";
 import "@blocknote/core/fonts/inter.css";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
-import {
-  useCreateBlockNote,
-  SuggestionMenuController,
-  getDefaultReactSlashMenuItems,
-  SuggestionMenuProps,
-  DefaultReactSuggestionItem,
-} from "@blocknote/react";
+import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import {
   BlockNoteSchema,
   defaultBlockSpecs,
@@ -72,132 +66,25 @@ const addSite = (editor: any) => ({
   icon: <RiPagesFill />,
 });
 
-// Store a reference to the current editor for use in IPC handlers
-let currentEditor: any | null = null;
+// Store current editor globally to access in IPC handlers
+let currentEditor: any = null;
 
-// Handler for creating a new browser block
+// Function to create a new browser block with the specified URL
 const createNewBrowserBlock = (url: string): void => {
-  if (!currentEditor) {
-    console.error("Cannot create browser block - editor not available");
-    return;
-  }
-
-  try {
-    // Use insertOrUpdateBlock like the working addSite function
-    const newBlock = insertOrUpdateBlock(currentEditor, {
+  if (currentEditor) {
+    insertOrUpdateBlock(currentEditor, {
       type: "site",
       props: { url: url },
-    } as any);
-
-    if (newBlock && newBlock.id) {
-      const blockId = newBlock.id;
-
-      // Update the browser URL via IPC
-      if (window.electronAPI?.updateBrowserUrl) {
-        window.electronAPI.updateBrowserUrl({ blockId, url });
-      }
-    }
-  } catch (error) {
-    console.error("Error creating browser block:", error);
+    });
   }
 };
 
-// Custom key handler for slash commands - bypasses BlockNote's suggestion system
-const useSlashCommandHandler = (editor: any) => {
-  useEffect(() => {
-    if (!editor) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Only handle "/" when starting a new block (empty paragraph at cursor position 0)
-      if (event.key === "/" && event.target) {
-        // Don't trigger slash command if the event comes from an input field, textarea, or other form elements
-        const target = event.target as HTMLElement;
-        if (
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable === false
-        ) {
-          log.debug(
-            `Slash key pressed in form element (${target.tagName}), ignoring`,
-            "renderer"
-          );
-          return;
-        }
-
-        try {
-          const selection = editor.getTextCursorPosition();
-          const currentBlock = selection?.block;
-
-          // Debug: log the full selection object to understand its structure
-          log.debug(
-            `Selection object: ${JSON.stringify(selection, null, 2)}`,
-            "renderer"
-          );
-          log.debug(
-            `Current block: ${JSON.stringify(currentBlock, null, 2)}`,
-            "renderer"
-          );
-
-          // Only trigger slash command if:
-          // 1. We're in a paragraph block
-          // 2. The block is completely empty (no content)
-          const isEmptyParagraph =
-            currentBlock?.type === "paragraph" &&
-            (!currentBlock.content || currentBlock.content.length === 0);
-
-          // Try different ways to check if cursor is at start
-          const textContent = currentBlock?.content?.[0]?.text || "";
-          const isCursorAtStart = textContent.length === 0;
-
-          log.debug(
-            `Slash analysis - Block type: ${currentBlock?.type}, Content: "${textContent}", Is empty paragraph: ${isEmptyParagraph}, Cursor at start: ${isCursorAtStart}`,
-            "renderer"
-          );
-
-          if (isEmptyParagraph && isCursorAtStart) {
-            event.preventDefault(); // Prevent "/" from being typed
-            log.debug(
-              "Slash command detected at start of empty paragraph",
-              "renderer"
-            );
-
-            // Start slash command mode
-            window.electronAPI?.startSlashCommand();
-            return;
-          }
-
-          log.debug(
-            "Slash key pressed but conditions not met for slash command",
-            "renderer"
-          );
-        } catch (error) {
-          log.debug(
-            `Error checking slash command conditions: ${error}`,
-            "renderer"
-          );
-        }
-      }
-
-      // Handle escape to cancel slash command
-      if (event.key === "Escape") {
-        log.debug("Escape pressed, cancelling slash command", "renderer");
-        window.electronAPI?.cancelSlashCommand();
-      }
-    };
-
-    // Add event listener to the editor's DOM element
-    const editorDOM = editor._tiptapEditor?.view?.dom;
-    if (editorDOM) {
-      editorDOM.addEventListener("keydown", handleKeyDown);
-      log.debug("Slash command key handler attached", "renderer");
-
-      return () => {
-        editorDOM.removeEventListener("keydown", handleKeyDown);
-        log.debug("Slash command key handler removed", "renderer");
-      };
-    }
-  }, [editor]);
-};
+// Custom suggestion menu component that triggers HUD instead of showing BlockNote's menu
+function CustomSlashMenu(): null {
+  // Always return null since we don't want to render anything
+  // The HUD overlay will be shown instead
+  return null;
+}
 
 function App() {
   const editor = useCreateBlockNote({
@@ -217,9 +104,6 @@ function App() {
       currentEditor = null;
     };
   }, [editor]);
-
-  // Use the new slash command handler
-  useSlashCommandHandler(editor);
 
   // Set up IPC listener for new browser blocks
   useEffect(() => {
@@ -252,63 +136,67 @@ function App() {
         // Handle the block insertion based on the selected block type
         if (currentEditor) {
           try {
-            // First, ensure the editor has focus
-            currentEditor.focus();
+            // Use BlockNote's insertOrUpdateBlock like the built-in slash menu items do
+            // This handles all focus, cursor positioning, and insertion logic automatically
+            switch (blockKey) {
+              case "site":
+                insertOrUpdateBlock(currentEditor, { type: "site" });
+                break;
+              case "paragraph":
+                insertOrUpdateBlock(currentEditor, { type: "paragraph" });
+                break;
+              case "heading":
+                insertOrUpdateBlock(currentEditor, {
+                  type: "heading",
+                  props: { level: 1 },
+                });
+                break;
+              case "heading_2":
+                insertOrUpdateBlock(currentEditor, {
+                  type: "heading",
+                  props: { level: 2 },
+                });
+                break;
+              case "heading_3":
+                insertOrUpdateBlock(currentEditor, {
+                  type: "heading",
+                  props: { level: 3 },
+                });
+                break;
+              case "bullet_list":
+                insertOrUpdateBlock(currentEditor, { type: "bulletListItem" });
+                break;
+              case "numbered_list":
+                insertOrUpdateBlock(currentEditor, {
+                  type: "numberedListItem",
+                });
+                break;
+              case "check_list":
+                insertOrUpdateBlock(currentEditor, { type: "checkListItem" });
+                break;
+              case "table":
+                insertOrUpdateBlock(currentEditor, { type: "table" });
+                break;
+              case "image":
+                insertOrUpdateBlock(currentEditor, { type: "image" });
+                break;
+              case "video":
+                insertOrUpdateBlock(currentEditor, { type: "video" });
+                break;
+              case "audio":
+                insertOrUpdateBlock(currentEditor, { type: "audio" });
+                break;
+              case "file":
+                insertOrUpdateBlock(currentEditor, { type: "file" });
+                break;
+              default:
+                log.debug(`Unknown block type: ${blockKey}`, "renderer");
+            }
 
-            // Wait a brief moment for focus to be established, then insert
-            setTimeout(() => {
-              try {
-                // Map HUD block keys to BlockNote block types
-                const blockTypeMapping: Record<string, any> = {
-                  // Custom blocks
-                  site: { type: "site" },
-
-                  // Basic blocks
-                  paragraph: { type: "paragraph" },
-                  heading: { type: "heading", props: { level: 1 } },
-                  heading_2: { type: "heading", props: { level: 2 } },
-                  heading_3: { type: "heading", props: { level: 3 } },
-
-                  // Lists
-                  bullet_list: { type: "bulletListItem" },
-                  numbered_list: { type: "numberedListItem" },
-                  check_list: { type: "checkListItem" },
-
-                  // Advanced blocks
-                  table: { type: "table" },
-
-                  // Media blocks
-                  image: { type: "image" },
-                  video: { type: "video" },
-                  audio: { type: "audio" },
-                  file: { type: "file" },
-                };
-
-                const blockConfig = blockTypeMapping[blockKey];
-                if (blockConfig) {
-                  // Insert at the current cursor position
-                  const newBlocks = currentEditor.insertBlocks(
-                    [blockConfig],
-                    currentEditor.getTextCursorPosition().block,
-                    "after"
-                  );
-                  log.debug(
-                    `Successfully inserted block: ${blockKey}`,
-                    "renderer"
-                  );
-                } else {
-                  log.debug(`Unknown block type: ${blockKey}`, "renderer");
-                }
-              } catch (error) {
-                log.debug(
-                  `Error inserting block ${blockKey}: ${error}`,
-                  "renderer"
-                );
-              }
-            }, 50); // Brief delay to ensure focus is established
+            log.debug(`Successfully inserted block: ${blockKey}`, "renderer");
           } catch (error) {
             log.debug(
-              `Error preparing for block insertion ${blockKey}: ${error}`,
+              `Error inserting block ${blockKey}: ${error}`,
               "renderer"
             );
           }
@@ -319,20 +207,23 @@ function App() {
     return unsubscribe;
   }, []);
 
-  // Function to filter suggestion items based on query
-  const filterSuggestionItems = async (
-    items: any[],
-    query: string
-  ): Promise<any[]> => {
-    if (!query) return items;
-    return items.filter((item) =>
-      item.title.toLowerCase().includes(query.toLowerCase())
-    );
-  };
-
   return (
     <div className="App">
-      <BlockNoteView editor={editor} slashMenu={false} />
+      <BlockNoteView editor={editor} slashMenu={false}>
+        <SuggestionMenuController
+          triggerCharacter={"/"}
+          suggestionMenuComponent={CustomSlashMenu}
+          getItems={async () => {
+            // When BlockNote detects "/", trigger our custom HUD instead
+            log.debug(
+              "Slash menu triggered, starting custom slash command",
+              "renderer"
+            );
+            window.electronAPI?.startSlashCommand();
+            return []; // Return empty array since we handle items in HUD
+          }}
+        />
+      </BlockNoteView>
       <div style={{ height: "2000px", width: "100%", color: "gray" }} />
     </div>
   );
