@@ -3,6 +3,7 @@ import { Subject } from "rxjs";
 import set from "lodash/set";
 import { BlockEvent, BlockViewState } from "../types/window";
 import { log } from "../utils/mainLogger";
+import { shouldOpenDevTools } from "../config/development";
 
 const EVENTS = {
   BROWSER: {
@@ -247,8 +248,8 @@ export class ViewManager {
           );
         });
 
-        // Add devtools support for each browser block
-        if (process.env.NODE_ENV === "development") {
+        // Add devtools support for each browser block if configured
+        if (shouldOpenDevTools("openBrowserViews")) {
           try {
             log.debug(
               `Attaching devtools for browser block ${blockId}`,

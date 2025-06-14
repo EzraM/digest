@@ -3,6 +3,7 @@ import path from "path";
 import { viteConfig } from "../config/vite";
 import { OverlayState } from "../types/window";
 import { log } from "../utils/mainLogger";
+import { shouldOpenDevTools } from "../config/development";
 
 export class AppOverlay {
   private overlay: WebContentsView | null = null;
@@ -160,9 +161,12 @@ export class AppOverlay {
       );
 
       if (process.env.NODE_ENV === "development") {
-        const devTools = new BrowserWindow();
-        appOverlay.webContents.setDevToolsWebContents(devTools.webContents);
-        appOverlay.webContents.openDevTools({ mode: "detach" });
+        // Open devtools for HUD overlay if configured
+        if (shouldOpenDevTools("openHudOverlay")) {
+          const devTools = new BrowserWindow();
+          appOverlay.webContents.setDevToolsWebContents(devTools.webContents);
+          appOverlay.webContents.openDevTools({ mode: "detach" });
+        }
       }
 
       this.overlay = appOverlay;
