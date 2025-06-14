@@ -19,6 +19,8 @@ import {
   ProcessingResult,
   DocumentContext,
 } from "./services/IntelligentUrlService";
+import { BlockCreationService } from "./services/BlockCreationService";
+import { BlockCreationRequest } from "./services/ResponseExploder";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -43,6 +45,9 @@ let globalAppView: WebContentsView | null = null;
 
 // Initialize intelligent URL service
 const intelligentUrlService = new IntelligentUrlService();
+
+// Initialize block creation service
+const blockCreationService = new BlockCreationService();
 
 const createWindow = () => {
   const baseWindow = new BrowserWindow({
@@ -300,6 +305,51 @@ const setupIpcHandlers = (
   // Check if intelligent processing is available
   ipcMain.handle("intelligent-url-available", async (): Promise<boolean> => {
     return intelligentUrlService.isAvailable();
+  });
+
+  // Process input and create blocks
+  ipcMain.handle(
+    "process-input-create-blocks",
+    async (
+      event: IpcMainInvokeEvent,
+      input: string,
+      context?: any
+    ): Promise<{
+      success: boolean;
+      blocks?: BlockCreationRequest[];
+      error?: string;
+      metadata?: any;
+    }> => {
+      try {
+        log.debug(
+          `IPC: Processing input for block creation: "${input}"`,
+          "main"
+        );
+        const result = await blockCreationService.processInputAndCreateBlocks(
+          input,
+          context
+        );
+        log.debug(
+          `IPC: Block creation result: ${JSON.stringify(result)}`,
+          "main"
+        );
+        return result;
+      } catch (error) {
+        log.debug(`IPC: Error in block creation: ${error}`, "main");
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+          metadata: {
+            originalInput: input,
+          },
+        };
+      }
+    }
+  );
+
+  // Check if intelligent block creation is available
+  ipcMain.handle("block-creation-available", async (): Promise<boolean> => {
+    return blockCreationService.isIntelligentProcessingAvailable();
   });
 };
 

@@ -1,4 +1,5 @@
 interface ElectronAPI {
+  setUrl: (url: string) => void;
   updateBrowserUrl: (data: { blockId: string; url: string }) => void;
   updateBrowser: (data: {
     x: number;
@@ -9,7 +10,10 @@ interface ElectronAPI {
   }) => void;
   removeBrowser: (blockId: string) => void;
   addBlockEvent: (event: { type: "open" | "close" }) => void;
+  startSlashCommand: () => void;
+  cancelSlashCommand: () => void;
   onSelectBlockType: (callback: (blockKey: string) => void) => () => void;
+  onSlashCommandInsert: (callback: (blockKey: string) => void) => () => void;
   onBrowserInitialized: (
     callback: (data: {
       blockId: string;
@@ -19,6 +23,24 @@ interface ElectronAPI {
     }) => void
   ) => () => void;
   onNewBrowserBlock: (callback: (data: { url: string }) => void) => () => void;
+  processIntelligentUrl: (input: string, context?: any) => Promise<any>;
+  isIntelligentUrlAvailable: () => Promise<boolean>;
+  processInputCreateBlocks: (
+    input: string,
+    context?: any
+  ) => Promise<{
+    success: boolean;
+    blocks?: any[];
+    error?: string;
+    metadata?: any;
+  }>;
+  isBlockCreationAvailable: () => Promise<boolean>;
+  forwardLog: (logData: {
+    level: string;
+    message: string;
+    timestamp: string;
+    source: string;
+  }) => void;
 }
 
 declare global {

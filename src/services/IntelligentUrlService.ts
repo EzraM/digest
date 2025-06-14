@@ -22,13 +22,16 @@ export type InputClassification =
 export interface ProcessingResult {
   classification: InputClassification;
   confidence: number;
-  action: "navigate" | "search" | "clarify" | "error";
+  action: "navigate" | "search" | "clarify" | "error" | "explode";
   data?: {
     url?: string;
     searchResults?: SearchResult[];
     suggestions?: string[];
     preview?: ContentPreview;
     error?: string;
+    xmlResponse?: string;
+    originalInput?: string;
+    description?: string;
   };
 }
 
@@ -195,42 +198,55 @@ export class IntelligentUrlService {
    * Build the system prompt for Claude
    */
   private buildSystemPrompt(context?: DocumentContext): string {
-    return `You are an intelligent URL and search handler for a document editor. Your job is to analyze user input and determine the best action.
+    return `You are an intelligent URL and search handler for a document editor. Your job is to analyze user input and create appropriate content blocks using XML formatting.
 
-CLASSIFICATION TYPES:
-- direct_url: Valid URLs that can be navigated to directly (e.g., "github.com", "https://example.com")
-- jump_link: Shortcuts to common sites (e.g., "gmail", "docs", "github")
-- search_query: Search terms that need web search (e.g., "react hooks tutorial", "best practices")
-- ambiguous: Unclear intent that needs clarification
-- invalid: Invalid or problematic input
+When responding, you should create structured content using XML tags that will be converted into editor blocks:
 
-ACTIONS:
-- navigate: Go directly to a URL
-- search: Perform web search and show results
-- clarify: Ask for clarification
-- error: Handle invalid input
+AVAILABLE XML TAGS:
+- <table>CSV data or structured comparison</table> - Creates a table block (URLs in tables automatically create additional site blocks)
+- <page url="https://example.com">Optional description</page> - Creates a browser/site block  
+- <h1>Main heading</h1>, <h2>Section heading</h2>, <h3>Subsection</h3> - Creates heading blocks
+- <p>Paragraph content</p> - Creates paragraph blocks
+- <ul>List content</ul>, <ol>Ordered list</ol> - Creates list blocks
+- <image src="url" alt="description">Caption</image> - Creates image blocks
 
-RESPONSE FORMAT:
-Always respond with a JSON object containing:
-{
-  "classification": "direct_url|jump_link|search_query|ambiguous|invalid",
-  "confidence": 0.0-1.0,
-  "action": "navigate|search|clarify|error",
-  "reasoning": "Brief explanation of your decision",
-  "data": {
-    "url": "if navigating directly",
-    "searchQuery": "if searching",
-    "suggestions": ["array", "of", "suggestions"],
-    "preview": {
-      "title": "Content title",
-      "description": "Brief description",
-      "url": "final URL",
-      "domain": "domain.com",
-      "type": "article|documentation|tool|social|other",
-      "keyPoints": ["key", "points", "from", "content"]
-    }
-  }
-}
+RESPONSE STRATEGY:
+For queries like "websites similar to slashdot but more modern", you should respond with:
+1. A table comparing the sites (include URLs in the table - they'll automatically become clickable site blocks)
+2. Optionally add one featured page block for the most recommended option
+3. Explanatory paragraphs with headings
+
+IMPORTANT: When including URLs in tables, they will automatically create additional site blocks for easy navigation. You don't need to create separate <page> blocks for every URL in the table.
+
+RESPONSE GUIDELINES:
+- For direct URLs: respond with <page url="formatted-url">Optional description</page>
+- For search queries: create rich content with tables, headings, and multiple page blocks
+- For jump links: resolve to the correct URL and respond with a page block
+- Always use XML tags - do NOT return JSON
+
+EXAMPLES:
+
+Input: "github.com"
+Response: <page url="https://github.com">GitHub - Code hosting platform</page>
+
+Input: "websites similar to slashdot but more modern"
+Response:
+<h2>Modern Tech Discussion Sites</h2>
+<table>
+Site,URL,Focus,Community Size,Key Features
+Hacker News,https://news.ycombinator.com,Tech/Startup,Large,Voting system and thoughtful discussion
+Lobsters,https://lobste.rs,Programming,Medium,Invitation-only with high quality
+Reddit r/technology,https://reddit.com/r/technology,General Tech,Very Large,Broad tech coverage
+Ars Technica,https://arstechnica.com,Tech News,Large,In-depth technical journalism
+</table>
+<page url="https://news.ycombinator.com">Hacker News - Most active and influential tech community</page>
+<p>These sites offer more modern interfaces and active communities compared to Slashdot's older format. Hacker News is particularly recommended for startup and programming discussions.</p>
+
+Input: "react hooks tutorial"
+Response:
+<h2>React Hooks Learning Resources</h2>
+<page url="https://react.dev/reference/react">Official React Documentation - Hooks Reference</page>
+<p>The official React documentation provides comprehensive coverage of all hooks with interactive examples.</p>
 
 CONTEXT AWARENESS:
 ${
@@ -256,13 +272,16 @@ Be intelligent about jump links - "gmail" should go to mail.google.com, "github"
    * Build the user prompt
    */
   private buildUserPrompt(input: string, context?: DocumentContext): string {
-    return `Analyze this input and determine the best action: "${input}"
+    return `User input: "${input}"
 
-If this looks like a search query, use web search to find relevant results and provide a preview of the best option.
-If this is a jump link (like "gmail" or "docs"), determine the correct URL.
-If this is already a URL, validate it and provide a preview if possible.
+Analyze this input and respond with appropriate XML blocks:
 
-Respond with the JSON format specified in the system prompt.`;
+- If it's a direct URL or jump link, create a <page> block
+- If it's a search query, create rich content with headings, tables, and page blocks
+- Use web search when needed to find current, relevant information
+- Always respond with XML tags, never JSON
+
+Remember: You're creating content for a collaborative document editor, so make it useful and editable.`;
   }
 
   /**
@@ -282,19 +301,51 @@ Respond with the JSON format specified in the system prompt.`;
         }
       }
 
-      // Try to extract JSON from the response
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("No JSON found in Claude's response");
+      log.debug(
+        `Claude response text: ${responseText}`,
+        "IntelligentUrlService"
+      );
+
+      // Check if response contains XML tags
+      const hasXMLTags = /<\w+[^>]*>[\s\S]*?<\/\w+>/.test(responseText);
+
+      if (hasXMLTags) {
+        // This is an XML response that should be exploded into blocks
+        return {
+          classification: "search_query", // Default for XML responses
+          confidence: 0.9,
+          action: "explode", // New action type for XML responses
+          data: {
+            xmlResponse: responseText,
+            originalInput: originalInput,
+          },
+        };
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      // Check if it's a simple page response
+      const pageMatch = responseText.match(
+        /<page\s+url=["']([^"']+)["'][^>]*>(.*?)<\/page>/
+      );
+      if (pageMatch) {
+        return {
+          classification: "direct_url",
+          confidence: 0.9,
+          action: "navigate",
+          data: {
+            url: pageMatch[1],
+            description: pageMatch[2].trim(),
+          },
+        };
+      }
 
+      // Fallback: treat as plain text
       return {
-        classification: parsed.classification || "ambiguous",
-        confidence: parsed.confidence || 0.5,
-        action: parsed.action || "clarify",
-        data: parsed.data || {},
+        classification: "ambiguous",
+        confidence: 0.5,
+        action: "clarify",
+        data: {
+          suggestions: [responseText],
+        },
       };
     } catch (error) {
       log.debug(

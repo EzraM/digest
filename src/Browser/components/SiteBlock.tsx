@@ -1,63 +1,30 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { Page } from "./Page";
-import { SearchResults } from "./SearchResults";
-import { ContentPreview } from "./ContentPreview";
-import { ProcessingState } from "./ProcessingState";
-import {
-  IntelligentUrlHandler,
-  SiteBlockStatus,
-  ProcessingResult,
-  DocumentContext,
-} from "../../services/IntelligentUrlHandler";
+import { BlockInserter } from "../../services/BlockInserter";
 
-// Use the enhanced status type from the service
-type SiteStatus = SiteBlockStatus;
+type SiteStatus = "entry" | "page";
 
 export const site = createReactBlockSpec(
   {
     type: "site",
     propSchema: {
       url: { default: "" },
-      status: {
-        default: "entry",
-        values: [
-          "entry",
-          "processing",
-          "page",
-          "preview",
-          "search_results",
-          "error",
-        ],
-      },
-      processingResult: { default: "" }, // JSON string of ProcessingResult
-      searchQuery: { default: "" },
     },
     content: "none", // No inline content - we'll handle our own input
   },
   {
     render: (props) => {
       const { block, editor } = props;
-      const { url, status, processingResult, searchQuery } = block.props;
+      const { url } = block.props;
       const [inputValue, setInputValue] = useState(url || "");
-      const [intelligentHandler] = useState(() => new IntelligentUrlHandler());
+      const [blockInserter] = useState(() => new BlockInserter(editor));
       const inputRef = useRef<HTMLInputElement>(null);
 
-      // Parse processing result if available
-      let parsedResult: ProcessingResult | null = null;
-      try {
-        if (processingResult) {
-          parsedResult = JSON.parse(processingResult);
-        }
-      } catch (error) {
-        console.error("Failed to parse processing result:", error);
-      }
+      // Determine the effective status: if we have a URL, show page, otherwise show entry
+      const effectiveStatus: SiteStatus = url ? "page" : "entry";
 
-      // Determine the effective status: if we have a URL but status is entry, treat as page
-      const effectiveStatus: SiteStatus =
-        url && status === "entry" ? "page" : (status as SiteStatus);
-
-      // Focus the input when the block is created (only for true entry mode)
+      // Focus the input when the block is created (only for entry mode)
       useEffect(() => {
         if (effectiveStatus === "entry" && inputRef.current) {
           // Small delay to ensure the block is fully rendered
@@ -67,177 +34,74 @@ export const site = createReactBlockSpec(
         }
       }, [effectiveStatus]);
 
-      // Debug logging
-      console.log("[SiteBlock] Render:", {
-        blockId: block.id,
-        url,
-        status,
-        effectiveStatus,
-        inputValue,
-      });
-
-      // Helper function to parse URL for display
-      const parseUrlForDisplay = (url: string) => {
-        try {
-          const urlObj = new URL(url);
-          const domain = urlObj.hostname;
-          const path = urlObj.pathname + urlObj.search + urlObj.hash;
-          return { domain, path: path === "/" ? "" : path };
-        } catch {
-          // If URL parsing fails, just show the whole URL as domain
-          return { domain: url, path: "" };
-        }
-      };
-
-      // If we have a URL (either explicitly in page mode or auto-detected), show the browser
-      if (effectiveStatus === "page" && url) {
-        console.log("[SiteBlock] Rendering Page component with:", {
-          blockId: block.id,
-          url,
-        });
-        const { domain, path } = parseUrlForDisplay(url);
-
-        return (
-          <div>
-            {/* URL Display Bar */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                padding: "8px 12px",
-                backgroundColor: "#f8f9fa",
-                border: "1px solid #e9ecef",
-                borderBottom: "none",
-                borderRadius: "4px 4px 0 0",
-                fontSize: "14px",
-                fontFamily: "monospace",
-                minHeight: "32px",
-              }}
-            >
-              <span style={{ fontWeight: "bold", color: "#333" }}>
-                {domain}
-              </span>
-              {path && (
-                <span style={{ color: "#666", fontWeight: "normal" }}>
-                  {path}
-                </span>
-              )}
-            </div>
-            {/* Browser Content */}
-            <div style={{ borderRadius: "0 0 4px 4px", overflow: "hidden" }}>
-              <Page blockId={block.id} url={url} />
-            </div>
-          </div>
-        );
-      }
-
-      // Enhanced intelligent navigation handler
+      // Handle intelligent navigation using the new block creation service
       const handleIntelligentNavigate = async (input: string) => {
         try {
           console.log(
-            "[SiteBlock] Starting intelligent navigation for:",
+            "[SiteBlock] Processing input with intelligent service:",
             input
           );
 
-          // Set processing state
-          editor.updateBlock(block, {
-            type: "site",
-            props: {
-              ...block.props,
-              status: "processing" as SiteBlockStatus,
-              searchQuery: input,
-            },
-          });
+          // Check if intelligent processing is available
+          const isAvailable =
+            await window.electronAPI?.isBlockCreationAvailable();
 
-          // Extract document context (you could enhance this to get real context from the editor)
-          const context: DocumentContext =
-            IntelligentUrlHandler.extractDocumentContext();
+          if (!isAvailable) {
+            console.log(
+              "[SiteBlock] Intelligent processing not available, using basic navigation"
+            );
+            handleBasicNavigate();
+            return;
+          }
 
-          // Process the input using IPC
-          const result: ProcessingResult =
-            await intelligentHandler.processInput(input, context);
+          // Process input and get block creation requests
+          const result = await window.electronAPI?.processInputCreateBlocks(
+            input
+          );
 
-          console.log("[SiteBlock] Intelligent processing result:", result);
+          if (!result?.success || !result.blocks) {
+            console.log(
+              "[SiteBlock] Block creation failed, falling back to basic navigation"
+            );
+            handleBasicNavigate();
+            return;
+          }
 
-          // Handle the result based on the action
-          switch (result.action) {
-            case "navigate":
-              if (result.data?.url) {
-                console.log("[SiteBlock] Navigating to:", result.data.url);
-                editor.updateBlock(block, {
-                  type: "site",
-                  props: {
-                    ...block.props,
-                    url: result.data.url,
-                    status: "page" as SiteBlockStatus,
-                    searchQuery: undefined,
-                  },
-                });
-              } else {
-                throw new Error("No URL provided for navigation");
-              }
-              break;
+          console.log("[SiteBlock] Received blocks to create:", result.blocks);
 
-            case "search":
-              console.log("[SiteBlock] Showing search results");
-              editor.updateBlock(block, {
-                type: "site",
-                props: {
-                  ...block.props,
-                  status: "search_results" as SiteBlockStatus,
-                  processingResult: JSON.stringify(result),
-                  searchQuery: input,
-                },
+          // If we got exactly one site block, just update this block
+          if (result.blocks.length === 1 && result.blocks[0].type === "site") {
+            const siteBlock = result.blocks[0];
+            editor.updateBlock(block, {
+              type: "site",
+              props: {
+                url: siteBlock.props?.url || input,
+              },
+            });
+            return;
+          }
+
+          // Multiple blocks or non-site blocks - replace this block and insert others
+          if (result.blocks.length > 0) {
+            // Replace current block with first block
+            const firstBlock = result.blocks[0];
+            editor.updateBlock(block, {
+              type: firstBlock.type,
+              props: firstBlock.props || {},
+              content: firstBlock.content,
+            });
+
+            // Insert remaining blocks after this one
+            if (result.blocks.length > 1) {
+              const remainingBlocks = result.blocks.slice(1);
+              await blockInserter.insertBlocks(remainingBlocks, {
+                staggerDelay: 150,
               });
-              break;
-
-            case "clarify":
-              console.log("[SiteBlock] Showing clarification options");
-              editor.updateBlock(block, {
-                type: "site",
-                props: {
-                  ...block.props,
-                  status: "search_results" as SiteBlockStatus,
-                  processingResult: JSON.stringify(result),
-                  searchQuery: input,
-                },
-              });
-              break;
-
-            case "error":
-            default:
-              console.log(
-                "[SiteBlock] Error or unknown action:",
-                result.action
-              );
-              editor.updateBlock(block, {
-                type: "site",
-                props: {
-                  ...block.props,
-                  status: "error" as SiteBlockStatus,
-                  processingResult: JSON.stringify(result),
-                  searchQuery: input,
-                },
-              });
-              break;
+            }
           }
         } catch (error) {
           console.error("[SiteBlock] Error in intelligent navigation:", error);
-
-          // Fallback to basic navigation
-          const fallbackUrl = IntelligentUrlHandler.isValidUrl(input)
-            ? IntelligentUrlHandler.formatUrl(input)
-            : `https://www.google.com/search?q=${encodeURIComponent(input)}`;
-
-          editor.updateBlock(block, {
-            type: "site",
-            props: {
-              ...block.props,
-              url: fallbackUrl,
-              status: "page" as SiteBlockStatus,
-              searchQuery: undefined,
-            },
-          });
+          handleBasicNavigate();
         }
       };
 
@@ -261,49 +125,21 @@ export const site = createReactBlockSpec(
             type: "site",
             props: {
               url: formattedUrl,
-              status: "page",
-              processingResult: "",
-              searchQuery: "",
             },
           });
         }
       };
 
-      const handleCancel = () => {
-        editor.updateBlock(block, {
-          type: "site",
-          props: {
-            ...block.props,
-            status: "entry",
-            processingResult: "",
-            searchQuery: "",
-          },
-        });
-      };
-
-      const handleSearchResultSelect = (selectedUrl: string) => {
-        editor.updateBlock(block, {
-          type: "site",
-          props: {
-            url: selectedUrl,
-            status: "page",
-            processingResult: "",
-            searchQuery: "",
-          },
-        });
-      };
-
-      const handlePreviewExpand = () => {
-        if (parsedResult?.data?.url) {
-          editor.updateBlock(block, {
-            type: "site",
-            props: {
-              url: parsedResult.data.url,
-              status: "page",
-              processingResult: "",
-              searchQuery: "",
-            },
-          });
+      const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (e.metaKey || e.ctrlKey) {
+            // Cmd/Ctrl+Enter for intelligent processing
+            handleIntelligentNavigate(inputValue);
+          } else {
+            // Regular Enter for basic navigation
+            handleBasicNavigate();
+          }
         }
       };
 
@@ -312,173 +148,104 @@ export const site = createReactBlockSpec(
         editor.updateBlock(block, {
           type: "site",
           props: {
-            ...block.props,
-            status: "entry",
-            processingResult: "",
-            searchQuery: "",
+            url: "",
           },
         });
       };
 
-      // Handle processing state
-      if (effectiveStatus === "processing") {
-        return (
-          <ProcessingState
-            input={searchQuery || inputValue}
-            stage="analyzing"
-            onCancel={handleCancel}
-          />
-        );
-      }
-
-      // Handle search results state
-      if (
-        effectiveStatus === "search_results" &&
-        parsedResult?.data?.searchResults
-      ) {
-        return (
-          <SearchResults
-            results={parsedResult.data.searchResults}
-            query={searchQuery || inputValue}
-            onSelect={handleSearchResultSelect}
-            onCancel={handleCancel}
-          />
-        );
-      }
-
-      // Handle preview state
-      if (effectiveStatus === "preview" && parsedResult?.data?.preview) {
-        return (
-          <ContentPreview
-            preview={parsedResult.data.preview}
-            onExpand={handlePreviewExpand}
-            onEdit={handleEditUrl}
-          />
-        );
-      }
-
-      // Handle error state
-      if (effectiveStatus === "error") {
-        const errorMessage = parsedResult?.data?.error || "An error occurred";
-        return (
-          <div
-            style={{
-              border: "1px solid #fca5a5",
-              borderRadius: "6px",
-              backgroundColor: "#fef2f2",
-              padding: "16px",
-              maxWidth: "100%",
-            }}
-          >
+      // Render based on status
+      switch (effectiveStatus) {
+        case "entry":
+          return (
             <div
               style={{
+                border: "2px solid #e0e0e0",
+                borderRadius: "8px",
+                padding: "12px",
+                backgroundColor: "#fafafa",
+                minHeight: "60px",
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                marginBottom: "8px",
               }}
             >
-              <span style={{ fontSize: "20px" }}>❌</span>
-              <span style={{ fontWeight: "600", color: "#dc2626" }}>Error</span>
+              <div style={{ fontSize: "18px" }}>🌐</div>
+              <div style={{ flex: 1 }}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Enter URL or search query... (⌘+Enter for intelligent processing)"
+                  style={{
+                    width: "100%",
+                    border: "none",
+                    background: "transparent",
+                    fontSize: "14px",
+                    outline: "none",
+                    color: "#333",
+                  }}
+                />
+                <div
+                  style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}
+                >
+                  Press Enter to navigate • ⌘+Enter for intelligent processing
+                </div>
+              </div>
             </div>
-            <p style={{ margin: "0 0 12px 0", color: "#666" }}>
-              {errorMessage}
-            </p>
-            <button
-              onClick={handleEditUrl}
+          );
+
+        case "page":
+          return (
+            <div
               style={{
-                padding: "6px 12px",
-                border: "1px solid #dc2626",
-                borderRadius: "4px",
-                backgroundColor: "#dc2626",
-                color: "white",
-                cursor: "pointer",
-                fontSize: "12px",
+                border: "1px solid #e0e0e0",
+                borderRadius: "8px",
+                overflow: "hidden",
+                backgroundColor: "#fff",
+                position: "relative",
               }}
             >
-              Try Again
-            </button>
-          </div>
-        );
-      }
+              {/* URL bar */}
+              <div
+                style={{
+                  padding: "8px 12px",
+                  backgroundColor: "#f8f9fa",
+                  borderBottom: "1px solid #e0e0e0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "12px",
+                  color: "#666",
+                }}
+              >
+                <span>🌐</span>
+                <span style={{ flex: 1, fontFamily: "monospace" }}>{url}</span>
+                <button
+                  onClick={handleEditUrl}
+                  style={{
+                    background: "none",
+                    border: "1px solid #ddd",
+                    borderRadius: "4px",
+                    padding: "2px 6px",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                  }}
+                  title="Edit URL"
+                >
+                  ✏️
+                </button>
+              </div>
 
-      // If we're in entry mode, show the URL input
-      return (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            padding: "12px",
-            border: "1px solid #e0e0e0",
-            borderRadius: "6px",
-            backgroundColor: "#f9f9f9",
-            maxWidth: "100%",
-          }}
-        >
-          <span
-            style={{
-              fontWeight: "500",
-              color: "#666",
-              minWidth: "32px",
-              fontSize: "14px",
-            }}
-          >
-            URL:
-          </span>
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleIntelligentNavigate(inputValue);
-              }
-            }}
-            placeholder="Enter URL (e.g., example.com, github.com/user/repo)"
-            style={{
-              flex: 1,
-              minWidth: "300px", // Minimum width for readability
-              maxWidth: "600px", // Maximum width to prevent it from being too wide
-              padding: "8px 12px",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              backgroundColor: "white",
-              outline: "none",
-              fontSize: "14px",
-              fontFamily: "monospace", // Monospace for URLs
-            }}
-          />
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              handleIntelligentNavigate(inputValue);
-            }}
-            style={{
-              padding: "8px 16px",
-              border: "1px solid #007acc",
-              borderRadius: "4px",
-              backgroundColor: "#007acc",
-              color: "white",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "500",
-              minWidth: "60px",
-              transition: "background-color 0.2s",
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = "#005a9e";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = "#007acc";
-            }}
-          >
-            Go
-          </button>
-        </div>
-      );
+              {/* Browser content */}
+              <Page blockId={block.id} url={url} />
+            </div>
+          );
+
+        default:
+          return <div>Unknown status</div>;
+      }
     },
   }
 );

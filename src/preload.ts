@@ -129,6 +129,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   isIntelligentUrlAvailable: () =>
     ipcRenderer.invoke("intelligent-url-available"),
 
+  // Block creation processing
+  processInputCreateBlocks: (input: string, context?: any) =>
+    ipcRenderer.invoke("process-input-create-blocks", input, context),
+
+  isBlockCreationAvailable: () =>
+    ipcRenderer.invoke("block-creation-available"),
+
   // Console log forwarding
   forwardLog: (logData: {
     level: string;
