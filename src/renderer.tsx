@@ -246,6 +246,14 @@ declare global {
       debugLinkClick: (url: string) => void;
       testNewBrowserBlock: (url: string) => void;
       testCommunication: (callback?: (result: string) => void) => string | void;
+      processIntelligentUrl: (input: string, context?: any) => Promise<any>;
+      isIntelligentUrlAvailable: () => Promise<boolean>;
+      forwardLog: (logData: {
+        level: string;
+        message: string;
+        timestamp: string;
+        source: string;
+      }) => void;
     };
   }
 }

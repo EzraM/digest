@@ -122,4 +122,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener(EVENTS.BROWSER.NEW_BLOCK, subscription);
     };
   },
+  // Intelligent URL processing
+  processIntelligentUrl: (input: string, context?: any) =>
+    ipcRenderer.invoke("intelligent-url-process", input, context),
+
+  isIntelligentUrlAvailable: () =>
+    ipcRenderer.invoke("intelligent-url-available"),
+
+  // Console log forwarding
+  forwardLog: (logData: {
+    level: string;
+    message: string;
+    timestamp: string;
+    source: string;
+  }) => {
+    ipcRenderer.send("renderer-log", logData);
+  },
 });

@@ -4,6 +4,8 @@ import {
   WebContentsView,
   ipcMain,
   globalShortcut,
+  IpcMainEvent,
+  IpcMainInvokeEvent,
 } from "electron";
 import path from "path";
 import { ViewManager } from "./services/ViewManager";
@@ -11,6 +13,12 @@ import { viteConfig } from "./config/vite";
 import { AppOverlay } from "./services/AppOverlay";
 import { SlashCommandManager } from "./services/SlashCommandManager";
 import { log } from "./utils/mainLogger";
+import { shouldOpenDevTools } from "./config/development";
+import {
+  IntelligentUrlService,
+  ProcessingResult,
+  DocumentContext,
+} from "./services/IntelligentUrlService";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -32,6 +40,9 @@ const EVENTS = {
 let mainWindow: BrowserWindow | null = null;
 let globalViewManager: ViewManager | null = null;
 let globalAppView: WebContentsView | null = null;
+
+// Initialize intelligent URL service
+const intelligentUrlService = new IntelligentUrlService();
 
 const createWindow = () => {
   const baseWindow = new BrowserWindow({
@@ -84,9 +95,12 @@ const createWindow = () => {
     );
   }
 
-  const devTools = new BrowserWindow();
-  appViewInstance.webContents.setDevToolsWebContents(devTools.webContents);
-  appViewInstance.webContents.openDevTools({ mode: "detach" });
+  // Open devtools for main window if configured
+  if (shouldOpenDevTools("openMainWindow")) {
+    const devTools = new BrowserWindow();
+    appViewInstance.webContents.setDevToolsWebContents(devTools.webContents);
+    appViewInstance.webContents.openDevTools({ mode: "detach" });
+  }
 
   // Store global references
   globalAppView = appViewInstance;
@@ -118,6 +132,9 @@ const createWindow = () => {
   mainWindow = baseWindow;
   globalViewManager = viewManager;
 
+  // Set up console log forwarding from renderer
+  setupConsoleLogForwarding(appViewInstance);
+
   // Set up IPC handlers
   setupIpcHandlers(viewManager, slashCommandManager);
 
@@ -125,6 +142,57 @@ const createWindow = () => {
     mainWindow = null;
     globalViewManager = null;
     globalAppView = null;
+  });
+};
+
+const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
+  // Forward renderer console logs to main process
+  webContentsView.webContents.on(
+    "console-message",
+    (
+      event: any,
+      level: number,
+      message: string,
+      line: number,
+      sourceId: string
+    ) => {
+      const logLevel =
+        level === 1
+          ? "info"
+          : level === 2
+          ? "warn"
+          : level === 3
+          ? "error"
+          : "debug";
+      const source = sourceId ? path.basename(sourceId) : "renderer";
+
+      log.debug(
+        `[RENDERER-${logLevel.toUpperCase()}] ${source}:${line} - ${message}`,
+        "renderer-console"
+      );
+    }
+  );
+
+  // Also capture renderer errors
+  webContentsView.webContents.on(
+    "render-process-gone",
+    (event: any, details: any) => {
+      log.debug(
+        `Renderer process gone. Reason: ${details.reason}, Exit code: ${details.exitCode}`,
+        "renderer-crash"
+      );
+    }
+  );
+
+  webContentsView.webContents.on("unresponsive", () => {
+    log.debug("Renderer process became unresponsive", "renderer-unresponsive");
+  });
+
+  webContentsView.webContents.on("responsive", () => {
+    log.debug(
+      "Renderer process became responsive again",
+      "renderer-responsive"
+    );
   });
 };
 
@@ -173,6 +241,65 @@ const setupIpcHandlers = (
   ipcMain.on("block-menu:select", (_, blockKey) => {
     log.debug(`Block selected from HUD: ${blockKey}`, "main");
     slashCommandManager.selectBlock(blockKey);
+  });
+
+  // Handle renderer log forwarding
+  ipcMain.on(
+    "renderer-log",
+    (
+      event: IpcMainEvent,
+      logData: {
+        level: string;
+        message: string;
+        timestamp: string;
+        source: string;
+      }
+    ) => {
+      const { level, message, timestamp, source } = logData;
+      const safeLevel = (level || "debug").toUpperCase();
+      const safeMessage = message || "No message";
+      const safeSource = source || "unknown";
+
+      log.debug(
+        `[RENDERER-${safeLevel}] ${safeSource} - ${safeMessage}`,
+        "renderer-console"
+      );
+    }
+  );
+
+  // Intelligent URL processing
+  ipcMain.handle(
+    "intelligent-url-process",
+    async (
+      event: IpcMainInvokeEvent,
+      input: string,
+      context?: DocumentContext
+    ): Promise<ProcessingResult> => {
+      try {
+        log.debug(`IPC: Processing intelligent URL input: "${input}"`, "main");
+        const result = await intelligentUrlService.processInput(input, context);
+        log.debug(
+          `IPC: Intelligent URL result: ${JSON.stringify(result)}`,
+          "main"
+        );
+        return result;
+      } catch (error) {
+        log.debug(`IPC: Error processing intelligent URL: ${error}`, "main");
+        return {
+          classification: "invalid",
+          confidence: 1.0,
+          action: "error",
+          data: {
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        };
+      }
+    }
+  );
+
+  // Check if intelligent processing is available
+  ipcMain.handle("intelligent-url-available", async (): Promise<boolean> => {
+    return intelligentUrlService.isAvailable();
   });
 };
 
