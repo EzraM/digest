@@ -19,71 +19,78 @@ export const site = createReactBlockSpec(
       const { url } = block.props;
       const [inputValue, setInputValue] = useState(url || "");
       const [blockInserter] = useState(() => new BlockInserter(editor));
-      const inputRef = useRef<HTMLInputElement>(null);
+      const textareaRef = useRef<HTMLTextAreaElement>(null);
 
       // Determine the effective status: if we have a URL, show page, otherwise show entry
       const effectiveStatus: SiteStatus = url ? "page" : "entry";
 
       // Focus the input when the block is created (only for entry mode)
       useEffect(() => {
-        if (effectiveStatus === "entry" && inputRef.current) {
+        if (effectiveStatus === "entry" && textareaRef.current) {
           // Small delay to ensure the block is fully rendered
           setTimeout(() => {
-            inputRef.current?.focus();
+            textareaRef.current?.focus();
           }, 100);
         }
       }, [effectiveStatus]);
 
-      // Handle intelligent navigation using the new block creation service
-      const handleIntelligentNavigate = async (input: string) => {
+      // Check if input is a direct URL
+      const isDirectUrl = (input: string): boolean => {
+        return (
+          input.trim().startsWith("http://") ||
+          input.trim().startsWith("https://")
+        );
+      };
+
+      // Handle processing input
+      const handleProcessInput = async (input: string) => {
+        const trimmedInput = input.trim();
+        if (!trimmedInput) return;
+
         try {
-          console.log(
-            "[SiteBlock] Processing input with intelligent service:",
-            input
-          );
-
-          // Check if intelligent processing is available
-          const isAvailable =
-            await window.electronAPI?.isBlockCreationAvailable();
-
-          if (!isAvailable) {
-            console.log(
-              "[SiteBlock] Intelligent processing not available, using basic navigation"
-            );
-            handleBasicNavigate();
-            return;
-          }
-
-          // Process input and get block creation requests
-          const result = await window.electronAPI?.processInputCreateBlocks(
-            input
-          );
-
-          if (!result?.success || !result.blocks) {
-            console.log(
-              "[SiteBlock] Block creation failed, falling back to basic navigation"
-            );
-            handleBasicNavigate();
-            return;
-          }
-
-          console.log("[SiteBlock] Received blocks to create:", result.blocks);
-
-          // If we got exactly one site block, just update this block
-          if (result.blocks.length === 1 && result.blocks[0].type === "site") {
-            const siteBlock = result.blocks[0];
+          // If it's a direct URL, navigate directly
+          if (isDirectUrl(trimmedInput)) {
+            console.log("[SiteBlock] Direct URL navigation to:", trimmedInput);
             editor.updateBlock(block, {
               type: "site",
               props: {
-                url: siteBlock.props?.url || input,
+                url: trimmedInput,
               },
             });
             return;
           }
 
-          // Multiple blocks or non-site blocks - replace this block and insert others
+          // Otherwise, send to Claude for intelligent processing
+          console.log("[SiteBlock] Processing with Claude:", trimmedInput);
+
+          // Check if intelligent processing is available
+          const isAvailable = await (
+            window.electronAPI as any
+          )?.isBlockCreationAvailable?.();
+
+          if (!isAvailable) {
+            console.log("[SiteBlock] Intelligent processing not available");
+            // Could show an error or fallback behavior here
+            return;
+          }
+
+          // Process input and get block creation requests
+          const result = await (
+            window.electronAPI as any
+          )?.processInputCreateBlocks?.(trimmedInput);
+
+          if (!result?.success || !result.blocks) {
+            console.log("[SiteBlock] Block creation failed:", result?.error);
+            return;
+          }
+
+          console.log(
+            "[SiteBlock] Received blocks to create:",
+            JSON.stringify(result.blocks, null, 2)
+          );
+
+          // Replace current block with first block and insert remaining blocks
           if (result.blocks.length > 0) {
-            // Replace current block with first block
             const firstBlock = result.blocks[0];
             editor.updateBlock(block, {
               type: firstBlock.type,
@@ -100,46 +107,18 @@ export const site = createReactBlockSpec(
             }
           }
         } catch (error) {
-          console.error("[SiteBlock] Error in intelligent navigation:", error);
-          handleBasicNavigate();
-        }
-      };
-
-      const handleBasicNavigate = () => {
-        if (inputValue.trim()) {
-          const formatUrl = (url: string): string => {
-            if (!url) return url;
-            if (!url.match(/^[a-zA-Z]+:\/\//)) {
-              return `https://${url}`;
-            }
-            return url;
-          };
-
-          const formattedUrl = formatUrl(inputValue.trim());
-          console.log("[SiteBlock] Basic navigation to:", {
-            originalUrl: inputValue,
-            formattedUrl,
-          });
-
-          editor.updateBlock(block, {
-            type: "site",
-            props: {
-              url: formattedUrl,
-            },
-          });
+          console.error("[SiteBlock] Error processing input:", error);
         }
       };
 
       const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === "Enter") {
-          e.preventDefault();
           if (e.metaKey || e.ctrlKey) {
-            // Cmd/Ctrl+Enter for intelligent processing
-            handleIntelligentNavigate(inputValue);
-          } else {
-            // Regular Enter for basic navigation
-            handleBasicNavigate();
+            // Cmd/Ctrl+Enter for processing
+            e.preventDefault();
+            handleProcessInput(inputValue);
           }
+          // Regular Enter allows line break (default textarea behavior)
         }
       };
 
@@ -163,21 +142,20 @@ export const site = createReactBlockSpec(
                 borderRadius: "8px",
                 padding: "12px",
                 backgroundColor: "#fafafa",
-                minHeight: "60px",
+                minHeight: "80px",
                 display: "flex",
-                alignItems: "center",
+                alignItems: "flex-start",
                 gap: "8px",
               }}
             >
-              <div style={{ fontSize: "18px" }}>🌐</div>
+              <div style={{ fontSize: "18px", marginTop: "4px" }}>🌐</div>
               <div style={{ flex: 1 }}>
-                <input
-                  ref={inputRef}
-                  type="text"
+                <textarea
+                  ref={textareaRef}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Enter URL or search query... (⌘+Enter for intelligent processing)"
+                  placeholder="Enter URL or describe what you're looking for..."
                   style={{
                     width: "100%",
                     border: "none",
@@ -185,12 +163,16 @@ export const site = createReactBlockSpec(
                     fontSize: "14px",
                     outline: "none",
                     color: "#333",
+                    resize: "none",
+                    minHeight: "20px",
+                    fontFamily: "inherit",
                   }}
+                  rows={1}
                 />
                 <div
                   style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}
                 >
-                  Press Enter to navigate • ⌘+Enter for intelligent processing
+                  ⌘+Enter to process • Enter for line break
                 </div>
               </div>
             </div>

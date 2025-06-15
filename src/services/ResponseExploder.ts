@@ -1,5 +1,23 @@
 import { log } from "../utils/mainLogger";
 
+// We'll define our own types that match BlockNote's expected structure
+// rather than importing the generic types that require complex type parameters
+
+// BlockNote-compatible types
+type BlockNoteStyledText = {
+  type: "text";
+  text: string;
+  styles: Record<string, any>;
+};
+
+type BlockNoteLink = {
+  type: "link";
+  content: BlockNoteStyledText[];
+  href: string;
+};
+
+type BlockNoteInlineContent = BlockNoteStyledText | BlockNoteLink;
+
 // Block creation interfaces
 export interface BlockCreationRequest {
   type: string;
@@ -55,6 +73,10 @@ export class ResponseExploder {
 
       log.debug(
         `Successfully exploded response into ${blocks.length} blocks in ${processingTime}ms`,
+        "ResponseExploder"
+      );
+      log.debug(
+        `Block types created: ${blocks.map((b) => b.type).join(", ")}`,
         "ResponseExploder"
       );
 
@@ -128,25 +150,18 @@ export class ResponseExploder {
     const blocks: BlockCreationRequest[] = [];
 
     for (const element of elements) {
-      const blockRequest = this.convertElementToBlock(element);
-      if (blockRequest) {
-        blocks.push(blockRequest);
-
-        // If this is a table with URLs, create additional site blocks for easy navigation
-        if (element.tag === "table") {
-          const tableData = this.parseTableContent(element.content);
-          const urls = this.extractUrlsFromTable(tableData);
-
-          // Create site blocks for the first few URLs (limit to avoid overwhelming)
-          const maxSiteBlocks = 3;
-          for (let i = 0; i < Math.min(urls.length, maxSiteBlocks); i++) {
-            blocks.push({
-              type: "site",
-              props: {
-                url: urls[i],
-              },
-            });
-          }
+      // Handle lists specially since they can create multiple blocks
+      if (
+        element.tag === "list" ||
+        element.tag === "ul" ||
+        element.tag === "ol"
+      ) {
+        const listBlocks = this.createListBlocks(element);
+        blocks.push(...listBlocks);
+      } else {
+        const blockRequest = this.convertElementToBlock(element);
+        if (blockRequest) {
+          blocks.push(blockRequest);
         }
       }
     }
@@ -207,14 +222,12 @@ export class ResponseExploder {
   private static createTableBlock(
     element: ParsedXMLElement
   ): BlockCreationRequest {
-    // Parse table content - could be CSV, markdown table, or structured data
-    const tableData = this.parseTableContent(element.content);
+    // Parse table content into BlockNote's expected format
+    const tableContent = this.parseTableContentForBlockNote(element.content);
 
     return {
       type: "table",
-      props: {
-        ...tableData,
-      },
+      content: tableContent,
     };
   }
 
@@ -295,18 +308,46 @@ export class ResponseExploder {
   }
 
   /**
-   * Create a list block from XML
+   * Create multiple list item blocks from XML list
+   */
+  private static createListBlocks(
+    element: ParsedXMLElement
+  ): BlockCreationRequest[] {
+    const isOrdered =
+      element.tag === "ol" || element.attributes.type === "ordered";
+
+    // Parse individual <item> elements within the list
+    const itemMatches = element.content.match(/<item>(.*?)<\/item>/g);
+
+    if (itemMatches && itemMatches.length > 0) {
+      return itemMatches.map((itemMatch) => {
+        const itemContent = itemMatch.replace(/<\/?item>/g, "").trim();
+        return {
+          type: isOrdered ? "numberedListItem" : "bulletListItem",
+          content: itemContent,
+        };
+      });
+    }
+
+    // Fallback: treat entire content as a single list item
+    return [
+      {
+        type: isOrdered ? "numberedListItem" : "bulletListItem",
+        content: element.content,
+      },
+    ];
+  }
+
+  /**
+   * Create list blocks from XML - returns multiple blocks for each item
    */
   private static createListBlock(
     element: ParsedXMLElement
   ): BlockCreationRequest {
-    const isOrdered =
-      element.tag === "ol" || element.attributes.type === "ordered";
-
-    return {
-      type: isOrdered ? "numberedListItem" : "bulletListItem",
-      content: element.content,
-    };
+    // This method is kept for compatibility with the switch statement
+    // but we should use createListBlocks instead
+    const blocks = this.createListBlocks(element);
+    return blocks[0]; // Return first block only
   }
 
   /**
@@ -342,7 +383,118 @@ export class ResponseExploder {
   }
 
   /**
-   * Parse table content from various formats
+   * Parse table content into BlockNote's expected TableContent format
+   */
+  private static parseTableContentForBlockNote(content: string): {
+    type: "tableContent";
+    rows: { cells: BlockNoteInlineContent[][] }[];
+  } {
+    // Clean up the content by removing XML tags
+    const cleanContent = content
+      .replace(/<\/?headers>/g, "")
+      .replace(/<\/?row>/g, "")
+      .trim();
+
+    // Try to parse as CSV first
+    const lines = cleanContent.split("\n").filter((line) => line.trim());
+
+    if (lines.length > 0) {
+      // Parse each line as a row
+      const rows = lines.map((line) => {
+        const cellTexts = line.split(",").map((cell) => cell.trim());
+
+        // Convert each cell text to proper InlineContent array
+        const cells = cellTexts.map((cellText) => {
+          return this.parseTextToInlineContent(cellText);
+        });
+
+        return { cells };
+      });
+
+      return {
+        type: "tableContent",
+        rows,
+      };
+    }
+
+    // Fallback: single cell table
+    return {
+      type: "tableContent",
+      rows: [
+        {
+          cells: [[{ type: "text", text: content, styles: {} }]],
+        },
+      ],
+    };
+  }
+
+  /**
+   * Parse text content into InlineContent array, detecting URLs and creating Link objects
+   */
+  private static parseTextToInlineContent(
+    text: string
+  ): BlockNoteInlineContent[] {
+    // Simple URL detection regex
+    const urlRegex = /(https?:\/\/[^\s,]+)/g;
+    const parts: any[] = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = urlRegex.exec(text)) !== null) {
+      // Add text before the URL
+      if (match.index > lastIndex) {
+        const beforeText = text.slice(lastIndex, match.index).trim();
+        if (beforeText) {
+          parts.push({
+            type: "text",
+            text: beforeText,
+            styles: {},
+          });
+        }
+      }
+
+      // Add the URL as a Link object
+      parts.push({
+        type: "link",
+        content: [
+          {
+            type: "text",
+            text: match[0],
+            styles: {},
+          },
+        ],
+        href: match[0],
+      });
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text after the last URL
+    if (lastIndex < text.length) {
+      const remainingText = text.slice(lastIndex).trim();
+      if (remainingText) {
+        parts.push({
+          type: "text",
+          text: remainingText,
+          styles: {},
+        });
+      }
+    }
+
+    // If no URLs were found, return the entire text as a single StyledText object
+    if (parts.length === 0) {
+      parts.push({
+        type: "text",
+        text: text,
+        styles: {},
+      });
+    }
+
+    return parts;
+  }
+
+  /**
+   * Parse table content from various formats (legacy method for URL extraction)
    */
   private static parseTableContent(content: string): Record<string, any> {
     // Try to parse as CSV first

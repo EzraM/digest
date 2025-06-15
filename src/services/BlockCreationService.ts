@@ -21,16 +21,13 @@ export class BlockCreationService {
   private intelligentUrlService: IntelligentUrlService;
 
   constructor() {
-    this.intelligentUrlService = new IntelligentUrlService();
+    this.intelligentUrlService = IntelligentUrlService.getInstance();
   }
 
   /**
    * Main entry point: process user input and create appropriate blocks
    */
-  async processInputAndCreateBlocks(
-    input: string,
-    context?: any
-  ): Promise<{
+  async processInputAndCreateBlocks(input: string): Promise<{
     success: boolean;
     blocks?: BlockCreationRequest[];
     error?: string;
@@ -42,10 +39,9 @@ export class BlockCreationService {
         "BlockCreationService"
       );
 
-      // Step 1: Process input through Claude
+      // Step 1: Process input through Claude (always returns XML to explode)
       const processingResult = await this.intelligentUrlService.processInput(
-        input,
-        context
+        input
       );
 
       log.debug(
@@ -53,89 +49,41 @@ export class BlockCreationService {
         "BlockCreationService"
       );
 
-      // Step 2: Handle different action types
-      switch (processingResult.action) {
-        case "navigate":
-          // Simple navigation - create a single site block
-          return {
-            success: true,
-            blocks: [
-              {
-                type: "site",
-                props: {
-                  url: processingResult.data?.url,
-                },
-              },
-            ],
-            metadata: {
-              action: "navigate",
-              originalInput: input,
-            },
-          };
+      // Step 2: Handle the result
+      if (!processingResult.success) {
+        return {
+          success: false,
+          error: processingResult.error || "Unknown error occurred",
+          metadata: {
+            originalInput: input,
+          },
+        };
+      }
 
-        case "explode":
-          // XML response - explode into multiple blocks
-          if (processingResult.data?.xmlResponse) {
-            const explodedResponse = ResponseExploder.explodeResponse(
-              processingResult.data.xmlResponse,
-              input
-            );
+      // Step 3: Explode XML response into blocks
+      if (processingResult.xmlResponse) {
+        const explodedResponse = ResponseExploder.explodeResponse(
+          processingResult.xmlResponse,
+          input
+        );
 
-            return {
-              success: true,
-              blocks: explodedResponse.blocks,
-              metadata: {
-                action: "explode",
-                ...explodedResponse.metadata,
-              },
-            };
-          } else {
-            throw new Error("No XML response found for explode action");
-          }
+        const result = {
+          success: true,
+          blocks: explodedResponse.blocks,
+          metadata: {
+            action: "explode",
+            ...explodedResponse.metadata,
+          },
+        };
 
-        case "clarify":
-        case "search": {
-          // Create a paragraph with suggestions
-          const suggestions = processingResult.data?.suggestions || [
-            "No suggestions available",
-          ];
-          return {
-            success: true,
-            blocks: [
-              {
-                type: "paragraph",
-                content: `Suggestions for "${input}": ${suggestions.join(
-                  ", "
-                )}`,
-              },
-            ],
-            metadata: {
-              action: processingResult.action,
-              originalInput: input,
-            },
-          };
-        }
+        log.debug(
+          `Final block creation result: ${JSON.stringify(result, null, 2)}`,
+          "BlockCreationService"
+        );
 
-        case "error":
-        default: {
-          // Error case - create an error paragraph
-          const errorMessage =
-            processingResult.data?.error || "Unknown error occurred";
-          return {
-            success: true,
-            blocks: [
-              {
-                type: "paragraph",
-                content: `Error processing "${input}": ${errorMessage}`,
-              },
-            ],
-            metadata: {
-              action: "error",
-              originalInput: input,
-              error: errorMessage,
-            },
-          };
-        }
+        return result;
+      } else {
+        throw new Error("No XML response found");
       }
     } catch (error) {
       log.debug(
