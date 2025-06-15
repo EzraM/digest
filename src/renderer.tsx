@@ -41,6 +41,7 @@ import {
 import { site } from "./Browser/Browser";
 import { RiPagesFill } from "react-icons/ri";
 import { log } from "./utils/rendererLogger";
+import { ResponseExploder } from "./services/ResponseExploder";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
@@ -207,6 +208,108 @@ function App() {
     return unsubscribe;
   }, []);
 
+  // Set up IPC listener for prompt overlay block creation
+  useEffect(() => {
+    log.debug("Setting up prompt overlay block creation listener", "renderer");
+
+    if (!window.electronAPI?.onPromptOverlayCreateBlocks) {
+      log.debug(
+        "onPromptOverlayCreateBlocks not available in electronAPI",
+        "renderer"
+      );
+      return;
+    }
+
+    const unsubscribe = window.electronAPI.onPromptOverlayCreateBlocks(
+      (data: { xmlResponse: string; originalInput: string }) => {
+        log.debug(
+          `[PROMPT OVERLAY] Received block creation event for: ${data.originalInput}`,
+          "renderer"
+        );
+        log.debug(
+          `[PROMPT OVERLAY] XML response length: ${data.xmlResponse.length}`,
+          "renderer"
+        );
+
+        if (currentEditor) {
+          try {
+            // Use ResponseExploder to parse XML and create blocks
+            log.debug(
+              "[PROMPT OVERLAY] Starting ResponseExploder.explodeResponse",
+              "renderer"
+            );
+            const explodedResponse = ResponseExploder.explodeResponse(
+              data.xmlResponse,
+              data.originalInput
+            );
+
+            log.debug(
+              `[PROMPT OVERLAY] Exploded ${explodedResponse.blocks.length} blocks`,
+              "renderer"
+            );
+            log.debug(
+              `[PROMPT OVERLAY] Block types: ${explodedResponse.blocks
+                .map((b) => b.type)
+                .join(", ")}`,
+              "renderer"
+            );
+
+            // Insert blocks at the current cursor position
+            let insertCount = 0;
+
+            for (const blockRequest of explodedResponse.blocks) {
+              log.debug(
+                `[PROMPT OVERLAY] Inserting block ${insertCount + 1}: ${
+                  blockRequest.type
+                }`,
+                "renderer"
+              );
+              log.debug(
+                `[PROMPT OVERLAY] Block props: ${JSON.stringify(
+                  blockRequest.props
+                )}`,
+                "renderer"
+              );
+
+              try {
+                // Insert block after the current one
+                insertOrUpdateBlock(currentEditor, blockRequest as any);
+                insertCount++;
+                log.debug(
+                  `[PROMPT OVERLAY] Successfully inserted block ${insertCount}`,
+                  "renderer"
+                );
+              } catch (blockError) {
+                log.debug(
+                  `[PROMPT OVERLAY] Error inserting individual block: ${blockError}`,
+                  "renderer"
+                );
+              }
+            }
+
+            log.debug(
+              `[PROMPT OVERLAY] Finished inserting ${insertCount} blocks`,
+              "renderer"
+            );
+          } catch (error) {
+            log.debug(
+              `[PROMPT OVERLAY] Error in block creation process: ${error}`,
+              "renderer"
+            );
+          }
+        } else {
+          log.debug("[PROMPT OVERLAY] No current editor available", "renderer");
+        }
+      }
+    );
+
+    log.debug(
+      "Prompt overlay block creation listener set up successfully",
+      "renderer"
+    );
+    return unsubscribe;
+  }, []);
+
   return (
     <div className="App">
       <BlockNoteView editor={editor} slashMenu={false}>
@@ -243,6 +346,9 @@ declare global {
       onBrowserRemove: (callback: (blockId: string) => void) => void;
       onNewBrowserBlock: (callback: (data: { url: string }) => void) => void;
       onSlashCommandInsert: (callback: (blockKey: string) => void) => void;
+      onPromptOverlayCreateBlocks: (
+        callback: (data: { xmlResponse: string; originalInput: string }) => void
+      ) => void;
       debugLinkClick: (url: string) => void;
       testNewBrowserBlock: (url: string) => void;
       testCommunication: (callback?: (result: string) => void) => string | void;

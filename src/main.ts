@@ -22,6 +22,7 @@ import {
 } from "./services/IntelligentUrlService";
 import { BlockCreationService } from "./services/BlockCreationService";
 import { BlockCreationRequest } from "./services/ResponseExploder";
+import { PromptOverlay } from "./services/PromptOverlay";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -120,6 +121,10 @@ const createWindow = () => {
     appOverlay,
     globalAppView
   );
+
+  // Create and show the prompt overlay (always visible)
+  const promptOverlay = new PromptOverlay({}, baseWindow, globalAppView);
+  promptOverlay.show();
 
   // Set up the link click callback for ViewManager to properly target the correct WebContents
   viewManager.setLinkClickCallback((url: string) => {
@@ -308,7 +313,7 @@ const setupIpcHandlers = (
     ): Promise<ProcessingResult> => {
       try {
         log.debug(`IPC: Processing intelligent URL input: "${input}"`, "main");
-        const result = await intelligentUrlService.processInput(input, context);
+        const result = await intelligentUrlService.processInput(input);
         log.debug(
           `IPC: Intelligent URL result: ${JSON.stringify(result)}`,
           "main"
@@ -317,12 +322,8 @@ const setupIpcHandlers = (
       } catch (error) {
         log.debug(`IPC: Error processing intelligent URL: ${error}`, "main");
         return {
-          classification: "invalid",
-          confidence: 1.0,
-          action: "error",
-          data: {
-            error: error instanceof Error ? error.message : "Unknown error",
-          },
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
         };
       }
     }
@@ -332,6 +333,52 @@ const setupIpcHandlers = (
   ipcMain.handle("intelligent-url-available", async (): Promise<boolean> => {
     return intelligentUrlService.isAvailable();
   });
+
+  // Handle prompt submission from the prompt overlay
+  ipcMain.handle(
+    "prompt-overlay:submit",
+    async (
+      event: IpcMainInvokeEvent,
+      input: string
+    ): Promise<ProcessingResult> => {
+      try {
+        log.debug(`IPC: Processing prompt overlay input: "${input}"`, "main");
+        const result = await intelligentUrlService.processInput(input);
+        log.debug(
+          `IPC: Prompt overlay result: ${JSON.stringify(result)}`,
+          "main"
+        );
+
+        // If successful, forward the XML response to the main renderer to create blocks
+        if (
+          result.success &&
+          result.xmlResponse &&
+          globalAppView &&
+          !globalAppView.webContents.isDestroyed()
+        ) {
+          log.debug(
+            "Forwarding XML response to main renderer for block creation",
+            "main"
+          );
+          globalAppView.webContents.send("prompt-overlay:create-blocks", {
+            xmlResponse: result.xmlResponse,
+            originalInput: input,
+          });
+        }
+
+        return result;
+      } catch (error) {
+        log.debug(
+          `IPC: Error processing prompt overlay input: ${error}`,
+          "main"
+        );
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }
+  );
 
   // Process input and create blocks
   ipcMain.handle(
@@ -352,8 +399,7 @@ const setupIpcHandlers = (
           "main"
         );
         const result = await blockCreationService.processInputAndCreateBlocks(
-          input,
-          context
+          input
         );
         log.debug(
           `IPC: Block creation result: ${JSON.stringify(result)}`,

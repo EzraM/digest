@@ -6,11 +6,16 @@ import react from "@vitejs/plugin-react";
 // https://vitejs.dev/config
 export default defineConfig((env) => {
   const forgeEnv = env as ConfigEnv;
-  const { root, mode, forgeConfigSelf } = forgeEnv;
-  const name = forgeConfigSelf.name ?? "";
+  const { mode } = forgeEnv;
+  const name = (forgeEnv as any).forgeConfigSelf?.name ?? "";
 
   // Set root path based on the renderer name
-  const rootPath = name === "app_overlay" ? "app-overlay" : root;
+  const rootPath =
+    name === "app_overlay"
+      ? "app-overlay"
+      : name === "prompt_overlay"
+      ? "prompt-overlay"
+      : (forgeEnv as any).root || ".";
 
   return {
     root: rootPath,

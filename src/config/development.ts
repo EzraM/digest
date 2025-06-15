@@ -19,6 +19,9 @@ export const DEV_CONFIG = {
     // Open devtools for the HUD overlay (slash command menu)
     openHudOverlay: false,
 
+    // Open devtools for the prompt overlay (global prompt bar)
+    openPromptOverlay: false,
+
     // Open devtools for individual browser WebViews (embedded websites)
     openBrowserViews: false,
   },

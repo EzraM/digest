@@ -56,6 +56,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener(EVENTS.BLOCK_MENU.SELECT, subscription);
     };
   },
+  onPromptOverlayCreateBlocks: (
+    callback: (data: { xmlResponse: string; originalInput: string }) => void
+  ) => {
+    const subscription = (
+      _: any,
+      data: { xmlResponse: string; originalInput: string }
+    ) => {
+      log.debug(
+        `Received prompt overlay create blocks: ${data.originalInput}`,
+        "preload"
+      );
+      callback(data);
+    };
+    ipcRenderer.on("prompt-overlay:create-blocks", subscription);
+    return () => {
+      ipcRenderer.removeListener("prompt-overlay:create-blocks", subscription);
+    };
+  },
   onSlashCommandInsert: (callback: (blockKey: string) => void) => {
     const subscription = (_: any, blockKey: string) => {
       log.debug(
