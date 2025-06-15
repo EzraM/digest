@@ -12,6 +12,7 @@ import { ViewManager } from "./services/ViewManager";
 import { viteConfig } from "./config/vite";
 import { AppOverlay } from "./services/AppOverlay";
 import { SlashCommandManager } from "./services/SlashCommandManager";
+import { LinkInterceptionService } from "./services/LinkInterceptionService";
 import { log } from "./utils/mainLogger";
 import { shouldOpenDevTools } from "./config/development";
 import {
@@ -44,7 +45,7 @@ let globalViewManager: ViewManager | null = null;
 let globalAppView: WebContentsView | null = null;
 
 // Initialize intelligent URL service
-const intelligentUrlService = new IntelligentUrlService();
+const intelligentUrlService = IntelligentUrlService.getInstance();
 
 // Initialize block creation service
 const blockCreationService = new BlockCreationService();
@@ -110,6 +111,9 @@ const createWindow = () => {
   // Store global references
   globalAppView = appViewInstance;
 
+  // Set up link interception for the main renderer process
+  const linkInterceptionService = new LinkInterceptionService(appViewInstance);
+
   const viewManager = new ViewManager(baseWindow);
   const appOverlay = new AppOverlay({}, baseWindow, globalAppView);
   const slashCommandManager = new SlashCommandManager(
@@ -128,6 +132,28 @@ const createWindow = () => {
     } else {
       log.debug(
         "Cannot forward new block event - appView not available",
+        "main"
+      );
+    }
+  });
+
+  // Set up the link click callback for LinkInterceptionService
+  linkInterceptionService.setLinkClickCallback((url: string) => {
+    log.debug(
+      `Main renderer link click callback called with URL: ${url}`,
+      "main"
+    );
+
+    // Forward the new block event to the main renderer
+    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
+      log.debug(
+        `Forwarding new block event from main renderer to appView: ${url}`,
+        "main"
+      );
+      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url });
+    } else {
+      log.debug(
+        "Cannot forward new block event from main renderer - appView not available",
         "main"
       );
     }
