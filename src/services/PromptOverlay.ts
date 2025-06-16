@@ -223,8 +223,21 @@ export class PromptOverlay {
   focus() {
     log.debug("PromptOverlay.focus() called", "PromptOverlay");
     if (this.overlay && !this.overlay.webContents.isDestroyed()) {
-      this.overlay.webContents.send("prompt-overlay:focus-input");
-      log.debug("Sent focus message to prompt overlay", "PromptOverlay");
+      // First focus the WebContents itself
+      this.overlay.webContents.focus();
+      log.debug("Focused prompt overlay WebContents", "PromptOverlay");
+
+      // Then send message to focus the textarea within the WebContents
+      // Use a small delay to ensure WebContents focus is established first
+      setTimeout(() => {
+        if (this.overlay && !this.overlay.webContents.isDestroyed()) {
+          this.overlay.webContents.send("prompt-overlay:focus-input");
+          log.debug(
+            "Sent focus message to prompt overlay textarea",
+            "PromptOverlay"
+          );
+        }
+      }, 10); // Small delay to ensure WebContents focus is established
     }
   }
 
