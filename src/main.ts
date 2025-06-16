@@ -23,6 +23,7 @@ import {
 import { BlockCreationService } from "./services/BlockCreationService";
 import { BlockCreationRequest } from "./services/ResponseExploder";
 import { PromptOverlay } from "./services/PromptOverlay";
+import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -45,6 +46,7 @@ let mainWindow: BrowserWindow | null = null;
 let globalViewManager: ViewManager | null = null;
 let globalAppView: WebContentsView | null = null;
 let globalPromptOverlay: PromptOverlay | null = null;
+let globalViewLayerManager: ViewLayerManager | null = null;
 
 // Initialize intelligent URL service
 const intelligentUrlService = IntelligentUrlService.getInstance();
@@ -113,10 +115,17 @@ const createWindow = () => {
   // Store global references
   globalAppView = appViewInstance;
 
+  // Create the view layer manager for proper z-ordering
+  const viewLayerManager = new ViewLayerManager(baseWindow);
+  globalViewLayerManager = viewLayerManager;
+
+  // Register the main app view with the layer manager
+  viewLayerManager.addView("main-app", appViewInstance, ViewLayer.BACKGROUND);
+
   // Set up link interception for the main renderer process
   const linkInterceptionService = new LinkInterceptionService(appViewInstance);
 
-  const viewManager = new ViewManager(baseWindow);
+  const viewManager = new ViewManager(baseWindow, viewLayerManager);
   const appOverlay = new AppOverlay({}, baseWindow, globalAppView);
   const slashCommandManager = new SlashCommandManager(
     appOverlay,
@@ -124,7 +133,12 @@ const createWindow = () => {
   );
 
   // Create and show the prompt overlay (always visible)
-  const promptOverlay = new PromptOverlay({}, baseWindow, globalAppView);
+  const promptOverlay = new PromptOverlay(
+    {},
+    baseWindow,
+    globalAppView,
+    viewLayerManager
+  );
   promptOverlay.show();
   globalPromptOverlay = promptOverlay;
 

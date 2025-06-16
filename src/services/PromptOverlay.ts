@@ -2,6 +2,7 @@ import { BaseWindow, WebContentsView, BrowserWindow } from "electron";
 import path from "path";
 import { log } from "../utils/mainLogger";
 import { shouldOpenDevTools } from "../config/development";
+import { ViewLayerManager, ViewLayer } from "./ViewLayerManager";
 import { viteConfig } from "../config/vite";
 
 export interface PromptOverlayState {
@@ -15,7 +16,8 @@ export class PromptOverlay {
   constructor(
     initialState: PromptOverlayState,
     private baseWindow: BaseWindow,
-    private globalAppView?: WebContentsView
+    private globalAppView?: WebContentsView,
+    private viewLayerManager?: ViewLayerManager
   ) {
     this.state = { ...initialState };
   }
@@ -34,16 +36,16 @@ export class PromptOverlay {
         },
       });
 
-      // Position at top of screen
+      // Position at bottom center of screen
       const windowBounds = this.baseWindow.getBounds();
       const overlayWidth = 480; // Slightly wider for better content fit
       const overlayHeight = 140; // Taller to accommodate shadows and better spacing
       const centerX = Math.floor((windowBounds.width - overlayWidth) / 2);
-      const topY = 20; // 20px from top
+      const bottomY = Math.floor(windowBounds.height - overlayHeight - 20); // 20px from bottom
 
       promptOverlay.setBounds({
         x: centerX,
-        y: topY,
+        y: bottomY,
         width: overlayWidth,
         height: overlayHeight,
       });
@@ -151,23 +153,34 @@ export class PromptOverlay {
     log.debug("PromptOverlay.show() called", "PromptOverlay");
     this.createOverlay();
     if (this.overlay) {
-      this.baseWindow.contentView.addChildView(this.overlay);
-      log.debug(
-        "Prompt overlay added to baseWindow contentView",
-        "PromptOverlay"
-      );
-
-      // Ensure prompt overlay is on top by setting it as the active child
-      try {
-        // Move to front (this ensures it's the top-most overlay)
-        this.baseWindow.contentView.removeChildView(this.overlay);
+      if (this.viewLayerManager) {
+        // Use the layer manager for proper z-ordering
+        this.viewLayerManager.addView(
+          "prompt-overlay",
+          this.overlay,
+          ViewLayer.PROMPT
+        );
+        log.debug("Prompt overlay added via ViewLayerManager", "PromptOverlay");
+      } else {
+        // Fallback to manual management
         this.baseWindow.contentView.addChildView(this.overlay);
-        log.debug("Prompt overlay moved to front", "PromptOverlay");
-      } catch (error) {
         log.debug(
-          `Error moving prompt overlay to front: ${error}`,
+          "Prompt overlay added to baseWindow contentView (fallback)",
           "PromptOverlay"
         );
+
+        // Ensure prompt overlay is on top by setting it as the active child
+        try {
+          // Move to front (this ensures it's the top-most overlay)
+          this.baseWindow.contentView.removeChildView(this.overlay);
+          this.baseWindow.contentView.addChildView(this.overlay);
+          log.debug("Prompt overlay moved to front", "PromptOverlay");
+        } catch (error) {
+          log.debug(
+            `Error moving prompt overlay to front: ${error}`,
+            "PromptOverlay"
+          );
+        }
       }
     }
   }
@@ -175,11 +188,21 @@ export class PromptOverlay {
   hide() {
     log.debug("PromptOverlay.hide() called", "PromptOverlay");
     if (this.overlay) {
-      this.baseWindow.contentView.removeChildView(this.overlay);
-      log.debug(
-        "Prompt overlay removed from baseWindow contentView",
-        "PromptOverlay"
-      );
+      if (this.viewLayerManager) {
+        // Remove via layer manager
+        this.viewLayerManager.removeView("prompt-overlay");
+        log.debug(
+          "Prompt overlay removed via ViewLayerManager",
+          "PromptOverlay"
+        );
+      } else {
+        // Fallback to direct removal
+        this.baseWindow.contentView.removeChildView(this.overlay);
+        log.debug(
+          "Prompt overlay removed from baseWindow contentView (fallback)",
+          "PromptOverlay"
+        );
+      }
     }
   }
 
@@ -202,6 +225,20 @@ export class PromptOverlay {
     if (this.overlay && !this.overlay.webContents.isDestroyed()) {
       this.overlay.webContents.send("prompt-overlay:focus-input");
       log.debug("Sent focus message to prompt overlay", "PromptOverlay");
+    }
+  }
+
+  /**
+   * Ensure the prompt overlay is on top (useful when other views are added)
+   */
+  ensureOnTop() {
+    log.debug("PromptOverlay.ensureOnTop() called", "PromptOverlay");
+    if (this.overlay && this.viewLayerManager) {
+      this.viewLayerManager.bringToFront("prompt-overlay");
+      log.debug(
+        "Brought prompt overlay to front via ViewLayerManager",
+        "PromptOverlay"
+      );
     }
   }
 }

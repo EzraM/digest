@@ -113,7 +113,6 @@ export class IntelligentUrlService {
         };
       }
 
-      // Process with Claude for intelligent response
       const systemPrompt = `You are an intelligent assistant that helps users create structured content blocks for a collaborative document. Users will provide input describing what they want to research, compare, or explore.
 
 Your job is to respond with XML that will be converted into document blocks. Use these XML tags:
@@ -149,6 +148,24 @@ For relevant images.
 <item>Second item</item>
 </list>
 
+CRITICAL XML FORMATTING RULES:
+- NEVER nest <page> tags inside <list> or <item> tags
+- NEVER nest <page> tags inside any other tags
+- <page> tags must be standalone, top-level elements only
+- If you need to mention URLs within list items, just use plain text for the URL
+- If a list contains multiple URLs that should be navigated to, create separate <page> blocks AFTER the list
+
+WRONG (DO NOT DO THIS):
+<list>
+<item>LangChain - <page url="https://python.langchain.com/"></page></item>
+</list>
+
+CORRECT APPROACH:
+<list>
+<item>LangChain - https://python.langchain.com/</item>
+</list>
+<page url="https://python.langchain.com/"></page>
+
 IMPORTANT PRIORITY RULES:
 1. **Single Service Names/Jump Links**: If the user provides a single word or short phrase that clearly refers to a well-known service, website, or platform, respond with ONLY a single <page> tag pointing to that service's homepage.
 
@@ -172,7 +189,7 @@ Examples of single service requests:
 
 Guidelines:
 - Prioritize single <page> responses for clear service name requests
-- For comparisons, always create tables with URL columns
+- For comparisons, you can make tables with URL columns
 - Include 3-5 relevant options when comparing
 - Add brief explanatory text with <p> tags when providing information
 - Use appropriate headings to organize content

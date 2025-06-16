@@ -4,6 +4,7 @@ import set from "lodash/set";
 import { BlockEvent, BlockViewState } from "../types/window";
 import { log } from "../utils/mainLogger";
 import { shouldOpenDevTools } from "../config/development";
+import { ViewLayerManager, ViewLayer } from "./ViewLayerManager";
 
 const EVENTS = {
   BROWSER: {
@@ -17,7 +18,10 @@ export class ViewManager {
   private events$ = new Subject<BlockEvent>();
   private onLinkClickCallback?: (url: string) => void;
 
-  constructor(private baseWindow: BrowserWindow) {
+  constructor(
+    private baseWindow: BrowserWindow,
+    private viewLayerManager?: ViewLayerManager
+  ) {
     this.setupEventHandlers();
   }
 
@@ -364,7 +368,22 @@ export class ViewManager {
           `Adding WebContentsView to window for blockId: ${blockId}`,
           "ViewManager"
         );
-        this.baseWindow.contentView.addChildView(newView);
+
+        if (this.viewLayerManager) {
+          // Use the layer manager for proper z-ordering
+          this.viewLayerManager.addView(
+            `browser-block-${blockId}`,
+            newView,
+            ViewLayer.BROWSER_BLOCKS
+          );
+          log.debug(
+            `Browser block ${blockId} added via ViewLayerManager`,
+            "ViewManager"
+          );
+        } else {
+          // Fallback to direct addition
+          this.baseWindow.contentView.addChildView(newView);
+        }
 
         // Load URL last
         log.debug(
@@ -382,6 +401,12 @@ export class ViewManager {
           success: true,
           status: "created",
         });
+
+        // Ensure overlays stay on top after adding a new browser block
+        if (this.viewLayerManager) {
+          this.viewLayerManager.forceReorder();
+          log.debug("Forced reorder after adding browser block", "ViewManager");
+        }
 
         log.debug(
           `Successfully created WebContentsView for blockId: ${blockId}`,
@@ -537,8 +562,19 @@ export class ViewManager {
           `Removing WebContentsView for blockId: ${blockId}`,
           "ViewManager"
         );
-        // Remove the view from the window
-        this.baseWindow.contentView.removeChildView(view.contents);
+
+        if (this.viewLayerManager) {
+          // Remove via layer manager
+          this.viewLayerManager.removeView(`browser-block-${blockId}`);
+          log.debug(
+            `Browser block ${blockId} removed via ViewLayerManager`,
+            "ViewManager"
+          );
+        } else {
+          // Remove the view from the window directly
+          this.baseWindow.contentView.removeChildView(view.contents);
+        }
+
         // Clean up any event listeners or resources
         view.contents.webContents.close();
         // Remove the view from our state
