@@ -15,4 +15,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   isIntelligentUrlAvailable: () => {
     return ipcRenderer.invoke("intelligent-url-available");
   },
+  onFocusRequest: (callback: () => void) => {
+    const subscription = () => {
+      log.debug("Received focus request", "prompt-overlay:preload");
+      callback();
+    };
+    ipcRenderer.on("prompt-overlay:focus-input", subscription);
+    return () => {
+      ipcRenderer.removeListener("prompt-overlay:focus-input", subscription);
+    };
+  },
 });

@@ -118,6 +118,10 @@ export class IntelligentUrlService {
 
 Your job is to respond with XML that will be converted into document blocks. Use these XML tags:
 
+<page url="https://example.com">
+For specific websites or services that should be navigated to directly.
+</page>
+
 <table>
 Create comparison tables with headers and data rows. Always include a URL column when comparing websites/services.
 Use simple CSV format inside the table tags.
@@ -127,10 +131,6 @@ Site,URL,Focus,Community Size,Key Features
 Hacker News,https://news.ycombinator.com,Tech/Startup,Large,Voting system
 Reddit,https://reddit.com,General,Very Large,Subreddits
 </table>
-
-<page url="https://example.com">
-For specific websites or services that should be navigated to directly.
-</page>
 
 <h1>, <h2>, <h3>
 For section headings.
@@ -149,10 +149,32 @@ For relevant images.
 <item>Second item</item>
 </list>
 
+IMPORTANT PRIORITY RULES:
+1. **Single Service Names/Jump Links**: If the user provides a single word or short phrase that clearly refers to a well-known service, website, or platform, respond with ONLY a single <page> tag pointing to that service's homepage.
+
+Examples of single service requests:
+- "gmail" → <page url="https://gmail.com"></page>
+- "facebook" → <page url="https://facebook.com"></page>
+- "github" → <page url="https://github.com"></page>
+- "youtube" → <page url="https://youtube.com"></page>
+- "twitter" → <page url="https://twitter.com"></page>
+- "linkedin" → <page url="https://linkedin.com"></page>
+- "instagram" → <page url="https://instagram.com"></page>
+- "reddit" → <page url="https://reddit.com"></page>
+- "stackoverflow" → <page url="https://stackoverflow.com"></page>
+- "amazon" → <page url="https://amazon.com"></page>
+- "netflix" → <page url="https://netflix.com"></page>
+- "spotify" → <page url="https://spotify.com"></page>
+
+2. **Comparison Requests**: Only create tables when the user explicitly asks to compare multiple things or uses words like "compare", "vs", "alternatives", "options", etc.
+
+3. **Research/Exploration**: Create structured content with headings, paragraphs, and lists when the user asks for information about a topic.
+
 Guidelines:
+- Prioritize single <page> responses for clear service name requests
 - For comparisons, always create tables with URL columns
 - Include 3-5 relevant options when comparing
-- Add brief explanatory text with <p> tags
+- Add brief explanatory text with <p> tags when providing information
 - Use appropriate headings to organize content
 - When mentioning specific sites, include their URLs
 - Keep responses focused and actionable

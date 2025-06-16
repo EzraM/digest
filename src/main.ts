@@ -44,6 +44,7 @@ const EVENTS = {
 let mainWindow: BrowserWindow | null = null;
 let globalViewManager: ViewManager | null = null;
 let globalAppView: WebContentsView | null = null;
+let globalPromptOverlay: PromptOverlay | null = null;
 
 // Initialize intelligent URL service
 const intelligentUrlService = IntelligentUrlService.getInstance();
@@ -125,6 +126,7 @@ const createWindow = () => {
   // Create and show the prompt overlay (always visible)
   const promptOverlay = new PromptOverlay({}, baseWindow, globalAppView);
   promptOverlay.show();
+  globalPromptOverlay = promptOverlay;
 
   // Set up the link click callback for ViewManager to properly target the correct WebContents
   viewManager.setLinkClickCallback((url: string) => {
@@ -178,6 +180,7 @@ const createWindow = () => {
     mainWindow = null;
     globalViewManager = null;
     globalAppView = null;
+    globalPromptOverlay = null;
   });
 };
 
@@ -379,6 +382,14 @@ const setupIpcHandlers = (
       }
     }
   );
+
+  // Handle focus prompt overlay request
+  ipcMain.on("prompt-overlay:focus", () => {
+    log.debug("IPC: Focus prompt overlay request received", "main");
+    if (globalPromptOverlay && globalPromptOverlay.isVisible()) {
+      globalPromptOverlay.focus();
+    }
+  });
 
   // Process input and create blocks
   ipcMain.handle(

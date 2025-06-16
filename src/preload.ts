@@ -154,6 +154,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   isBlockCreationAvailable: () =>
     ipcRenderer.invoke("block-creation-available"),
 
+  // Focus prompt overlay
+  focusPromptOverlay: () => {
+    log.debug("Requesting prompt overlay focus", "preload");
+    ipcRenderer.send("prompt-overlay:focus");
+  },
+
   // Console log forwarding
   forwardLog: (logData: {
     level: string;

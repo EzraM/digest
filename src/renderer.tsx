@@ -208,6 +208,28 @@ function App() {
     return unsubscribe;
   }, []);
 
+  // Set up global keyboard shortcut for prompt overlay focus
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Cmd+L (or Ctrl+L on Windows/Linux) to focus prompt overlay
+      if ((event.metaKey || event.ctrlKey) && event.key === "l") {
+        event.preventDefault();
+        log.debug("Cmd+L pressed, focusing prompt overlay", "renderer");
+
+        // Send IPC message to focus the prompt overlay
+        if (window.electronAPI?.focusPromptOverlay) {
+          window.electronAPI.focusPromptOverlay();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   // Set up IPC listener for prompt overlay block creation
   useEffect(() => {
     log.debug("Setting up prompt overlay block creation listener", "renderer");
@@ -349,6 +371,7 @@ declare global {
       onPromptOverlayCreateBlocks: (
         callback: (data: { xmlResponse: string; originalInput: string }) => void
       ) => void;
+      focusPromptOverlay: () => void;
       debugLinkClick: (url: string) => void;
       testNewBrowserBlock: (url: string) => void;
       testCommunication: (callback?: (result: string) => void) => string | void;

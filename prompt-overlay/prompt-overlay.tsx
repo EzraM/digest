@@ -1,3 +1,4 @@
+/// <reference types="../src/types/electron" />
 import React, { useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom/client";
 import { MantineProvider, Textarea, Button, Box, Text } from "@mantine/core";
@@ -35,9 +36,10 @@ const App = () => {
   useEffect(() => {
     const checkAvailability = async () => {
       try {
-        if (window.electronAPI?.isIntelligentUrlAvailable) {
-          const available =
-            await window.electronAPI.isIntelligentUrlAvailable();
+        if ((window as any).electronAPI?.isIntelligentUrlAvailable) {
+          const available = await (
+            window as any
+          ).electronAPI.isIntelligentUrlAvailable();
           setIsAvailable(available);
           log.debug(
             `Intelligent URL processing available: ${available}`,
@@ -60,8 +62,10 @@ const App = () => {
     log.debug(`Submitting prompt: "${prompt}"`, "prompt-overlay");
 
     try {
-      if (window.electronAPI?.submitPrompt) {
-        const result = await window.electronAPI.submitPrompt(prompt.trim());
+      if ((window as any).electronAPI?.submitPrompt) {
+        const result = await (window as any).electronAPI.submitPrompt(
+          prompt.trim()
+        );
         log.debug(
           `Prompt processing result: ${JSON.stringify(result)}`,
           "prompt-overlay"
@@ -93,97 +97,140 @@ const App = () => {
     }
   }, []);
 
+  // Listen for focus requests from main process
+  useEffect(() => {
+    const handleFocusRequest = () => {
+      log.debug("Received focus request from main process", "prompt-overlay");
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.select(); // Also select all text for quick replacement
+      }
+    };
+
+    // Listen for focus messages from main process
+    if ((window as any).electronAPI?.onFocusRequest) {
+      return (window as any).electronAPI.onFocusRequest(handleFocusRequest);
+    }
+  }, []);
+
   return (
     <MantineProvider theme={theme}>
       <Box
         style={{
-          padding: "12px",
-          backgroundColor: "rgba(255, 255, 255, 0.95)",
+          margin: "10px 20px 30px 20px", // Less top, more bottom, same sides
+          backgroundColor: "rgba(255, 255, 255, 0.98)",
           border: "1px solid #e0e0e0",
           borderRadius: "12px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
-          backdropFilter: "blur(8px)",
-          width: "100%",
-          height: "100%",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+          backdropFilter: "blur(16px)",
+          width: "calc(100% - 40px)", // Account for left/right margin
+          height: "calc(100% - 40px)", // Account for top/bottom margin
           display: "flex",
           flexDirection: "column",
-          gap: "8px",
+          overflow: "hidden",
         }}
       >
-        <Textarea
-          ref={textareaRef}
-          placeholder={
-            isAvailable
-              ? "Enter URL or describe what you're looking for..."
-              : "AI processing not available"
-          }
-          value={prompt}
-          onChange={(event) => setPrompt(event.currentTarget.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isLoading || !isAvailable}
-          autosize
-          minRows={1}
-          maxRows={2}
-          size="sm"
-          styles={{
-            input: {
-              border: "none",
-              background: "transparent",
-              fontSize: "14px",
-              resize: "none",
-              "&:focus": {
-                borderColor: "transparent",
-                outline: "none",
-              },
-            },
-          }}
-        />
-
         <Box
           style={{
+            padding: "16px",
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
+            flexDirection: "column",
+            height: "100%",
+            minHeight: 0, // Allow flex child to shrink
           }}
         >
-          <Text
-            size="xs"
-            c="dimmed"
-            style={{
-              fontSize: "11px",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
-            <span>⌘</span>
-            <span>+</span>
-            <span>↵</span>
-            <span>to submit</span>
-          </Text>
+          <Box style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <Textarea
+              ref={textareaRef}
+              placeholder={
+                isAvailable
+                  ? "Enter URL or describe what you're looking for..."
+                  : "AI processing not available"
+              }
+              value={prompt}
+              onChange={(event) => setPrompt(event.currentTarget.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading || !isAvailable}
+              autosize
+              minRows={2}
+              maxRows={4}
+              size="md"
+              style={{
+                flex: 1,
+                width: "100%",
+              }}
+              styles={{
+                wrapper: {
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                },
+                input: {
+                  border: "none",
+                  background: "transparent",
+                  fontSize: "14px",
+                  resize: "none",
+                  flex: 1,
+                  "&:focus": {
+                    borderColor: "transparent",
+                    outline: "none",
+                  },
+                },
+              }}
+            />
+          </Box>
 
-          <Button
-            onClick={handleSubmit}
-            disabled={!prompt.trim() || isLoading || !isAvailable}
-            loading={isLoading}
-            size="xs"
-            color="blue"
+          <Box
             style={{
-              minWidth: "60px",
-              fontSize: "11px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingTop: "12px",
+              marginTop: "8px",
+              borderTop: "1px solid #f0f0f0",
+              flexShrink: 0, // Don't shrink the button bar
             }}
           >
-            {isLoading ? (
-              ""
-            ) : (
-              <Box
-                style={{ display: "flex", alignItems: "center", gap: "4px" }}
-              >
-                <span style={{ fontSize: "10px" }}>⌘</span>
-                <span style={{ fontSize: "10px" }}>↵</span>
-              </Box>
-            )}
-          </Button>
+            <Text
+              size="xs"
+              c="dimmed"
+              style={{
+                fontSize: "11px",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <span>⌘</span>
+              <span>+</span>
+              <span>↵</span>
+              <span>to submit</span>
+            </Text>
+
+            <Button
+              onClick={handleSubmit}
+              disabled={!prompt.trim() || isLoading || !isAvailable}
+              loading={isLoading}
+              size="sm"
+              color="blue"
+              style={{
+                minWidth: "70px",
+                fontSize: "11px",
+                height: "28px",
+              }}
+            >
+              {isLoading ? (
+                ""
+              ) : (
+                <Box
+                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  <span style={{ fontSize: "10px" }}>⌘</span>
+                  <span style={{ fontSize: "10px" }}>↵</span>
+                </Box>
+              )}
+            </Button>
+          </Box>
         </Box>
       </Box>
     </MantineProvider>

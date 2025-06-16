@@ -35,6 +35,11 @@ interface ElectronAPI {
     metadata?: any;
   }>;
   isBlockCreationAvailable: () => Promise<boolean>;
+  submitPrompt: (prompt: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  focusPromptOverlay: () => void;
   forwardLog: (logData: {
     level: string;
     message: string;

@@ -36,8 +36,8 @@ export class PromptOverlay {
 
       // Position at top of screen
       const windowBounds = this.baseWindow.getBounds();
-      const overlayWidth = 450;
-      const overlayHeight = 120;
+      const overlayWidth = 480; // Slightly wider for better content fit
+      const overlayHeight = 140; // Taller to accommodate shadows and better spacing
       const centerX = Math.floor((windowBounds.width - overlayWidth) / 2);
       const topY = 20; // 20px from top
 
@@ -195,5 +195,13 @@ export class PromptOverlay {
 
   isVisible(): boolean {
     return this.overlay !== null;
+  }
+
+  focus() {
+    log.debug("PromptOverlay.focus() called", "PromptOverlay");
+    if (this.overlay && !this.overlay.webContents.isDestroyed()) {
+      this.overlay.webContents.send("prompt-overlay:focus-input");
+      log.debug("Sent focus message to prompt overlay", "PromptOverlay");
+    }
   }
 }
