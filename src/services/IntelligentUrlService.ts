@@ -95,7 +95,10 @@ export class IntelligentUrlService {
     return data.content[0].text;
   }
 
-  public async processInput(input: string): Promise<ProcessingResult> {
+  public async processInput(
+    input: string,
+    documentContext?: any
+  ): Promise<ProcessingResult> {
     try {
       // Handle empty input
       if (!input.trim()) {
@@ -113,7 +116,31 @@ export class IntelligentUrlService {
         };
       }
 
-      const systemPrompt = `You are an intelligent assistant that helps users create structured content blocks for a collaborative document. Users will provide input describing what they want to research, compare, or explore.
+      // Build document context section for the prompt
+      let documentContextSection = "";
+      if (
+        documentContext &&
+        documentContext.document &&
+        documentContext.document.length > 0
+      ) {
+        const docSummary = this.summarizeDocument(documentContext.document);
+        documentContextSection = `
+
+DOCUMENT CONTEXT:
+The user is working on a document that currently contains ${documentContext.blockCount} blocks. Here's a summary of the current content:
+
+${docSummary}
+
+Please consider this existing content when generating your response. You can:
+- Reference existing content to avoid duplication
+- Build upon existing themes or topics
+- Complement what's already there
+- Create connections between new content and existing blocks
+
+`;
+      }
+
+      const systemPrompt = `You are an intelligent assistant that helps users create structured content blocks for a collaborative document. Users will provide input describing what they want to research, compare, or explore.${documentContextSection}
 
 Your job is to respond with XML that will be converted into document blocks. Use these XML tags:
 
@@ -216,6 +243,87 @@ Respond ONLY with XML tags. Do not include any other text or explanations.`;
           error instanceof Error ? error.message : "Unknown error occurred",
       };
     }
+  }
+
+  /**
+   * Create a summary of the document content for LLM context
+   */
+  private summarizeDocument(document: any[]): string {
+    try {
+      const summary: string[] = [];
+
+      for (let i = 0; i < Math.min(document.length, 20); i++) {
+        // Limit to first 20 blocks
+        const block = document[i];
+
+        if (block.type === "heading") {
+          const level = block.props?.level || 1;
+          const headingPrefix = "#".repeat(level);
+          summary.push(
+            `${headingPrefix} ${this.extractTextContent(block.content)}`
+          );
+        } else if (block.type === "paragraph") {
+          const text = this.extractTextContent(block.content);
+          if (text.length > 100) {
+            summary.push(`• ${text.substring(0, 100)}...`);
+          } else if (text.trim()) {
+            summary.push(`• ${text}`);
+          }
+        } else if (block.type === "site") {
+          const url = block.props?.url;
+          if (url) {
+            summary.push(`• Page: ${url}`);
+          }
+        } else if (
+          block.type === "bulletListItem" ||
+          block.type === "numberedListItem"
+        ) {
+          const text = this.extractTextContent(block.content);
+          if (text.trim()) {
+            summary.push(`  - ${text}`);
+          }
+        } else if (block.type === "table") {
+          summary.push(`• Table with ${block.content?.rows?.length || 0} rows`);
+        }
+      }
+
+      if (document.length > 20) {
+        summary.push(`... and ${document.length - 20} more blocks`);
+      }
+
+      return summary.join("\n");
+    } catch (error) {
+      log.debug(
+        `Error summarizing document: ${error}`,
+        "IntelligentUrlService"
+      );
+      return "Unable to summarize document content";
+    }
+  }
+
+  /**
+   * Extract plain text content from BlockNote content structure
+   */
+  private extractTextContent(content: any): string {
+    if (!content) return "";
+
+    if (typeof content === "string") return content;
+
+    if (Array.isArray(content)) {
+      return content
+        .map((item) => {
+          if (typeof item === "string") return item;
+          if (item.type === "text") return item.text || "";
+          if (item.type === "link")
+            return this.extractTextContent(item.content);
+          return "";
+        })
+        .join("");
+    }
+
+    if (content.text) return content.text;
+
+    return "";
   }
 
   /**

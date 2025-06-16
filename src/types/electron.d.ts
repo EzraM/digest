@@ -40,6 +40,7 @@ interface ElectronAPI {
     error?: string;
   }>;
   focusPromptOverlay: () => void;
+  updateDocumentState: (documentState: any) => void;
   forwardLog: (logData: {
     level: string;
     message: string;

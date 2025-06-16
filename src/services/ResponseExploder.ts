@@ -1,4 +1,5 @@
 import { log } from "../utils/mainLogger";
+import { CustomPartialBlock } from "../types/schema";
 
 // We'll define our own types that match BlockNote's expected structure
 // rather than importing the generic types that require complex type parameters
@@ -18,7 +19,7 @@ type BlockNoteLink = {
 
 type BlockNoteInlineContent = BlockNoteStyledText | BlockNoteLink;
 
-// Block creation interfaces
+// Block creation interfaces - now using our typed schema
 export interface BlockCreationRequest {
   type: string;
   props?: Record<string, any>;

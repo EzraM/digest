@@ -47,6 +47,7 @@ let globalViewManager: ViewManager | null = null;
 let globalAppView: WebContentsView | null = null;
 let globalPromptOverlay: PromptOverlay | null = null;
 let globalViewLayerManager: ViewLayerManager | null = null;
+let globalDocumentContext: any = null; // Store current document context for LLM prompts
 
 // Initialize intelligent URL service
 const intelligentUrlService = IntelligentUrlService.getInstance();
@@ -330,7 +331,19 @@ const setupIpcHandlers = (
     ): Promise<ProcessingResult> => {
       try {
         log.debug(`IPC: Processing intelligent URL input: "${input}"`, "main");
-        const result = await intelligentUrlService.processInput(input);
+        // Use the globally stored document context if available, otherwise use passed context
+        const documentContext = globalDocumentContext || context;
+        log.debug(
+          `Using document context: ${
+            documentContext ? `${documentContext.blockCount} blocks` : "none"
+          }`,
+          "main"
+        );
+
+        const result = await intelligentUrlService.processInput(
+          input,
+          documentContext
+        );
         log.debug(
           `IPC: Intelligent URL result: ${JSON.stringify(result)}`,
           "main"
@@ -360,7 +373,19 @@ const setupIpcHandlers = (
     ): Promise<ProcessingResult> => {
       try {
         log.debug(`IPC: Processing prompt overlay input: "${input}"`, "main");
-        const result = await intelligentUrlService.processInput(input);
+        log.debug(
+          `Using document context: ${
+            globalDocumentContext
+              ? `${globalDocumentContext.blockCount} blocks`
+              : "none"
+          }`,
+          "main"
+        );
+
+        const result = await intelligentUrlService.processInput(
+          input,
+          globalDocumentContext
+        );
         log.debug(
           `IPC: Prompt overlay result: ${JSON.stringify(result)}`,
           "main"
@@ -397,9 +422,36 @@ const setupIpcHandlers = (
     }
   );
 
+  // Handle document state updates (continuous sync)
+  ipcMain.on(
+    "document-state:update",
+    (event: IpcMainEvent, documentState: any) => {
+      if (documentState) {
+        globalDocumentContext = documentState;
+        log.debug(
+          `Document state updated: ${
+            documentState.blockCount
+          } blocks at ${new Date(
+            documentState.timestamp
+          ).toLocaleTimeString()}`,
+          "main"
+        );
+      }
+    }
+  );
+
   // Handle focus prompt overlay request
-  ipcMain.on("prompt-overlay:focus", () => {
+  ipcMain.on("prompt-overlay:focus", (event: IpcMainEvent) => {
     log.debug("IPC: Focus prompt overlay request received", "main");
+    log.debug(
+      `Current document context: ${
+        globalDocumentContext
+          ? `${globalDocumentContext.blockCount} blocks`
+          : "none"
+      }`,
+      "main"
+    );
+
     if (globalPromptOverlay && globalPromptOverlay.isVisible()) {
       globalPromptOverlay.focus();
     }

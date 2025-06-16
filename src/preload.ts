@@ -160,6 +160,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("prompt-overlay:focus");
   },
 
+  // Update document state (continuous sync)
+  updateDocumentState: (documentState: any) => {
+    log.debug(
+      `Updating document state: ${documentState?.blockCount || 0} blocks`,
+      "preload"
+    );
+    ipcRenderer.send("document-state:update", documentState);
+  },
+
   // Console log forwarding
   forwardLog: (logData: {
     level: string;

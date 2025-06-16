@@ -33,50 +33,31 @@ import "@blocknote/core/fonts/inter.css";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
-import {
-  BlockNoteSchema,
-  defaultBlockSpecs,
-  insertOrUpdateBlock,
-} from "@blocknote/core";
-import { site } from "./Browser/Browser";
-import { RiPagesFill } from "react-icons/ri";
+import { insertOrUpdateBlock } from "@blocknote/core";
 import { log } from "./utils/rendererLogger";
 import { ResponseExploder } from "./services/ResponseExploder";
+import schema, {
+  CustomBlockNoteEditor,
+  CustomPartialBlock,
+} from "./types/schema";
+import { useDocumentSync } from "./hooks/useDocumentSync";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
 
-const schema = BlockNoteSchema.create({
-  blockSpecs: {
-    ...defaultBlockSpecs,
-    site: site,
-  },
-});
-
-// slash menu item to insert a Site
-const addSite = (editor: any) => ({
-  title: "Site",
-  key: "site",
-  onItemClick: () => {
-    insertOrUpdateBlock(editor, {
-      type: "site",
-    });
-  },
-  aliases: ["site", "url", "/"],
-  group: "Browser",
-  icon: <RiPagesFill />,
-});
+// Note: Site blocks are no longer user-selectable from slash menu
+// They are created programmatically when links are clicked
 
 // Store current editor globally to access in IPC handlers
-let currentEditor: any = null;
+let currentEditor: CustomBlockNoteEditor | null = null;
 
 // Function to create a new browser block with the specified URL
 const createNewBrowserBlock = (url: string): void => {
   if (currentEditor) {
     insertOrUpdateBlock(currentEditor, {
       type: "site",
-      props: { url: url },
-    });
+      props: { url },
+    } as CustomPartialBlock);
   }
 };
 
@@ -96,7 +77,7 @@ function App() {
         content: "Welcome to Digest!",
       },
     ],
-  });
+  }) as CustomBlockNoteEditor;
 
   // Store editor reference for IPC handlers
   useEffect(() => {
@@ -140,9 +121,8 @@ function App() {
             // Use BlockNote's insertOrUpdateBlock like the built-in slash menu items do
             // This handles all focus, cursor positioning, and insertion logic automatically
             switch (blockKey) {
-              case "site":
-                insertOrUpdateBlock(currentEditor, { type: "site" });
-                break;
+              // Note: 'site' blocks are no longer user-selectable from HUD
+              // They are created programmatically when links are clicked
               case "paragraph":
                 insertOrUpdateBlock(currentEditor, { type: "paragraph" });
                 break;
@@ -150,19 +130,19 @@ function App() {
                 insertOrUpdateBlock(currentEditor, {
                   type: "heading",
                   props: { level: 1 },
-                });
+                } as CustomPartialBlock);
                 break;
               case "heading_2":
                 insertOrUpdateBlock(currentEditor, {
                   type: "heading",
                   props: { level: 2 },
-                });
+                } as CustomPartialBlock);
                 break;
               case "heading_3":
                 insertOrUpdateBlock(currentEditor, {
                   type: "heading",
                   props: { level: 3 },
-                });
+                } as CustomPartialBlock);
                 break;
               case "bullet_list":
                 insertOrUpdateBlock(currentEditor, { type: "bulletListItem" });
@@ -208,6 +188,9 @@ function App() {
     return unsubscribe;
   }, []);
 
+  // Set up continuous document state synchronization
+  useDocumentSync(editor);
+
   // Set up global keyboard shortcut for prompt overlay focus
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -216,7 +199,7 @@ function App() {
         event.preventDefault();
         log.debug("Cmd+L pressed, focusing prompt overlay", "renderer");
 
-        // Send IPC message to focus the prompt overlay
+        // Send IPC message to focus the prompt overlay (document context is already synced)
         if (window.electronAPI?.focusPromptOverlay) {
           window.electronAPI.focusPromptOverlay();
         }
@@ -372,6 +355,7 @@ declare global {
         callback: (data: { xmlResponse: string; originalInput: string }) => void
       ) => void;
       focusPromptOverlay: () => void;
+      updateDocumentState: (documentState: any) => void;
       debugLinkClick: (url: string) => void;
       testNewBrowserBlock: (url: string) => void;
       testCommunication: (callback?: (result: string) => void) => string | void;
