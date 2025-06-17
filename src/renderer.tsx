@@ -41,6 +41,7 @@ import schema, {
   CustomPartialBlock,
 } from "./types/schema";
 import { useDocumentSync } from "./hooks/useDocumentSync";
+import { welcomeContent } from "./content/welcomeContent";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
@@ -71,12 +72,7 @@ function CustomSlashMenu(): null {
 function App() {
   const editor = useCreateBlockNote({
     schema,
-    initialContent: [
-      {
-        type: "paragraph",
-        content: "Welcome to Digest!",
-      },
-    ],
+    initialContent: welcomeContent,
   }) as CustomBlockNoteEditor;
 
   // Store editor reference for IPC handlers
