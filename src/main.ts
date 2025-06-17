@@ -143,6 +143,11 @@ const createWindow = () => {
   promptOverlay.show();
   globalPromptOverlay = promptOverlay;
 
+  // Connect prompt overlay to intelligent URL service for cost tracking
+  intelligentUrlService.setPromptOverlayWebContents(
+    promptOverlay.getWebContentsView()
+  );
+
   // Set up the link click callback for ViewManager to properly target the correct WebContents
   viewManager.setLinkClickCallback((url: string) => {
     log.debug(`Link click callback called with URL: ${url}`, "main");
@@ -363,6 +368,14 @@ const setupIpcHandlers = (
   ipcMain.handle("intelligent-url-available", async (): Promise<boolean> => {
     return intelligentUrlService.isAvailable();
   });
+
+  // Get current cost summary
+  ipcMain.handle(
+    "intelligent-url-cost-summary",
+    async (): Promise<{ queryCost: number; sessionTotal: number }> => {
+      return intelligentUrlService.getCostSummary();
+    }
+  );
 
   // Handle prompt submission from the prompt overlay
   ipcMain.handle(

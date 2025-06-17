@@ -1,8 +1,11 @@
 /// <reference types="../src/types/electron" />
 import React, { useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom/client";
-import { MantineProvider, Textarea, Button, Box, Text } from "@mantine/core";
+import { MantineProvider, Textarea, Button, Box } from "@mantine/core";
 import { log } from "../src/utils/rendererLogger";
+import { useCostTracking } from "./useCostTracking";
+import { useAIAvailability } from "./useAIAvailability";
+import { CostDisplay } from "./CostDisplay";
 
 // Custom theme for better styling
 const theme = {
@@ -29,31 +32,14 @@ const theme = {
 const App = () => {
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isAvailable, setIsAvailable] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Check if intelligent URL processing is available
-  useEffect(() => {
-    const checkAvailability = async () => {
-      try {
-        if ((window as any).electronAPI?.isIntelligentUrlAvailable) {
-          const available = await (
-            window as any
-          ).electronAPI.isIntelligentUrlAvailable();
-          setIsAvailable(available);
-          log.debug(
-            `Intelligent URL processing available: ${available}`,
-            "prompt-overlay"
-          );
-        }
-      } catch (error) {
-        log.debug(`Error checking availability: ${error}`, "prompt-overlay");
-        setIsAvailable(false);
-      }
-    };
+  // Use the cost tracking hook
+  const { costData, hasCostData } = useCostTracking();
 
-    checkAvailability();
-  }, []);
+  // Use the AI availability hook
+  const { isAvailable, isLoading: isCheckingAvailability } =
+    useAIAvailability();
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isLoading || !isAvailable) return;
@@ -143,7 +129,9 @@ const App = () => {
             <Textarea
               ref={textareaRef}
               placeholder={
-                isAvailable
+                isCheckingAvailability
+                  ? "Checking AI availability..."
+                  : isAvailable
                   ? "Describe what you're looking for or enter a url..."
                   : "AI processing not available"
               }
@@ -191,21 +179,11 @@ const App = () => {
               flexShrink: 0, // Don't shrink the button bar
             }}
           >
-            <Text
-              size="xs"
-              c="dimmed"
-              style={{
-                fontSize: "11px",
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
-              <span>⌘</span>
-              <span>+</span>
-              <span>↵</span>
-              <span>to submit</span>
-            </Text>
+            <CostDisplay
+              queryCost={costData.queryCost}
+              sessionTotal={costData.sessionTotal}
+              hasCostData={hasCostData}
+            />
 
             <Button
               onClick={handleSubmit}

@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   isIntelligentUrlAvailable: () => {
     return ipcRenderer.invoke("intelligent-url-available");
   },
+  getCostSummary: () => {
+    return ipcRenderer.invoke("intelligent-url-cost-summary");
+  },
   onFocusRequest: (callback: () => void) => {
     const subscription = () => {
       log.debug("Received focus request", "prompt-overlay:preload");
@@ -23,6 +26,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("prompt-overlay:focus-input", subscription);
     return () => {
       ipcRenderer.removeListener("prompt-overlay:focus-input", subscription);
+    };
+  },
+  onCostUpdate: (
+    callback: (costData: { queryCost: number; sessionTotal: number }) => void
+  ) => {
+    const subscription = (
+      _: any,
+      costData: { queryCost: number; sessionTotal: number }
+    ) => {
+      log.debug(
+        `Received cost update: ${JSON.stringify(costData)}`,
+        "prompt-overlay:preload"
+      );
+      callback(costData);
+    };
+    ipcRenderer.on("cost-update", subscription);
+    return () => {
+      ipcRenderer.removeListener("cost-update", subscription);
     };
   },
 });

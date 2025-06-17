@@ -1,5 +1,6 @@
 import { log } from "../utils/mainLogger";
 import { getAnthropicApiKey } from "../config/development";
+import { WebContentsView } from "electron";
 
 // Simple result type - always returns XML to be exploded into blocks
 export interface ProcessingResult {
@@ -34,10 +35,30 @@ export interface DocumentContext {
   };
 }
 
+// Cost tracking interface
+interface QueryCost {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  webSearches: number;
+  totalCostUSD: number;
+}
+
 // Main process service for intelligent URL handling
 export class IntelligentUrlService {
   private static instance: IntelligentUrlService;
   private anthropicApiKey: string | null = null;
+  private sessionTotalCost = 0;
+  private lastQueryCost = 0;
+  private promptOverlayWebContents: WebContentsView | null = null;
+
+  // Claude Sonnet 4 pricing (as of 2025)
+  private static readonly PRICING = {
+    INPUT_TOKENS_PER_MILLION: 3.0, // $3 per million input tokens
+    OUTPUT_TOKENS_PER_MILLION: 15.0, // $15 per million output tokens
+    WEB_SEARCHES_PER_THOUSAND: 10.0, // $10 per thousand searches
+  };
 
   private constructor() {
     this.anthropicApiKey = getAnthropicApiKey();
@@ -52,6 +73,82 @@ export class IntelligentUrlService {
 
   public isAvailable(): boolean {
     return this.anthropicApiKey !== null;
+  }
+
+  private calculateQueryCost(usage: any): QueryCost {
+    const inputTokens = usage.input_tokens || 0;
+    const outputTokens = usage.output_tokens || 0;
+    const cacheReadTokens = usage.cache_read_input_tokens || 0;
+    const cacheCreationTokens = usage.cache_creation_input_tokens || 0;
+    const webSearches = usage.server_tool_use?.web_search_requests || 0;
+
+    // Calculate costs (convert to USD)
+    const inputCost =
+      (inputTokens / 1_000_000) *
+      IntelligentUrlService.PRICING.INPUT_TOKENS_PER_MILLION;
+    const outputCost =
+      (outputTokens / 1_000_000) *
+      IntelligentUrlService.PRICING.OUTPUT_TOKENS_PER_MILLION;
+    const webSearchCost =
+      (webSearches / 1_000) *
+      IntelligentUrlService.PRICING.WEB_SEARCHES_PER_THOUSAND;
+
+    // Cache read tokens are typically free or heavily discounted
+    // Cache creation tokens are charged at input token rates
+    const cacheCreationCost =
+      (cacheCreationTokens / 1_000_000) *
+      IntelligentUrlService.PRICING.INPUT_TOKENS_PER_MILLION;
+
+    const totalCostUSD =
+      inputCost + outputCost + webSearchCost + cacheCreationCost;
+
+    return {
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheCreationTokens,
+      webSearches,
+      totalCostUSD,
+    };
+  }
+
+  public getSessionTotalCost(): number {
+    return this.sessionTotalCost;
+  }
+
+  public resetSessionCost(): void {
+    this.sessionTotalCost = 0;
+    log.debug("Session cost counter reset", "IntelligentUrlService");
+  }
+
+  public getCostSummary(): { queryCost: number; sessionTotal: number } {
+    return {
+      queryCost: this.lastQueryCost,
+      sessionTotal: this.sessionTotalCost,
+    };
+  }
+
+  public setPromptOverlayWebContents(
+    webContents: WebContentsView | null
+  ): void {
+    this.promptOverlayWebContents = webContents;
+  }
+
+  private emitCostUpdate(): void {
+    if (
+      this.promptOverlayWebContents &&
+      !this.promptOverlayWebContents.webContents.isDestroyed()
+    ) {
+      const costData = {
+        queryCost: this.lastQueryCost,
+        sessionTotal: this.sessionTotalCost,
+      };
+      this.promptOverlayWebContents.webContents.send("cost-update", costData);
+      log.debug(
+        `Emitted cost update to prompt overlay: ${JSON.stringify(costData)}`,
+        "IntelligentUrlService"
+      );
+    }
   }
 
   private isDirectUrl(input: string): boolean {
@@ -100,12 +197,39 @@ export class IntelligentUrlService {
 
     const data = await response.json();
 
-    // Log web search usage if present
-    if (data.usage?.server_tool_use?.web_search_requests) {
+    // Calculate and log costs
+    if (data.usage) {
+      const queryCost = this.calculateQueryCost(data.usage);
+      this.lastQueryCost = queryCost.totalCostUSD;
+      this.sessionTotalCost += queryCost.totalCostUSD;
+
+      // Log detailed cost breakdown
       log.debug(
-        `Web searches performed: ${data.usage.server_tool_use.web_search_requests}`,
+        `Query Cost Breakdown:
+  - Input tokens: ${queryCost.inputTokens.toLocaleString()} ($${(
+          (queryCost.inputTokens / 1_000_000) *
+          IntelligentUrlService.PRICING.INPUT_TOKENS_PER_MILLION
+        ).toFixed(6)})
+  - Output tokens: ${queryCost.outputTokens.toLocaleString()} ($${(
+          (queryCost.outputTokens / 1_000_000) *
+          IntelligentUrlService.PRICING.OUTPUT_TOKENS_PER_MILLION
+        ).toFixed(6)})
+  - Cache read tokens: ${queryCost.cacheReadTokens.toLocaleString()} (free)
+  - Cache creation tokens: ${queryCost.cacheCreationTokens.toLocaleString()} ($${(
+          (queryCost.cacheCreationTokens / 1_000_000) *
+          IntelligentUrlService.PRICING.INPUT_TOKENS_PER_MILLION
+        ).toFixed(6)})
+  - Web searches: ${queryCost.webSearches} ($${(
+          (queryCost.webSearches / 1_000) *
+          IntelligentUrlService.PRICING.WEB_SEARCHES_PER_THOUSAND
+        ).toFixed(6)})
+  - Query total: $${queryCost.totalCostUSD.toFixed(6)}
+  - Session total: $${this.sessionTotalCost.toFixed(6)}`,
         "IntelligentUrlService"
       );
+
+      // Emit cost update to prompt overlay (if available)
+      this.emitCostUpdate();
     }
 
     // Log the full response structure for debugging

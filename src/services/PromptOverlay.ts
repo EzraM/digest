@@ -220,6 +220,10 @@ export class PromptOverlay {
     return this.overlay !== null;
   }
 
+  getWebContentsView(): WebContentsView | null {
+    return this.overlay;
+  }
+
   focus() {
     log.debug("PromptOverlay.focus() called", "PromptOverlay");
     if (this.overlay && !this.overlay.webContents.isDestroyed()) {
