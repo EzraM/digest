@@ -259,12 +259,12 @@ function App() {
               "renderer"
             );
 
-            // Insert blocks at the current cursor position
-            let insertCount = 0;
+            // Insert or update blocks
+            let processedCount = 0;
 
             for (const blockRequest of explodedResponse.blocks) {
               log.debug(
-                `[PROMPT OVERLAY] Inserting block ${insertCount + 1}: ${
+                `[PROMPT OVERLAY] Processing block ${processedCount + 1}: ${
                   blockRequest.type
                 }`,
                 "renderer"
@@ -275,25 +275,72 @@ function App() {
                 )}`,
                 "renderer"
               );
+              log.debug(
+                `[PROMPT OVERLAY] Block ID: ${
+                  blockRequest.blockId || "none (new block)"
+                }`,
+                "renderer"
+              );
 
               try {
-                // Insert block after the current one
-                insertOrUpdateBlock(currentEditor, blockRequest as any);
-                insertCount++;
+                if (blockRequest.blockId) {
+                  // Update existing block
+                  log.debug(
+                    `[PROMPT OVERLAY] Updating existing block with ID: ${blockRequest.blockId}`,
+                    "renderer"
+                  );
+
+                  // Find the block by ID in the current document
+                  const existingBlock = currentEditor.document.find(
+                    (block: any) => block.id === blockRequest.blockId
+                  );
+
+                  if (existingBlock) {
+                    // Create the updated block data
+                    const updatedBlockData: any = {
+                      type: blockRequest.type,
+                      props: blockRequest.props || {},
+                    };
+
+                    if (blockRequest.content !== undefined) {
+                      updatedBlockData.content = blockRequest.content;
+                    }
+
+                    // Update the existing block
+                    currentEditor.updateBlock(existingBlock, updatedBlockData);
+                    log.debug(
+                      `[PROMPT OVERLAY] Successfully updated block ${blockRequest.blockId}`,
+                      "renderer"
+                    );
+                  } else {
+                    log.debug(
+                      `[PROMPT OVERLAY] Block with ID ${blockRequest.blockId} not found, inserting as new block`,
+                      "renderer"
+                    );
+                    // Block not found, insert as new block
+                    insertOrUpdateBlock(currentEditor, blockRequest as any);
+                  }
+                } else {
+                  // Insert new block
+                  log.debug(`[PROMPT OVERLAY] Inserting new block`, "renderer");
+                  insertOrUpdateBlock(currentEditor, blockRequest as any);
+                }
+
+                processedCount++;
                 log.debug(
-                  `[PROMPT OVERLAY] Successfully inserted block ${insertCount}`,
+                  `[PROMPT OVERLAY] Successfully processed block ${processedCount}`,
                   "renderer"
                 );
               } catch (blockError) {
                 log.debug(
-                  `[PROMPT OVERLAY] Error inserting individual block: ${blockError}`,
+                  `[PROMPT OVERLAY] Error processing individual block: ${blockError}`,
                   "renderer"
                 );
               }
             }
 
             log.debug(
-              `[PROMPT OVERLAY] Finished inserting ${insertCount} blocks`,
+              `[PROMPT OVERLAY] Finished processing ${processedCount} blocks`,
               "renderer"
             );
           } catch (error) {

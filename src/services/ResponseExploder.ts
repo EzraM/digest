@@ -25,6 +25,7 @@ export interface BlockCreationRequest {
   props?: Record<string, any>;
   content?: any;
   position?: "after" | "before" | "replace";
+  blockId?: string; // For updating existing blocks
 }
 
 export interface ExplodedResponse {
@@ -177,6 +178,15 @@ export class ResponseExploder {
   }
 
   /**
+   * Extract blockId from element attributes if present
+   */
+  private static extractBlockId(element: ParsedXMLElement): string | undefined {
+    return (
+      element.attributes.blockId || element.attributes.blockid || undefined
+    );
+  }
+
+  /**
    * Convert a single XML element to a block creation request
    */
   private static convertElementToBlock(
@@ -225,11 +235,18 @@ export class ResponseExploder {
   ): BlockCreationRequest {
     // Parse table content into BlockNote's expected format
     const tableContent = this.parseTableContentForBlockNote(element.content);
+    const blockId = this.extractBlockId(element);
 
-    return {
+    const block: BlockCreationRequest = {
       type: "table",
       content: tableContent,
     };
+
+    if (blockId) {
+      block.blockId = blockId;
+    }
+
+    return block;
   }
 
   /**
@@ -262,13 +279,20 @@ export class ResponseExploder {
     element: ParsedXMLElement
   ): BlockCreationRequest {
     const url = element.attributes.url || element.content;
+    const blockId = this.extractBlockId(element);
 
-    return {
+    const block: BlockCreationRequest = {
       type: "site",
       props: {
         url: this.formatUrl(url),
       },
     };
+
+    if (blockId) {
+      block.blockId = blockId;
+    }
+
+    return block;
   }
 
   /**
@@ -287,13 +311,21 @@ export class ResponseExploder {
       level = parseInt(element.attributes.level, 10) || 1;
     }
 
-    return {
+    const blockId = this.extractBlockId(element);
+
+    const block: BlockCreationRequest = {
       type: "heading",
       props: {
         level: Math.min(Math.max(level, 1), 3), // Clamp to 1-3
       },
       content: element.content,
     };
+
+    if (blockId) {
+      block.blockId = blockId;
+    }
+
+    return block;
   }
 
   /**
@@ -302,10 +334,18 @@ export class ResponseExploder {
   private static createParagraphBlock(
     element: ParsedXMLElement
   ): BlockCreationRequest {
-    return {
+    const blockId = this.extractBlockId(element);
+
+    const block: BlockCreationRequest = {
       type: "paragraph",
       content: element.content,
     };
+
+    if (blockId) {
+      block.blockId = blockId;
+    }
+
+    return block;
   }
 
   /**

@@ -7,6 +7,7 @@ export interface BlockCreationRequest {
   props?: Record<string, any>;
   content?: any;
   position?: "after" | "before" | "replace";
+  blockId?: string; // For updating existing blocks
 }
 
 /**

@@ -144,7 +144,7 @@ const App = () => {
               ref={textareaRef}
               placeholder={
                 isAvailable
-                  ? "Enter URL or describe what you're looking for..."
+                  ? "Describe what you're looking for or enter a url..."
                   : "AI processing not available"
               }
               value={prompt}
@@ -152,8 +152,8 @@ const App = () => {
               onKeyDown={handleKeyDown}
               disabled={isLoading || !isAvailable}
               autosize
-              minRows={2}
-              maxRows={4}
+              minRows={4}
+              maxRows={6}
               size="md"
               style={{
                 flex: 1,

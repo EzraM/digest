@@ -104,7 +104,7 @@ export class IntelligentUrlService {
       if (!input.trim()) {
         return {
           success: false,
-          error: "Please enter a URL or describe what you're looking for",
+          error: "Please describe what you're looking for, or enter a url",
         };
       }
 
@@ -127,28 +127,59 @@ export class IntelligentUrlService {
         documentContextSection = `
 
 DOCUMENT CONTEXT:
-The user is working on a document that currently contains ${documentContext.blockCount} blocks. Here's a summary of the current content:
+The user is working on a document that currently contains ${documentContext.blockCount} blocks. Here's the current content in XML format (the same format you should use in your response):
 
 ${docSummary}
 
-Please consider this existing content when generating your response. You can:
-- Reference existing content to avoid duplication
-- Build upon existing themes or topics
-- Complement what's already there
-- Create connections between new content and existing blocks
+Please consider this existing content when generating your response. Look for opportunities to:
+- **enrich** existing blocks with missing details, better structure, or refined insights
+- **connect** new information to existing themes and topics
+- **compress** multiple related ideas into cohesive, dense understanding
 
+To UPDATE existing blocks: copy their exact blockId attribute
+To CREATE new blocks: omit the blockId attribute
 `;
+
+        log.debug(
+          `Document context includes ${documentContext.blockCount} blocks in XML format with blockId attributes for editing`,
+          "IntelligentUrlService"
+        );
       }
 
-      const systemPrompt = `You are an intelligent assistant that helps users create structured content blocks for a collaborative document. Users will provide input describing what they want to research, compare, or explore.${documentContextSection}
+      const systemPrompt = `You are a curious and fastidious friend helping with Digest - a document editor designed to compress and refine information gathered while exploring the internet. Your role is to help sharpen understanding and create dense, high-quality knowledge.
+
+Think of yourself as detail-oriented yet wryly aware of the much bigger picture.
+
+A common scenario: maybe someone is comparing products, trying to find the best one. They ask what each option costs. Maybe take the opportunity to rewrite the list as a table.
+
+Example transformation - if you see this existing content:
+<list blockId="abc-123">
+<item>Notion - Great for teams</item>
+<item>Obsidian - Good for linking</item>
+<item>Roam - Research focused</item>
+</list>
+
+And someone asks about pricing, transform it to:
+<table blockId="abc-123">
+Tool,Focus,Price
+Notion,Great for teams,$8/month
+Obsidian,Good for linking,Free
+Roam,Research focused,$15/month
+</table>
+
+${documentContextSection}
 
 Your job is to respond with XML that will be converted into document blocks. Use these XML tags:
 
-<page url="https://example.com">
+**BLOCK EDITING SUPPORT:**
+You can UPDATE existing blocks by including a blockId attribute. If blockId is provided, the existing block will be updated instead of creating a new one.
+Example: <p blockId="4e1e3e6a-4f14-488b-ae68-e8d4e604a213">Updated paragraph content</p>
+
+<page url="https://example.com" blockId="optional-block-id">
 For specific websites or services that should be navigated to directly.
 </page>
 
-<table>
+<table blockId="optional-block-id">
 Create comparison tables with headers and data rows. Always include a URL column when comparing websites/services.
 Use simple CSV format inside the table tags.
 Example:
@@ -158,19 +189,19 @@ Hacker News,https://news.ycombinator.com,Tech/Startup,Large,Voting system
 Reddit,https://reddit.com,General,Very Large,Subreddits
 </table>
 
-<h1>, <h2>, <h3>
+<h1 blockId="optional-block-id">, <h2 blockId="optional-block-id">, <h3 blockId="optional-block-id">
 For section headings.
 Example: <h2>Social Media Platforms</h2>
 
-<p>
+<p blockId="optional-block-id">
 For explanatory text or descriptions.
 Example: <p>Here are the top social media platforms for developers:</p>
 
-<image url="https://example.com/image.jpg" alt="Description">
+<image url="https://example.com/image.jpg" alt="Description" blockId="optional-block-id">
 For relevant images.
 </image>
 
-<list>
+<list blockId="optional-block-id">
 <item>First item</item>
 <item>Second item</item>
 </list>
@@ -214,22 +245,33 @@ Examples of single service requests:
 
 3. **Research/Exploration**: Create structured content with headings, paragraphs, and lists when the user asks for information about a topic.
 
+4. If a page is already opened, we do not need to open it again. One is enough.
+
 Guidelines:
 - Prioritize single <page> responses for clear service name requests
-- For comparisons, you can make tables with URL columns
-- Include 3-5 relevant options when comparing
-- Add brief explanatory text with <p> tags when providing information
-- Use appropriate headings to organize content
+- Include 3-5 relevant options when comparing, focusing on quality over quantity
+- Add brief explanatory text only when it adds genuine value
+- Use appropriate headings to organize content hierarchically
 - When mentioning specific sites, include their URLs
-- Keep responses focused and actionable
+- Keep responses focused, actionable, and dense with useful information
 
 Respond ONLY with XML tags. Do not include any other text or explanations.`;
 
       const userPrompt = `${input}`;
 
-      const response = await this.callAnthropic(
-        `${systemPrompt}\n\nUser request: ${userPrompt}`
-      );
+      const fullPrompt = `${systemPrompt}\n\nUser request: ${userPrompt}`;
+
+      // Log the full prompt being sent to the LLM
+      log.debug("=== LLM PROMPT START ===", "IntelligentUrlService");
+      log.debug(fullPrompt, "IntelligentUrlService");
+      log.debug("=== LLM PROMPT END ===", "IntelligentUrlService");
+
+      const response = await this.callAnthropic(fullPrompt);
+
+      // Log the LLM response
+      log.debug("=== LLM RESPONSE START ===", "IntelligentUrlService");
+      log.debug(response, "IntelligentUrlService");
+      log.debug("=== LLM RESPONSE END ===", "IntelligentUrlService");
 
       return {
         success: true,
@@ -246,33 +288,43 @@ Respond ONLY with XML tags. Do not include any other text or explanations.`;
   }
 
   /**
-   * Create a summary of the document content for LLM context
+   * Create a summary of the document content for LLM context using XML format
+   * This matches the output format the LLM should produce, making it easier to copy/update blocks
    */
   private summarizeDocument(document: any[]): string {
     try {
-      const summary: string[] = [];
+      const xmlBlocks: string[] = [];
 
-      for (let i = 0; i < Math.min(document.length, 20); i++) {
-        // Limit to first 20 blocks
+      // Log the raw document structure to see what we're working with
+      log.debug("=== DOCUMENT STRUCTURE START ===", "IntelligentUrlService");
+      log.debug(
+        JSON.stringify(document.slice(0, 3), null, 2),
+        "IntelligentUrlService"
+      ); // First 3 blocks
+      log.debug("=== DOCUMENT STRUCTURE END ===", "IntelligentUrlService");
+
+      // Convert each block to XML format that matches our expected output
+      for (let i = 0; i < document.length; i++) {
         const block = document[i];
+        const blockId = block.id || "no-id";
 
         if (block.type === "heading") {
           const level = block.props?.level || 1;
-          const headingPrefix = "#".repeat(level);
-          summary.push(
-            `${headingPrefix} ${this.extractTextContent(block.content)}`
-          );
+          const text = this.extractTextContent(block.content);
+          if (text.trim()) {
+            xmlBlocks.push(
+              `<h${level} blockId="${blockId}">${text}</h${level}>`
+            );
+          }
         } else if (block.type === "paragraph") {
           const text = this.extractTextContent(block.content);
-          if (text.length > 100) {
-            summary.push(`• ${text.substring(0, 100)}...`);
-          } else if (text.trim()) {
-            summary.push(`• ${text}`);
+          if (text.trim()) {
+            xmlBlocks.push(`<p blockId="${blockId}">${text}</p>`);
           }
         } else if (block.type === "site") {
           const url = block.props?.url;
           if (url) {
-            summary.push(`• Page: ${url}`);
+            xmlBlocks.push(`<page url="${url}" blockId="${blockId}"></page>`);
           }
         } else if (
           block.type === "bulletListItem" ||
@@ -280,18 +332,30 @@ Respond ONLY with XML tags. Do not include any other text or explanations.`;
         ) {
           const text = this.extractTextContent(block.content);
           if (text.trim()) {
-            summary.push(`  - ${text}`);
+            // Note: List items are typically grouped, but for now we'll show individual items
+            // In a full implementation, we might want to group consecutive list items
+            const listType = block.type === "numberedListItem" ? "ol" : "ul";
+            xmlBlocks.push(
+              `<${listType} blockId="${blockId}"><item>${text}</item></${listType}>`
+            );
           }
         } else if (block.type === "table") {
-          summary.push(`• Table with ${block.content?.rows?.length || 0} rows`);
+          const tableContent = this.extractTableContent(block);
+          if (tableContent) {
+            xmlBlocks.push(
+              `<table blockId="${blockId}">\n${tableContent}\n</table>`
+            );
+          } else {
+            xmlBlocks.push(
+              `<table blockId="${blockId}"><!-- Table with ${
+                block.content?.rows?.length || 0
+              } rows --></table>`
+            );
+          }
         }
       }
 
-      if (document.length > 20) {
-        summary.push(`... and ${document.length - 20} more blocks`);
-      }
-
-      return summary.join("\n");
+      return xmlBlocks.join("\n\n");
     } catch (error) {
       log.debug(
         `Error summarizing document: ${error}`,
@@ -324,6 +388,41 @@ Respond ONLY with XML tags. Do not include any other text or explanations.`;
     if (content.text) return content.text;
 
     return "";
+  }
+
+  /**
+   * Extract table content in a readable format for LLM context
+   */
+  private extractTableContent(block: any): string | null {
+    try {
+      if (!block.content || !block.content.rows) return null;
+
+      const rows = block.content.rows;
+      if (rows.length === 0) return null;
+
+      // Convert table to CSV-like format
+      const tableLines: string[] = [];
+
+      for (const row of rows) {
+        if (row.cells && Array.isArray(row.cells)) {
+          const cellTexts = row.cells.map((cell: any) => {
+            if (Array.isArray(cell)) {
+              return cell.map((item) => this.extractTextContent(item)).join("");
+            }
+            return this.extractTextContent(cell);
+          });
+          tableLines.push(cellTexts.join(","));
+        }
+      }
+
+      return tableLines.join("\n");
+    } catch (error) {
+      log.debug(
+        `Error extracting table content: ${error}`,
+        "IntelligentUrlService"
+      );
+      return null;
+    }
   }
 
   /**
