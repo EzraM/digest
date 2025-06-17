@@ -76,12 +76,19 @@ export class IntelligentUrlService {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 4000,
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 8000,
         messages: [
           {
             role: "user",
             content: prompt,
+          },
+        ],
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 10,
           },
         ],
       }),
@@ -92,7 +99,55 @@ export class IntelligentUrlService {
     }
 
     const data = await response.json();
-    return data.content[0].text;
+
+    // Log web search usage if present
+    if (data.usage?.server_tool_use?.web_search_requests) {
+      log.debug(
+        `Web searches performed: ${data.usage.server_tool_use.web_search_requests}`,
+        "IntelligentUrlService"
+      );
+    }
+
+    // Log the full response structure for debugging
+    log.debug(
+      `Full response structure: ${JSON.stringify(data.content, null, 2)}`,
+      "IntelligentUrlService"
+    );
+
+    // Handle response that may include web search results
+    // Find all text blocks and concatenate them (excluding search-related text)
+    const textBlocks = data.content.filter(
+      (block: any) => block.type === "text"
+    );
+
+    if (textBlocks.length === 0) {
+      throw new Error("No text content found in Claude's response");
+    }
+
+    // For web search responses, we need to combine all text blocks
+    // but skip the initial "I'll search for..." type messages
+    const allText = textBlocks
+      .map((block: any) => block.text)
+      .filter((text: string) => {
+        // Skip short search announcements
+        if (
+          text.length < 50 &&
+          (text.includes("search") ||
+            text.includes("I'll") ||
+            text.includes("Let me"))
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .join(" ");
+
+    if (!allText.trim()) {
+      // Fallback: return the last text block regardless
+      return textBlocks[textBlocks.length - 1].text;
+    }
+
+    return allText;
   }
 
   public async processInput(
@@ -148,9 +203,14 @@ To CREATE new blocks: omit the blockId attribute
 
       const systemPrompt = `You are a curious and fastidious friend helping with Digest - a document editor designed to compress and refine information gathered while exploring the internet. Your role is to help sharpen understanding and create dense, high-quality knowledge.
 
+You have access to web search capabilities to find current, accurate information. Use web search when:
+- The user asks for current information (prices, news, recent updates)
+- You need to verify or update existing information in the document
+- The user's query would benefit from real-time web data
+
 Think of yourself as detail-oriented yet wryly aware of the much bigger picture.
 
-A common scenario: maybe someone is comparing products, trying to find the best one. They ask what each option costs. Maybe take the opportunity to rewrite the list as a table.
+A common scenario: maybe someone is comparing products, trying to find the best one. They ask what each option costs. Maybe take the opportunity to rewrite the list as a table with current pricing information.
 
 Example transformation - if you see this existing content:
 <list blockId="abc-123">
@@ -224,6 +284,25 @@ CORRECT APPROACH:
 </list>
 <page url="https://python.langchain.com/"></page>
 
+
+🚨 **NEVER HALLUCINATE OR GUESS URLs** 🚨
+
+**URL Source Priority (STRICT):**
+1. **ONLY use URLs from web search results** - When you perform a web search, you will receive actual working URLs in the search results. These are verified and current.
+2. **ONLY use URLs from existing document context** - If URLs already exist in the document blocks, they've been previously verified.
+3. **For well-known services without search**: Use only the most basic homepage URLs (gmail.com, github.com, etc.) and ONLY for single-word service requests.
+
+**FORBIDDEN:**
+- ❌ Do NOT create URLs based on assumptions (like example.com/products)
+- ❌ Do NOT guess subpaths or specific page URLs 
+- ❌ Do NOT use URLs that aren't explicitly provided in search results
+- ❌ Do NOT use outdated URLs from training data
+
+**When to Search vs Direct URLs:**
+- **Search first** for any specific products, services, or current information
+- **Use search results URLs** for <page> blocks and table URL columns
+- **Only use direct URLs** for basic homepage requests (single words like "gmail")
+
 IMPORTANT PRIORITY RULES:
 1. **Single Service Names/Jump Links**: If the user provides a single word or short phrase that clearly refers to a well-known service, website, or platform, respond with ONLY a single <page> tag pointing to that service's homepage.
 
@@ -241,7 +320,7 @@ Examples of single service requests:
 - "netflix" → <page url="https://netflix.com"></page>
 - "spotify" → <page url="https://spotify.com"></page>
 
-2. **Comparison Requests**: Only create tables when the user explicitly asks to compare multiple things or uses words like "compare", "vs", "alternatives", "options", etc.
+2. **Comparison Requests**: When comparing products/services, SEARCH FIRST to get current information and working URLs, then create tables using the verified URLs from search results.
 
 3. **Research/Exploration**: Create structured content with headings, paragraphs, and lists when the user asks for information about a topic.
 
