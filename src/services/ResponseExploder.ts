@@ -116,6 +116,14 @@ export class ResponseExploder {
   private static parseXMLElements(response: string): ParsedXMLElement[] {
     const elements: ParsedXMLElement[] = [];
 
+    log.debug(
+      `[ResponseExploder] Parsing XML response: ${response.substring(
+        0,
+        500
+      )}...`,
+      "ResponseExploder"
+    );
+
     // Regex to match XML tags with optional attributes
     const xmlRegex = /<(\w+)([^>]*)>([\s\S]*?)<\/\1>/g;
     let match;
@@ -132,13 +140,26 @@ export class ResponseExploder {
         attributes[attrMatch[1]] = attrMatch[2];
       }
 
-      elements.push({
+      const element = {
         tag: tag.toLowerCase(),
         content: content.trim(),
         attributes,
-      });
+      };
+
+      log.debug(
+        `[ResponseExploder] Parsed element: ${tag} with content: ${content.substring(
+          0,
+          100
+        )}...`,
+        "ResponseExploder"
+      );
+      elements.push(element);
     }
 
+    log.debug(
+      `[ResponseExploder] Total elements parsed: ${elements.length}`,
+      "ResponseExploder"
+    );
     return elements;
   }
 
@@ -184,6 +205,70 @@ export class ResponseExploder {
     return (
       element.attributes.blockId || element.attributes.blockid || undefined
     );
+  }
+
+  /**
+   * Parse HTML content into BlockNote InlineContent format
+   * Handles <strong>, <em>, <a>, etc. and converts to proper BlockNote styling
+   */
+  private static parseHtmlToInlineContent(
+    html: string
+  ): BlockNoteInlineContent[] {
+    const result: BlockNoteInlineContent[] = [];
+
+    // Simple HTML parser that handles basic formatting
+    // This regex matches text and HTML tags
+    const htmlRegex = /(<[^>]*>)|([^<]+)/g;
+    let match;
+    let currentStyles: Record<string, any> = {};
+    const styleStack: Record<string, any>[] = [];
+
+    while ((match = htmlRegex.exec(html)) !== null) {
+      const [fullMatch, tag, text] = match;
+
+      if (tag) {
+        // Handle opening/closing tags
+        const tagName = tag.match(/<\/?(\w+)/)?.[1]?.toLowerCase();
+        const isClosing = tag.startsWith("</");
+
+        if (tagName === "strong" || tagName === "b") {
+          if (isClosing) {
+            // Pop styles from stack
+            currentStyles = styleStack.pop() || {};
+          } else {
+            // Push current styles to stack and add bold
+            styleStack.push({ ...currentStyles });
+            currentStyles = { ...currentStyles, bold: true };
+          }
+        } else if (tagName === "em" || tagName === "i") {
+          if (isClosing) {
+            currentStyles = styleStack.pop() || {};
+          } else {
+            styleStack.push({ ...currentStyles });
+            currentStyles = { ...currentStyles, italic: true };
+          }
+        }
+        // Add more tag handlers as needed
+      } else if (text && text.trim()) {
+        // Add text with current styles
+        result.push({
+          type: "text",
+          text: text,
+          styles: { ...currentStyles },
+        });
+      }
+    }
+
+    // If no content was parsed, return plain text
+    if (result.length === 0) {
+      result.push({
+        type: "text",
+        text: html.replace(/<[^>]*>/g, "").trim(),
+        styles: {},
+      });
+    }
+
+    return result;
   }
 
   /**
@@ -318,7 +403,7 @@ export class ResponseExploder {
       props: {
         level: Math.min(Math.max(level, 1), 3), // Clamp to 1-3
       },
-      content: element.content,
+      content: this.parseHtmlToInlineContent(element.content),
     };
 
     if (blockId) {
@@ -338,7 +423,7 @@ export class ResponseExploder {
 
     const block: BlockCreationRequest = {
       type: "paragraph",
-      content: element.content,
+      content: this.parseHtmlToInlineContent(element.content),
     };
 
     if (blockId) {
@@ -362,10 +447,12 @@ export class ResponseExploder {
 
     if (itemMatches && itemMatches.length > 0) {
       return itemMatches.map((itemMatch) => {
-        const itemContent = itemMatch.replace(/<\/?item>/g, "").trim();
+        // Remove <item> tags and parse HTML content
+        const htmlContent = itemMatch.replace(/<\/?item>/g, "").trim();
+        const inlineContent = this.parseHtmlToInlineContent(htmlContent);
         return {
           type: isOrdered ? "numberedListItem" : "bulletListItem",
-          content: itemContent,
+          content: inlineContent,
         };
       });
     }
