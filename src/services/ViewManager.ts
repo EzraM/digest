@@ -143,7 +143,7 @@ export class ViewManager {
                     "img-src * data: blob:; " +
                     "font-src * data:; " +
                     "connect-src *; " +
-                    "media-src *; " +
+                    "media-src * blob:; " +
                     "object-src *; " +
                     "child-src * blob:; " +
                     "worker-src * blob: data:; " +
