@@ -1,3 +1,5 @@
+import { BlockOperation, OperationResult } from "./operations";
+
 interface ElectronAPI {
   setUrl: (url: string) => void;
   updateBrowserUrl: (data: { blockId: string; url: string }) => void;
@@ -41,6 +43,19 @@ interface ElectronAPI {
   }>;
   focusPromptOverlay: () => void;
   updateDocumentState: (documentState: any) => void;
+
+  // New block operation methods with transaction metadata support
+  applyBlockOperations: (
+    operations: BlockOperation[],
+    origin?: import("./operations").TransactionOrigin
+  ) => Promise<OperationResult>;
+  onDocumentUpdate: (
+    callback: (updateData: import("./operations").DocumentUpdate) => void
+  ) => () => void;
+  removeDocumentUpdateListener: (
+    callback: (updateData: import("./operations").DocumentUpdate) => void
+  ) => void;
+
   forwardLog: (logData: {
     level: string;
     message: string;

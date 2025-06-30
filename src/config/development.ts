@@ -14,7 +14,7 @@ export const DEV_CONFIG = {
   // DevTools configuration
   devtools: {
     // Open devtools for the main app window (BlockNote editor)
-    openMainWindow: false,
+    openMainWindow: true,
 
     // Open devtools for the HUD overlay (slash command menu)
     openHudOverlay: false,

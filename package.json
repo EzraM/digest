@@ -21,6 +21,7 @@
     "@electron-forge/plugin-fuses": "^7.4.0",
     "@electron-forge/plugin-vite": "^7.4.0",
     "@electron/fuses": "^1.8.0",
+    "@types/better-sqlite3": "^7.6.8",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
@@ -45,6 +46,7 @@
     "@blocknote/react": "^0.14.1",
     "@react-hook/resize-observer": "^2.0.1",
     "@types/lodash": "^4.17.6",
+    "better-sqlite3": "^9.2.2",
     "electron-squirrel-startup": "^1.0.1",
     "immer": "^10.1.1",
     "lodash": "^4.17.21",
@@ -52,7 +54,8 @@
     "react-dom": "^18.3.1",
     "rxjs": "^7.8.1",
     "uuid": "^10.0.0",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "yjs": "^13.6.10"
   },
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"
 }

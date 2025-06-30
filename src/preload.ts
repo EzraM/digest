@@ -169,6 +169,35 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("document-state:update", documentState);
   },
 
+  // Block operations for unified processing with transaction metadata
+  applyBlockOperations: (operations: any[], origin?: any) => {
+    log.debug(
+      `Applying ${operations.length} block operations ${
+        origin?.batchId ? `(batch: ${origin.batchId})` : ""
+      }`,
+      "preload"
+    );
+    return ipcRenderer.invoke("block-operations:apply", operations, origin);
+  },
+
+  onDocumentUpdate: (callback: (updateData: any) => void) => {
+    const subscription = (_: any, updateData: any) => {
+      log.debug(
+        `Received document update: ${updateData?.blocks?.length || 0} blocks`,
+        "preload"
+      );
+      callback(updateData);
+    };
+    ipcRenderer.on("document-update", subscription);
+    return () => {
+      ipcRenderer.removeListener("document-update", subscription);
+    };
+  },
+
+  removeDocumentUpdateListener: (callback: (updateData: any) => void) => {
+    ipcRenderer.removeListener("document-update", callback);
+  },
+
   // Console log forwarding
   forwardLog: (logData: {
     level: string;

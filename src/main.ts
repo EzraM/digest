@@ -24,6 +24,7 @@ import { BlockCreationService } from "./services/BlockCreationService";
 import { BlockCreationRequest } from "./services/ResponseExploder";
 import { PromptOverlay } from "./services/PromptOverlay";
 import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
+import { BlockOperationService } from "./services/BlockOperationService";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -192,6 +193,20 @@ const createWindow = () => {
 
   // Set up console log forwarding from renderer
   setupConsoleLogForwarding(appViewInstance);
+
+  // Initialize block operation service for unified persistence
+  const blockOperationService = BlockOperationService.getInstance();
+  blockOperationService.setRendererWebContents(appViewInstance);
+
+  // Load any existing document from persistence
+  blockOperationService
+    .loadDocument()
+    .then((blocks) => {
+      log.debug(`Loaded ${blocks.length} blocks from persistence`, "main");
+    })
+    .catch((error) => {
+      log.debug(`Error loading document from persistence: ${error}`, "main");
+    });
 
   // Set up IPC handlers
   setupIpcHandlers(viewManager, slashCommandManager);
@@ -435,12 +450,14 @@ const setupIpcHandlers = (
     }
   );
 
-  // Handle document state updates (continuous sync)
+  // Handle document state updates (continuous sync) with initial state persistence
   ipcMain.on(
     "document-state:update",
-    (event: IpcMainEvent, documentState: any) => {
+    async (event: IpcMainEvent, documentState: any) => {
       if (documentState) {
+        const previousBlockCount = globalDocumentContext?.blockCount || 0;
         globalDocumentContext = documentState;
+
         log.debug(
           `Document state updated: ${
             documentState.blockCount
@@ -449,6 +466,64 @@ const setupIpcHandlers = (
           ).toLocaleTimeString()}`,
           "main"
         );
+
+        // If this is the initial state (we had 0 blocks, now we have some), save it to persistence
+        if (
+          previousBlockCount === 0 &&
+          documentState.blockCount > 0 &&
+          documentState.document
+        ) {
+          try {
+            log.debug(
+              `Saving initial document state with ${documentState.blockCount} blocks to persistence`,
+              "main"
+            );
+
+            // Get the BlockOperationService instance
+            const blockOperationService = (
+              await import("./services/BlockOperationService")
+            ).BlockOperationService.getInstance();
+
+            // Convert the initial document blocks to insert operations
+            const operations = documentState.document.map(
+              (block: any, index: number) => ({
+                type: "insert",
+                blockId: block.id || `initial-block-${index}`,
+                position: index,
+                block: block,
+                source: "system",
+                timestamp: Date.now(),
+                userId: "system",
+                requestId: "initial-load",
+                batchId: "initial-document-state",
+              })
+            );
+
+            const origin = {
+              source: "system" as const,
+              requestId: "initial-load",
+              batchId: "initial-document-state",
+              timestamp: Date.now(),
+              metadata: {
+                type: "initial-state",
+                blockCount: documentState.blockCount,
+              },
+            };
+
+            // Apply the operations to save them to persistence
+            const result = await blockOperationService.applyOperations(
+              operations,
+              origin
+            );
+
+            log.debug(
+              `Initial state persistence result: ${result.operationsApplied} operations saved, success: ${result.success}`,
+              "main"
+            );
+          } catch (error) {
+            log.debug(`Error saving initial document state: ${error}`, "main");
+          }
+        }
       }
     }
   );
@@ -513,6 +588,59 @@ const setupIpcHandlers = (
   ipcMain.handle("block-creation-available", async (): Promise<boolean> => {
     return blockCreationService.isIntelligentProcessingAvailable();
   });
+
+  // Handle block operations for unified processing with transaction metadata
+  ipcMain.handle(
+    "block-operations:apply",
+    async (
+      event: IpcMainInvokeEvent,
+      operations: any[],
+      origin?: any
+    ): Promise<any> => {
+      try {
+        log.debug(
+          `IPC: Applying ${operations.length} block operations ${
+            origin?.batchId ? `(batch: ${origin.batchId})` : ""
+          }`,
+          "main"
+        );
+
+        // Get the BlockOperationService instance
+        const blockOperationService = (
+          await import("./services/BlockOperationService")
+        ).BlockOperationService.getInstance();
+
+        // Set renderer web contents for updates
+        if (globalAppView) {
+          blockOperationService.setRendererWebContents(globalAppView);
+        }
+
+        // Apply operations with transaction metadata
+        const result = await blockOperationService.applyOperations(
+          operations,
+          origin
+        );
+
+        log.debug(
+          `IPC: Block operations result: ${
+            result.operationsApplied
+          } applied, success: ${result.success}${
+            result.batchId ? `, batch: ${result.batchId}` : ""
+          }`,
+          "main"
+        );
+
+        return result;
+      } catch (error) {
+        log.debug(`IPC: Error applying block operations: ${error}`, "main");
+        return {
+          success: false,
+          operationsApplied: 0,
+          errors: [error instanceof Error ? error.message : "Unknown error"],
+        };
+      }
+    }
+  );
 };
 
 // Create a new browser block for testing
