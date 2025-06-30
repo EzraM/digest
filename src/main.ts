@@ -25,6 +25,7 @@ import { BlockCreationRequest } from "./services/ResponseExploder";
 import { PromptOverlay } from "./services/PromptOverlay";
 import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
 import { BlockOperationService } from "./services/BlockOperationService";
+import { welcomeContent } from "./content/welcomeContent";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -198,18 +199,11 @@ const createWindow = () => {
   const blockOperationService = BlockOperationService.getInstance();
   blockOperationService.setRendererWebContents(appViewInstance);
 
-  // Load any existing document from persistence
-  blockOperationService
-    .loadDocument()
-    .then((blocks) => {
-      log.debug(`Loaded ${blocks.length} blocks from persistence`, "main");
-    })
-    .catch((error) => {
-      log.debug(`Error loading document from persistence: ${error}`, "main");
-    });
+  // Document loading/seeding will happen when renderer signals it's ready
+  // This prevents race condition where Y.js updates are broadcast before renderer can receive them
 
-  // Set up IPC handlers
-  setupIpcHandlers(viewManager, slashCommandManager);
+  // Set up IPC handlers (including renderer-ready handler)
+  setupIpcHandlers(viewManager, slashCommandManager, blockOperationService);
 
   baseWindow.on("closed", () => {
     mainWindow = null;
@@ -272,8 +266,33 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 
 const setupIpcHandlers = (
   viewManager: ViewManager,
-  slashCommandManager: SlashCommandManager
+  slashCommandManager: SlashCommandManager,
+  blockOperationService: BlockOperationService
 ) => {
+  // Handle renderer ready signal - load/seed document only after renderer is ready
+  ipcMain.on("renderer-ready", async () => {
+    log.debug("Renderer ready signal received - loading document", "main");
+
+    try {
+      const blocks = await blockOperationService.loadDocument();
+      log.debug(`Loaded ${blocks.length} blocks from persistence`, "main");
+
+      // If no blocks exist, seed with welcome content
+      if (blocks.length === 0) {
+        log.debug("No blocks found, seeding with welcome content", "main");
+        await blockOperationService.seedInitialContent(welcomeContent);
+        log.debug(
+          "Welcome content seeded - Y.js will sync to renderer",
+          "main"
+        );
+      } else {
+        log.debug("Document loaded - Y.js will sync to renderer", "main");
+      }
+    } catch (error) {
+      log.debug(`Error loading document: ${error}`, "main");
+    }
+  });
+
   // Handle URL setting
   ipcMain.on("set-url", (_, url) => {
     log.debug(`Received set-url event with URL: ${url}`, "main");
@@ -466,64 +485,6 @@ const setupIpcHandlers = (
           ).toLocaleTimeString()}`,
           "main"
         );
-
-        // If this is the initial state (we had 0 blocks, now we have some), save it to persistence
-        if (
-          previousBlockCount === 0 &&
-          documentState.blockCount > 0 &&
-          documentState.document
-        ) {
-          try {
-            log.debug(
-              `Saving initial document state with ${documentState.blockCount} blocks to persistence`,
-              "main"
-            );
-
-            // Get the BlockOperationService instance
-            const blockOperationService = (
-              await import("./services/BlockOperationService")
-            ).BlockOperationService.getInstance();
-
-            // Convert the initial document blocks to insert operations
-            const operations = documentState.document.map(
-              (block: any, index: number) => ({
-                type: "insert",
-                blockId: block.id || `initial-block-${index}`,
-                position: index,
-                block: block,
-                source: "system",
-                timestamp: Date.now(),
-                userId: "system",
-                requestId: "initial-load",
-                batchId: "initial-document-state",
-              })
-            );
-
-            const origin = {
-              source: "system" as const,
-              requestId: "initial-load",
-              batchId: "initial-document-state",
-              timestamp: Date.now(),
-              metadata: {
-                type: "initial-state",
-                blockCount: documentState.blockCount,
-              },
-            };
-
-            // Apply the operations to save them to persistence
-            const result = await blockOperationService.applyOperations(
-              operations,
-              origin
-            );
-
-            log.debug(
-              `Initial state persistence result: ${result.operationsApplied} operations saved, success: ${result.success}`,
-              "main"
-            );
-          } catch (error) {
-            log.debug(`Error saving initial document state: ${error}`, "main");
-          }
-        }
       }
     }
   );

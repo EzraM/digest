@@ -347,7 +347,12 @@ export class BlockOperationService {
         break;
 
       case "update":
-        if (operation.block) {
+        if (operation.blockId === "document-root" && operation.document) {
+          // Handle document-level updates (replace entire document)
+          this.yBlocks.delete(0, this.yBlocks.length);
+          this.yBlocks.insert(0, operation.document);
+        } else if (operation.block) {
+          // Handle single block updates
           const index = this.findBlockIndex(operation.blockId);
           if (index !== -1) {
             this.yBlocks.delete(index, 1);
@@ -471,6 +476,56 @@ export class BlockOperationService {
     } catch (error) {
       log.debug(`Error loading document: ${error}`, "BlockOperationService");
       return [];
+    }
+  }
+
+  /**
+   * Seed initial content if database is empty
+   */
+  async seedInitialContent(initialBlocks: any[]): Promise<void> {
+    if (!this.database || !initialBlocks || initialBlocks.length === 0) {
+      return;
+    }
+
+    try {
+      log.debug(
+        `Seeding initial content with ${initialBlocks.length} blocks`,
+        "BlockOperationService"
+      );
+
+      const operations: BlockOperation[] = initialBlocks.map(
+        (block, index) => ({
+          id: `seed-${Date.now()}-${index}`,
+          type: "insert" as const,
+          blockId: block.id || `seed-block-${index}`,
+          source: "system" as const,
+          timestamp: Date.now(),
+          block: block,
+          document: initialBlocks,
+          userId: "system",
+          requestId: `seed-${Date.now()}`,
+        })
+      );
+
+      const origin: TransactionOrigin = {
+        source: "system",
+        batchId: `seed-batch-${Date.now()}`,
+        requestId: `seed-${Date.now()}`,
+        timestamp: Date.now(),
+      };
+
+      await this.applyOperations(operations, origin);
+
+      log.debug(
+        `Successfully seeded ${operations.length} initial blocks`,
+        "BlockOperationService"
+      );
+    } catch (error) {
+      log.debug(
+        `Error seeding initial content: ${error}`,
+        "BlockOperationService"
+      );
+      throw error;
     }
   }
 

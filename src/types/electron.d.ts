@@ -55,6 +55,9 @@ interface ElectronAPI {
   removeDocumentUpdateListener: (
     callback: (updateData: import("./operations").DocumentUpdate) => void
   ) => void;
+  onPromptOverlayCreateBlocks: (
+    callback: (data: { xmlResponse: string; originalInput: string }) => void
+  ) => () => void;
 
   forwardLog: (logData: {
     level: string;
@@ -62,6 +65,19 @@ interface ElectronAPI {
     timestamp: string;
     source: string;
   }) => void;
+
+  // Block operations for unified processing with transaction metadata
+  applyBlockOperations: (operations: any[], origin?: any) => Promise<any>;
+
+  // Document update handling
+  onDocumentUpdate: (callback: (updateData: any) => void) => () => void;
+  removeDocumentUpdateListener: (callback: (updateData: any) => void) => void;
+
+  // Signal renderer is ready to receive document updates
+  signalRendererReady: () => void;
+
+  // Update document state (continuous sync)
+  updateDocumentState: (documentState: any) => void;
 }
 
 declare global {

@@ -70,9 +70,10 @@ function CustomSlashMenu(): null {
 }
 
 function App() {
+  // Create editor immediately with no initial content - Y.js sync will populate it
   const editor = useCreateBlockNote({
     schema,
-    initialContent: welcomeContent,
+    initialContent: undefined, // Start with no content, Y.js will sync content automatically
   }) as CustomBlockNoteEditor;
 
   // Store editor reference for IPC handlers
@@ -378,38 +379,4 @@ function App() {
       <div style={{ height: "2000px", width: "100%", color: "gray" }} />
     </div>
   );
-}
-
-declare global {
-  interface Window {
-    electronAPI: {
-      setUrl: (url: string) => void;
-      updateBrowser: (browserLayout: any) => void;
-      updateBrowserUrl: (data: { blockId: string; url: string }) => void;
-      removeBrowser: (blockId: string) => void;
-      addBlockEvent: (event: any) => void;
-      startSlashCommand: () => void;
-      cancelSlashCommand: () => void;
-      onBrowserUpdate: (callback: (data: any) => void) => void;
-      onBrowserRemove: (callback: (blockId: string) => void) => void;
-      onNewBrowserBlock: (callback: (data: { url: string }) => void) => void;
-      onSlashCommandInsert: (callback: (blockKey: string) => void) => void;
-      onPromptOverlayCreateBlocks: (
-        callback: (data: { xmlResponse: string; originalInput: string }) => void
-      ) => void;
-      focusPromptOverlay: () => void;
-      updateDocumentState: (documentState: any) => void;
-      debugLinkClick: (url: string) => void;
-      testNewBrowserBlock: (url: string) => void;
-      testCommunication: (callback?: (result: string) => void) => string | void;
-      processIntelligentUrl: (input: string, context?: any) => Promise<any>;
-      isIntelligentUrlAvailable: () => Promise<boolean>;
-      forwardLog: (logData: {
-        level: string;
-        message: string;
-        timestamp: string;
-        source: string;
-      }) => void;
-    };
-  }
 }

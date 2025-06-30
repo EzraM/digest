@@ -180,6 +180,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return ipcRenderer.invoke("block-operations:apply", operations, origin);
   },
 
+  // Signal renderer ready to receive document updates
+  signalRendererReady: () => {
+    log.debug("Signaling renderer ready for document updates", "preload");
+    ipcRenderer.send("renderer-ready");
+  },
+
   onDocumentUpdate: (callback: (updateData: any) => void) => {
     const subscription = (_: any, updateData: any) => {
       log.debug(

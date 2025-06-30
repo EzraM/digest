@@ -21,6 +21,7 @@ export interface BlockOperation {
   blockId: string;
   position?: number;
   block?: CustomBlock;
+  document?: CustomBlock[]; // For document-level updates
   prevBlock?: CustomBlock; // For update operations
   parentId?: string; // For nested operations
   source: "user" | "llm" | "sync" | "system";
