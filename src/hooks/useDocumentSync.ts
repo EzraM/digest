@@ -3,6 +3,7 @@ import { CustomBlockNoteEditor } from "../types/schema";
 import { log } from "../utils/rendererLogger";
 import { BlockNoteOperationConverter } from "../services/BlockNoteOperationConverter";
 import { BlockChange, DocumentUpdate } from "../types/operations";
+import { useDebounced } from "./useDebounced";
 
 /**
  * Custom hook to synchronize document state and operations with the main process
@@ -29,6 +30,54 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
     }
   };
 
+  // ✅ Move useDebounced to top level - hooks must be called at component/hook top level
+  const sendUserOperation = useDebounced<any[]>(
+    (document: any[]) => {
+      const operations = [
+        {
+          id: `user-edit-${Date.now()}`,
+          type: "update" as const,
+          blockId: "document-root",
+          source: "user" as const,
+          timestamp: Date.now(),
+          block: null as any, // We'll send the full document instead
+          document: document,
+          userId: "local-user",
+          requestId: `user-edit-${Date.now()}`,
+        },
+      ];
+
+      const origin = {
+        source: "user" as const,
+        batchId: `user-batch-${Date.now()}`,
+        requestId: `user-edit-${Date.now()}`,
+        timestamp: Date.now(),
+      };
+
+      log.debug(
+        `Sending debounced user operation with ${document.length} blocks (after 2s delay)`,
+        "useDocumentSync"
+      );
+
+      // Apply operations with transaction metadata
+      (window.electronAPI as any)
+        ?.applyBlockOperations(operations, origin)
+        .then((result: any) => {
+          log.debug(
+            `Applied debounced user operation successfully: ${result.operationsApplied} operations`,
+            "useDocumentSync"
+          );
+        })
+        .catch((error: any) => {
+          log.debug(
+            `Error applying debounced user operation: ${error}`,
+            "useDocumentSync"
+          );
+        });
+    },
+    2000 // 2 seconds after typing stops
+  );
+
   useEffect(() => {
     if (!editor || !window.electronAPI?.updateDocumentState) {
       return;
@@ -44,71 +93,19 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
       );
     }
 
-    // Track previous document state to detect changes
-    let previousDocument: any[] = editor.document;
-
-    // Set up unified document change listener for operations and state sync
+    // Set up document change listener - much simpler now!
     let stateUpdateTimeout: NodeJS.Timeout;
     const handleDocumentChange = (currentEditor: CustomBlockNoteEditor) => {
       try {
         const currentDocument = currentEditor.document;
 
-        // Simple change detection by comparing document snapshots
-        if (
-          JSON.stringify(currentDocument) !== JSON.stringify(previousDocument)
-        ) {
-          log.debug(
-            `Document changed from user: ${previousDocument.length} → ${currentDocument.length} blocks`,
-            "useDocumentSync"
-          );
+        // Send to debounced operation handler - the hook handles deduplication and timing
+        sendUserOperation(currentDocument);
 
-          // Create a simple operation from the document changes
-          // This is a simplified approach - treats document-level changes as operations
-          const operations = [
-            {
-              id: `user-edit-${Date.now()}`,
-              type: "update" as const,
-              blockId: "document-root",
-              source: "user" as const,
-              timestamp: Date.now(),
-              block: null as any, // We'll send the full document instead
-              document: currentDocument,
-              userId: "local-user",
-              requestId: `user-edit-${Date.now()}`,
-            },
-          ];
-
-          const origin = {
-            source: "user" as const,
-            batchId: `user-batch-${Date.now()}`,
-            requestId: `user-edit-${Date.now()}`,
-            timestamp: Date.now(),
-          };
-
-          log.debug(
-            `Sending user document operation with ${currentDocument.length} blocks`,
-            "useDocumentSync"
-          );
-
-          // Apply operations with transaction metadata
-          (window.electronAPI as any)
-            ?.applyBlockOperations(operations, origin)
-            .then((result: any) => {
-              log.debug(
-                `Applied user operation successfully: ${result.operationsApplied} operations`,
-                "useDocumentSync"
-              );
-            })
-            .catch((error: any) => {
-              log.debug(
-                `Error applying user operation: ${error}`,
-                "useDocumentSync"
-              );
-            });
-
-          // Update previous document snapshot
-          previousDocument = JSON.parse(JSON.stringify(currentDocument));
-        }
+        log.debug(
+          `Document changed from user: ${currentDocument.length} blocks (queued for debouncing)`,
+          "useDocumentSync"
+        );
       } catch (error) {
         log.debug(
           `Error processing document changes: ${error}`,
@@ -155,7 +152,7 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
     //   window.electronAPI.onDocumentUpdate(handleDocumentUpdate);
     // }
 
-    // Cleanup function
+    // Cleanup function - useDebounced hook handles its own cleanup automatically
     return () => {
       clearTimeout(stateUpdateTimeout);
 
