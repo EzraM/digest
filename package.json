@@ -42,9 +42,9 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@blocknote/core": "^0.14.1",
-    "@blocknote/mantine": "^0.14.1",
-    "@blocknote/react": "^0.14.1",
+    "@blocknote/core": "^0.32.0",
+    "@blocknote/mantine": "^0.32.0",
+    "@blocknote/react": "^0.32.0",
     "@react-hook/resize-observer": "^2.0.1",
     "@types/lodash": "^4.17.6",
     "better-sqlite3": "^9.2.2",
