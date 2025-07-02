@@ -1,7 +1,11 @@
 import { WebContentsView, BrowserWindow, ipcMain } from "electron";
 import { Subject } from "rxjs";
 import set from "lodash/set";
-import { BlockEvent, BlockViewState } from "../types/window";
+import {
+  BlockEvent,
+  BlockViewUpdateEvent,
+  BlockViewState,
+} from "../types/window";
 import { log } from "../utils/mainLogger";
 import { shouldOpenDevTools } from "../config/development";
 import { ViewLayerManager, ViewLayer } from "./ViewLayerManager";
@@ -15,7 +19,9 @@ const EVENTS = {
 
 export class ViewManager {
   private views: BlockViewState = {};
-  private events$ = new Subject<BlockEvent>();
+  private events$ = new Subject<
+    BlockViewUpdateEvent | { type: "remove-view"; blockId: string }
+  >();
   private onLinkClickCallback?: (url: string) => void;
 
   constructor(
@@ -38,38 +44,21 @@ export class ViewManager {
         "ViewManager"
       );
 
-      if (ev.type === "set-url") {
+      if (ev.type === "update-block-view") {
         log.debug(
-          `Setting URL for blockId: ${blockId}, url: ${ev.url}`,
+          `Updating block view for blockId: ${blockId}, url: ${
+            ev.url
+          }, bounds: ${JSON.stringify(ev.bounds)}`,
           "ViewManager"
         );
         set(this.views, [blockId, "url"], ev.url);
-      }
-      if (ev.type === "set-layout") {
-        log.debug(
-          `Setting bounds for blockId: ${blockId}, bounds: ${JSON.stringify(
-            ev.bounds
-          )}`,
-          "ViewManager"
-        );
         set(this.views, [blockId, "bounds"], ev.bounds);
-
-        // Log the state after setting bounds
-        log.debug(
-          `View state after setting bounds: ${JSON.stringify(
-            this.views[blockId]
-          )}`,
-          "ViewManager"
-        );
-      }
-      if (ev.type === "remove-view") {
+        this.handleViewCreation(blockId);
+        this.handleViewUpdate(blockId, ev);
+      } else if (ev.type === "remove-view") {
         log.debug(`Removing view for blockId: ${blockId}`, "ViewManager");
         this.handleViewRemoval(blockId);
-        return; // Skip view creation and update for removal events
       }
-
-      this.handleViewCreation(blockId);
-      this.handleViewUpdate(blockId, ev);
     });
   }
 
@@ -438,43 +427,27 @@ export class ViewManager {
     }
   }
 
-  private handleViewUpdate(blockId: string, ev: BlockEvent) {
+  private handleViewUpdate(blockId: string, ev: BlockViewUpdateEvent) {
     const view = this.views[blockId];
-    if (view?.contents && ev.type === "set-layout") {
+    if (view?.contents && ev.type === "update-block-view") {
       view.contents.setBounds(ev.bounds);
     }
   }
 
-  public handleLayoutUpdate(layout: any) {
+  public handleBlockViewUpdate(update: {
+    blockId: string;
+    url: string;
+    bounds: { x: number; y: number; width: number; height: number };
+  }) {
     log.debug(
-      `Handling layout update: ${JSON.stringify(layout)}`,
+      `Handling unified block view update: ${JSON.stringify(update)}`,
       "ViewManager"
     );
-
-    // Extract the bounds from the layout object
-    const { blockId, x, y, width, height } = layout;
-
-    // Create a proper bounds object
-    const bounds = { x, y, width, height };
-
-    // Create a proper layout event
-    const layoutEvent = {
-      type: "set-layout" as const,
-      blockId,
-      bounds,
+    const event: BlockViewUpdateEvent = {
+      type: "update-block-view",
+      ...update,
     };
-
-    log.debug(
-      `Transformed layout event: ${JSON.stringify(layoutEvent)}`,
-      "ViewManager"
-    );
-
-    // Send the event to the event stream
-    this.events$.next(layoutEvent);
-  }
-
-  public handleUrlUpdate(url: any) {
-    this.events$.next({ ...url, type: "set-url" });
+    this.events$.next(event);
   }
 
   // Helper method to validate URLs

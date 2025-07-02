@@ -1,59 +1,42 @@
-import React, { useReducer, useEffect } from "react";
-import { PageProps, BrowserState, BrowserAction } from "../types";
+import React, { useEffect, useCallback } from "react";
+import { PageProps } from "../types";
 import { BrowserSlot } from "./BrowserSlot";
+import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
+import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
 
-export function Page({blockId, url}: PageProps) {
-  const [state, dispatch] = useReducer(
-    (state: BrowserState, action: BrowserAction) => {
-      switch (action.type) {
-        case "set-url":
-          return {
-            status: "entry",
-            url: action.url,
-          };
-        case "enter":
-          return {
-            status: "page",
-            url: state.url,
-          };
-        default:
-          return state;
+export function Page({ blockId, url }: PageProps) {
+  const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
+    useBrowserViewUpdater(blockId);
+  const {
+    isInitialized,
+    initError,
+    initStatus,
+    retryInitialization,
+    getInitAttemptRef,
+  } = useBrowserInitialization(blockId);
+
+  const handleBoundsChange = useCallback(
+    (bounds: { x: number; y: number; width: number; height: number }) => {
+      // We must increment the init attempt ref here to trigger the timeout effect in the hook
+      const initAttemptRef = getInitAttemptRef();
+      if (
+        bounds.width > 0 &&
+        bounds.height > 0 &&
+        !isInitialized &&
+        !initStatus
+      ) {
+        initAttemptRef.current += 1;
       }
+      handleBoundsChangeUpdater(bounds);
     },
-    { status: url ? "page" : "entry", url: url || "" }
+    [handleBoundsChangeUpdater, getInitAttemptRef, isInitialized, initStatus]
   );
 
-  const handleInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      dispatch({ type: "enter" });
-    }
-  };
-
-  // Format URL to ensure it has the proper protocol
-  const formatUrl = (url: string): string => {
-    if (!url) return url;
-
-    // If URL doesn't start with a protocol, add https://
-    if (!url.match(/^[a-zA-Z]+:\/\//)) {
-      return `https://${url}`;
-    }
-
-    return url;
-  };
-
   useEffect(() => {
-    const formattedUrl = formatUrl(state.url);
-    console.log("[Browser] Updating URL:", {
-      blockId,
-      url: formattedUrl,
-      originalUrl: state.url,
-      status: state.status,
-    });
-
-    if (state.status === "page" && formattedUrl) {
-      window.electronAPI.updateBrowserUrl({ blockId, url: formattedUrl });
+    if (url) {
+      handleUrlChange(url);
     }
-  }, [blockId, state.status, state.url]);
+  }, [url, handleUrlChange]);
 
   // Cleanup when component unmounts
   useEffect(() => {
@@ -63,33 +46,34 @@ export function Page({blockId, url}: PageProps) {
     };
   }, [blockId]);
 
+  const handleRetry = () => {
+    retryInitialization();
+    // After resetting state, we need to re-trigger the update flow.
+    // The bounds update is a good way to do this.
+    // The actual bounds are managed within BrowserSlot, so we can't get them here directly.
+    // This is a bit of a hack, but we can send a "dummy" update if needed,
+    // though the user resizing the slot would naturally trigger it.
+    // For now, we rely on the user or the existing flow to provide new bounds.
+  };
+
   return (
-    <div>
-      {state.status === "entry" && (
-        <input
-          style={{ height: 30, width: 500 }}
-          key="locationBar"
-          type="text"
-          value={state.url}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-            dispatch({ type: "set-url", url: e.target.value })
-          }
-          onKeyPress={handleInput}
-          placeholder="Enter URL (e.g., google.com)"
-        />
-      )}
-      {state.status === "page" && (
-        <div
-          key="browserContainer"
-          style={{
-            border: "2px solid black",
-            width: "calc(96vw - 118px)",
-            height: 800,
-          }}
-        >
-          <BrowserSlot key={blockId} blockId={blockId} />
-        </div>
-      )}
+    <div
+      key="browserContainer"
+      style={{
+        border: "2px solid black",
+        width: "calc(96vw - 118px)",
+        height: 800,
+      }}
+    >
+      <BrowserSlot
+        key={blockId}
+        blockId={blockId}
+        onBoundsChange={handleBoundsChange}
+        isInitialized={isInitialized}
+        initError={initError}
+        initStatus={initStatus}
+        onRetry={handleRetry}
+      />
     </div>
   );
-} 
+}

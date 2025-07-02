@@ -293,24 +293,12 @@ const setupIpcHandlers = (
     }
   });
 
-  // Handle URL setting
-  ipcMain.on("set-url", (_, url) => {
-    log.debug(`Received set-url event with URL: ${url}`, "main");
-  });
-
   // Handle browser updates
   ipcMain.on("update-browser", (_, browserLayout) => {
     log.debug(`Received update-browser event`, "main");
-    viewManager.handleLayoutUpdate(browserLayout);
-  });
-
-  // Handle browser URL updates
-  ipcMain.on("update-browser-url", (_, data) => {
-    log.debug(
-      `Received update-browser-url event for block ${data.blockId}`,
-      "main"
-    );
-    viewManager.handleUrlUpdate(data);
+    // Migrate to unified event: you must provide both url and bounds here
+    // Example: viewManager.handleBlockViewUpdate({ blockId, url, bounds })
+    // If browserLayout does not have url, you need to refactor the caller to provide it
   });
 
   // Handle browser removal
@@ -602,6 +590,15 @@ const setupIpcHandlers = (
       }
     }
   );
+
+  // Unified handler for update-block-view
+  ipcMain.on("update-browser-view", (_, data) => {
+    log.debug(
+      `Received update-browser-view event for block ${data.blockId}`,
+      "main"
+    );
+    viewManager.handleBlockViewUpdate(data);
+  });
 };
 
 // Create a new browser block for testing

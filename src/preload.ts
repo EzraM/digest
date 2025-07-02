@@ -18,19 +18,11 @@ const EVENTS = {
 } as const;
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  setUrl: (url: string) => ipcRenderer.send("set-url", url),
-  updateBrowser: (browserLayout: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
+  updateBrowser: (data: {
     blockId: string;
-  }) => {
-    ipcRenderer.send("update-browser", browserLayout);
-  },
-  updateBrowserUrl: (browserUrl: { blockId: string; url: string }) => {
-    ipcRenderer.send("update-browser-url", browserUrl);
-  },
+    url: string;
+    bounds: { x: number; y: number; width: number; height: number };
+  }) => ipcRenderer.send("update-browser-view", data),
   removeBrowser: (blockId: string) => {
     ipcRenderer.send("remove-browser", blockId);
   },
@@ -95,27 +87,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
       status?: "created" | "loaded" | "existing";
     }) => void
   ) => {
-    const subscription = (
-      _: any,
-      data: {
-        blockId: string;
-        success: boolean;
-        error?: string;
-        status?: "created" | "loaded" | "existing";
-      }
-    ) => {
-      log.debug(
-        `Browser initialization status for ${data.blockId}: ${data.success}${
-          data.status ? ` (${data.status})` : ""
-        }`,
-        "preload"
-      );
-      callback(data);
-    };
-    ipcRenderer.on(EVENTS.BROWSER.INITIALIZED, subscription);
-    return () => {
-      ipcRenderer.removeListener(EVENTS.BROWSER.INITIALIZED, subscription);
-    };
+    const channel = "browser:initialized";
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
   },
   onNewBrowserBlock: (callback: (data: { url: string }) => void) => {
     const subscription = (_: any, data: any) => {

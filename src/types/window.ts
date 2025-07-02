@@ -39,3 +39,10 @@ export interface RemoveEvent {
 }
 
 export type BlockEvent = LayoutEvent | UrlEvent | RemoveEvent;
+
+export type BlockViewUpdateEvent = {
+  type: "update-block-view";
+  blockId: string;
+  url: string;
+  bounds: { x: number; y: number; width: number; height: number };
+};

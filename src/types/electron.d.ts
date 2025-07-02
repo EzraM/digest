@@ -1,17 +1,13 @@
 import { BlockOperation, OperationResult } from "./operations";
 
 interface ElectronAPI {
-  setUrl: (url: string) => void;
-  updateBrowserUrl: (data: { blockId: string; url: string }) => void;
   updateBrowser: (data: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
     blockId: string;
+    url: string;
+    bounds: { x: number; y: number; width: number; height: number };
   }) => void;
   removeBrowser: (blockId: string) => void;
-  addBlockEvent: (event: { type: "open" | "close" }) => void;
+  addBlockEvent: (e: { type: "open" | "close" }) => void;
   startSlashCommand: () => void;
   cancelSlashCommand: () => void;
   onSelectBlockType: (callback: (blockKey: string) => void) => () => void;
