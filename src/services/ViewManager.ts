@@ -63,6 +63,12 @@ export class ViewManager {
   }
 
   private handleViewCreation(blockId: string) {
+    if (this.baseWindow.isDestroyed()) {
+      log.warn(
+        `ViewManager: baseWindow is destroyed, skipping view creation for blockId: ${blockId}`
+      );
+      return;
+    }
     const view = this.views[blockId];
     log.debug(`Checking view creation for blockId: ${blockId}`, "ViewManager");
     log.debug(
@@ -428,6 +434,12 @@ export class ViewManager {
   }
 
   private handleViewUpdate(blockId: string, ev: BlockViewUpdateEvent) {
+    if (this.baseWindow.isDestroyed()) {
+      log.warn(
+        `ViewManager: baseWindow is destroyed, skipping view update for blockId: ${blockId}`
+      );
+      return;
+    }
     const view = this.views[blockId];
     if (view?.contents && ev.type === "update-block-view") {
       view.contents.setBounds(ev.bounds);
@@ -520,6 +532,12 @@ export class ViewManager {
   }
 
   private handleViewRemoval(blockId: string) {
+    if (this.baseWindow.isDestroyed()) {
+      log.warn(
+        `ViewManager: baseWindow is destroyed, skipping view removal for blockId: ${blockId}`
+      );
+      return;
+    }
     const view = this.views[blockId];
     if (!view) {
       log.debug(

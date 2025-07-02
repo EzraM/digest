@@ -1,4 +1,4 @@
-import { WebContentsView, BrowserWindow } from "electron";
+import { WebContentsView } from "electron";
 
 export interface ViewBounds {
   x: number;
