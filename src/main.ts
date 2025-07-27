@@ -15,12 +15,7 @@ import { SlashCommandManager } from "./services/SlashCommandManager";
 import { LinkInterceptionService } from "./services/LinkInterceptionService";
 import { log } from "./utils/mainLogger";
 import { shouldOpenDevTools } from "./config/development";
-import {
-  ProcessingResult,
-  DocumentContext,
-} from "./services/IntelligentUrlService";
-import { BlockCreationService } from "./services/BlockCreationService";
-import { BlockCreationRequest } from "./services/ResponseExploder";
+import { DocumentContext } from "./types/content-processing";
 import { PromptOverlay } from "./services/PromptOverlay";
 import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
 import { welcomeContent } from "./content/welcomeContent";
@@ -56,8 +51,7 @@ let globalDocumentContext: DocumentContext | null = null; // Store current docum
 // Global service container
 const serviceContainer = new Container();
 
-// Initialize block creation service
-const blockCreationService = new BlockCreationService();
+// Content coordination services will be resolved from service container
 
 const createWindow = async () => {
   // Register all services with their dependencies
@@ -74,6 +68,7 @@ const createWindow = async () => {
 
   // Get service instances
   const services = getServices(serviceContainer);
+  const { contentCoordinator, blockEventManager } = services;
   const baseWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -94,7 +89,12 @@ const createWindow = async () => {
 
   // Set Content-Security-Policy
   appViewInstance.webContents.session.webRequest.onHeadersReceived(
-    (details: any, callback: any) => {
+    (
+      details: { responseHeaders?: Record<string, string[]> },
+      callback: (response: {
+        responseHeaders: Record<string, string[]>;
+      }) => void
+    ) => {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
@@ -160,8 +160,8 @@ const createWindow = async () => {
   promptOverlay.show();
   globalPromptOverlay = promptOverlay;
 
-  // Connect prompt overlay to intelligent URL service for cost tracking
-  services.intelligentUrlService.setPromptOverlayWebContents(
+  // Connect prompt overlay to content coordinator for cost tracking
+  contentCoordinator.setPromptOverlayWebContents(
     promptOverlay.getWebContentsView()
   );
 
@@ -211,12 +211,14 @@ const createWindow = async () => {
   // Set up service web contents references
   services.blockOperationService.setRendererWebContents(appViewInstance);
   services.debugEventService.setMainRendererWebContents(appViewInstance);
+  blockEventManager.setRendererWebContents(appViewInstance);
+  contentCoordinator.setRendererWebContents(appViewInstance);
 
   // Document loading/seeding will happen when renderer signals it's ready
   // This prevents race condition where Y.js updates are broadcast before renderer can receive them
 
   // Set up IPC handlers (including renderer-ready handler)
-  setupIpcHandlers(viewManager, slashCommandManager, services);
+  setupIpcHandlers(viewManager, slashCommandManager, services, contentCoordinator, blockEventManager);
 
   baseWindow.on("closed", () => {
     globalAppView = null;
@@ -229,7 +231,7 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
   webContentsView.webContents.on(
     "console-message",
     (
-      _event: any,
+      _event: unknown,
       level: number,
       message: string,
       line: number,
@@ -255,7 +257,7 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
   // Also capture renderer errors
   webContentsView.webContents.on(
     "render-process-gone",
-    (_event: any, details: any) => {
+    (_event: unknown, details: { reason: string; exitCode: number }) => {
       log.debug(
         `Renderer process gone. Reason: ${details.reason}, Exit code: ${details.exitCode}`,
         "renderer-crash"
@@ -278,9 +280,11 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 const setupIpcHandlers = (
   viewManager: ViewManager,
   slashCommandManager: SlashCommandManager,
-  services: ReturnType<typeof getServices>
+  services: ReturnType<typeof getServices>,
+  contentCoordinator: ReturnType<typeof getServices>['contentCoordinator'],
+  blockEventManager: ReturnType<typeof getServices>['blockEventManager']
 ) => {
-  const { blockOperationService, intelligentUrlService } = services;
+  const { blockOperationService } = services;
   // Handle renderer ready signal - load/seed document only after renderer is ready
   ipcMain.on("renderer-ready", async () => {
     log.debug("Renderer ready signal received - loading document", "main");
@@ -340,7 +344,7 @@ const setupIpcHandlers = (
   ipcMain.on(
     "renderer-log",
     (
-      event: IpcMainEvent,
+      _event: IpcMainEvent,
       logData: {
         level: string;
         message: string;
@@ -360,36 +364,38 @@ const setupIpcHandlers = (
     }
   );
 
-  // Intelligent URL processing
+  // Content processing
   ipcMain.handle(
     "intelligent-url-process",
     async (
-      event: IpcMainInvokeEvent,
+      _event: IpcMainInvokeEvent,
       input: string,
       context?: DocumentContext
-    ): Promise<ProcessingResult> => {
+    ) => {
       try {
-        log.debug(`IPC: Processing intelligent URL input: "${input}"`, "main");
+        log.debug(`IPC: Processing content input: "${input}"`, "main");
         // Use the globally stored document context if available, otherwise use passed context
         const documentContext = globalDocumentContext || context;
         log.debug(
           `Using document context: ${
-            documentContext ? `${documentContext.blockCount} blocks` : "none"
+            documentContext
+              ? `${documentContext.blocks?.length || 0} blocks`
+              : "none"
           }`,
           "main"
         );
 
-        const result = await intelligentUrlService.processInput(
+        const result = await contentCoordinator.processInput(
           input,
           documentContext
         );
         log.debug(
-          `IPC: Intelligent URL result: ${JSON.stringify(result)}`,
+          `IPC: Content processing result: ${JSON.stringify(result)}`,
           "main"
         );
         return result;
       } catch (error) {
-        log.debug(`IPC: Error processing intelligent URL: ${error}`, "main");
+        log.debug(`IPC: Error processing content: ${error}`, "main");
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -398,38 +404,35 @@ const setupIpcHandlers = (
     }
   );
 
-  // Check if intelligent processing is available
+  // Check if content processing is available
   ipcMain.handle("intelligent-url-available", async (): Promise<boolean> => {
-    return intelligentUrlService.isAvailable();
+    return contentCoordinator.isAvailable();
   });
 
   // Get current cost summary
   ipcMain.handle(
     "intelligent-url-cost-summary",
     async (): Promise<{ queryCost: number; sessionTotal: number }> => {
-      return intelligentUrlService.getCostSummary();
+      return contentCoordinator.getCostSummary();
     }
   );
 
   // Handle prompt submission from the prompt overlay
   ipcMain.handle(
     "prompt-overlay:submit",
-    async (
-      event: IpcMainInvokeEvent,
-      input: string
-    ): Promise<ProcessingResult> => {
+    async (_event: IpcMainInvokeEvent, input: string) => {
       try {
         log.debug(`IPC: Processing prompt overlay input: "${input}"`, "main");
         log.debug(
           `Using document context: ${
             globalDocumentContext
-              ? `${globalDocumentContext.blockCount} blocks`
+              ? `${globalDocumentContext.blocks?.length || 0} blocks`
               : "none"
           }`,
           "main"
         );
 
-        const result = await intelligentUrlService.processInput(
+        const result = await contentCoordinator.processInput(
           input,
           globalDocumentContext
         );
@@ -437,23 +440,6 @@ const setupIpcHandlers = (
           `IPC: Prompt overlay result: ${JSON.stringify(result)}`,
           "main"
         );
-
-        // If successful, forward the XML response to the main renderer to create blocks
-        if (
-          result.success &&
-          result.xmlResponse &&
-          globalAppView &&
-          !globalAppView.webContents.isDestroyed()
-        ) {
-          log.debug(
-            "Forwarding XML response to main renderer for block creation",
-            "main"
-          );
-          globalAppView.webContents.send("prompt-overlay:create-blocks", {
-            xmlResponse: result.xmlResponse,
-            originalInput: input,
-          });
-        }
 
         return result;
       } catch (error) {
@@ -472,13 +458,13 @@ const setupIpcHandlers = (
   // Handle document state updates (continuous sync) with initial state persistence
   ipcMain.on(
     "document-state:update",
-    async (event: IpcMainEvent, documentState: any) => {
+    async (_event: IpcMainEvent, documentState: DocumentContext) => {
       if (documentState) {
         globalDocumentContext = documentState;
 
         log.debug(
           `Document state updated: ${
-            documentState.blockCount
+            documentState.blocks?.length || 0
           } blocks at ${new Date(
             documentState.timestamp
           ).toLocaleTimeString()}`,
@@ -494,7 +480,7 @@ const setupIpcHandlers = (
     log.debug(
       `Current document context: ${
         globalDocumentContext
-          ? `${globalDocumentContext.blockCount} blocks`
+          ? `${globalDocumentContext.blocks?.length || 0} blocks`
           : "none"
       }`,
       "main"
@@ -509,7 +495,7 @@ const setupIpcHandlers = (
   ipcMain.on(
     "prompt-overlay:update-bounds",
     (
-      event: IpcMainEvent,
+      _event: IpcMainEvent,
       bounds: { x: number; y: number; width: number; height: number }
     ) => {
       log.debug(
@@ -523,32 +509,40 @@ const setupIpcHandlers = (
     }
   );
 
-  // Process input and create blocks
+  // Legacy support - redirect to content coordinator
   ipcMain.handle(
     "process-input-create-blocks",
     async (
       _event: IpcMainInvokeEvent,
       input: string,
-      _context?: any
-    ): Promise<{
-      success: boolean;
-      blocks?: BlockCreationRequest[];
-      error?: string;
-      metadata?: any;
-    }> => {
+      _context?: DocumentContext
+    ) => {
       try {
         log.debug(
-          `IPC: Processing input for block creation: "${input}"`,
+          `IPC: Processing input for block creation (legacy): "${input}"`,
           "main"
         );
-        const result = await blockCreationService.processInputAndCreateBlocks(
-          input
+        const result = await contentCoordinator.processInput(
+          input,
+          globalDocumentContext
         );
         log.debug(
           `IPC: Block creation result: ${JSON.stringify(result)}`,
           "main"
         );
-        return result;
+
+        // Convert to legacy format for backward compatibility
+        return {
+          success: result.success,
+          blocks: result.blockOperations?.operations.map((op) => ({
+            type: op.content?.type || "paragraph",
+            props: op.content?.props,
+            content: op.content?.content,
+            blockId: op.blockId,
+          })),
+          error: result.error,
+          metadata: result.metadata,
+        };
       } catch (error) {
         log.debug(`IPC: Error in block creation: ${error}`, "main");
         return {
@@ -562,23 +556,25 @@ const setupIpcHandlers = (
     }
   );
 
-  // Check if intelligent block creation is available
+  // Check if content processing is available
   ipcMain.handle("block-creation-available", async (): Promise<boolean> => {
-    return blockCreationService.isIntelligentProcessingAvailable();
+    return contentCoordinator.isAvailable();
   });
 
   // Handle block operations for unified processing with transaction metadata
   ipcMain.handle(
     "block-operations:apply",
     async (
-      event: IpcMainInvokeEvent,
-      operations: any[],
-      origin?: any
-    ): Promise<any> => {
+      _event: IpcMainInvokeEvent,
+      operations: unknown[],
+      origin?: unknown
+    ): Promise<unknown> => {
       try {
         log.debug(
           `IPC: Applying ${operations.length} block operations ${
-            origin?.batchId ? `(batch: ${origin.batchId})` : ""
+            (origin as any)?.batchId
+              ? `(batch: ${(origin as any).batchId})`
+              : ""
           }`,
           "main"
         );
@@ -595,8 +591,8 @@ const setupIpcHandlers = (
 
         // Apply operations with transaction metadata
         const result = await blockOperationService.applyOperations(
-          operations,
-          origin
+          operations as any,
+          origin as any
         );
 
         log.debug(
@@ -674,6 +670,6 @@ app.on("will-quit", () => {
     }
   } catch (error) {
     // Database might not be initialized if app is closing early
-    log.debug("Database cleanup skipped - not initialized", "main");
+    log.debug(`Database cleanup error: ${error}`, "main");
   }
 });

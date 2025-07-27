@@ -4,6 +4,8 @@ import { initializeEventLogger } from './EventLogger';
 import { IntelligentUrlService } from './IntelligentUrlService';
 import { BlockOperationService } from './BlockOperationService';
 import { getDebugEventService, DebugEventService } from './DebugEventService';
+import { ContentCoordinator } from './ContentCoordinator';
+import { BlockEventManager } from './BlockEventManager';
 import { log } from '../utils/mainLogger';
 
 /**
@@ -63,6 +65,26 @@ export function registerServices(container: Container): void {
       return getDebugEventService();
     }
   });
+
+  // BlockEventManager - depends on eventLogger and blockOperationService
+  container.register('blockEventManager', {
+    dependencies: ['eventLogger', 'blockOperationService'],
+    factory: async () => {
+      log.debug('Initializing BlockEventManager', 'ServiceRegistry');
+      // EventLogger is guaranteed to be initialized at this point
+      return BlockEventManager.getInstance();
+    }
+  });
+
+  // ContentCoordinator - depends on eventLogger and blockEventManager
+  container.register('contentCoordinator', {
+    dependencies: ['eventLogger', 'blockEventManager'],
+    factory: async () => {
+      log.debug('Initializing ContentCoordinator', 'ServiceRegistry');
+      // EventLogger is guaranteed to be initialized at this point
+      return ContentCoordinator.getInstance();
+    }
+  });
 }
 
 /**
@@ -79,6 +101,8 @@ export async function initializeAllServices(container: Container): Promise<void>
   await container.resolve('blockOperationService');
   await container.resolve('intelligentUrlService');
   await container.resolve('debugEventService');
+  await container.resolve('blockEventManager');
+  await container.resolve('contentCoordinator');
   
   log.debug('All services initialized successfully', 'ServiceRegistry');
 }
@@ -92,6 +116,8 @@ export function getServices(container: Container) {
     eventLogger: container.get('eventLogger'),
     blockOperationService: container.get('blockOperationService') as BlockOperationService,
     intelligentUrlService: container.get('intelligentUrlService') as IntelligentUrlService,
-    debugEventService: container.get('debugEventService') as DebugEventService
+    debugEventService: container.get('debugEventService') as DebugEventService,
+    blockEventManager: container.get('blockEventManager') as BlockEventManager,
+    contentCoordinator: container.get('contentCoordinator') as ContentCoordinator
   };
 }
