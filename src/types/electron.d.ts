@@ -38,6 +38,7 @@ interface ElectronAPI {
     error?: string;
   }>;
   focusPromptOverlay: () => void;
+  updatePromptOverlayBounds: (bounds: { x: number; y: number; width: number; height: number }) => void;
   updateDocumentState: (documentState: any) => void;
 
   // New block operation methods with transaction metadata support

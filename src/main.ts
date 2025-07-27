@@ -494,6 +494,15 @@ const setupIpcHandlers = (
     }
   });
 
+  // Handle prompt overlay bounds update
+  ipcMain.on("prompt-overlay:update-bounds", (event: IpcMainEvent, bounds: { x: number; y: number; width: number; height: number }) => {
+    log.debug(`IPC: Prompt overlay bounds update received: ${JSON.stringify(bounds)}`, "main");
+    
+    if (globalPromptOverlay) {
+      globalPromptOverlay.updateBounds(bounds);
+    }
+  });
+
   // Process input and create blocks
   ipcMain.handle(
     "process-input-create-blocks",

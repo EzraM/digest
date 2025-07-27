@@ -41,7 +41,7 @@ import schema, {
   CustomPartialBlock,
 } from "./types/schema";
 import { useDocumentSync } from "./hooks/useDocumentSync";
-import { welcomeContent } from "./content/welcomeContent";
+import { usePromptOverlayBounds } from "./hooks/usePromptOverlayBounds";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
@@ -75,6 +75,10 @@ function App() {
     schema,
     initialContent: undefined, // Start with no content, Y.js will sync content automatically
   }) as CustomBlockNoteEditor;
+
+  // Set up prompt overlay positioning
+  const promptOverlayRef = useRef<HTMLDivElement>(null);
+  usePromptOverlayBounds(promptOverlayRef);
 
   // Store editor reference for IPC handlers
   useEffect(() => {
@@ -377,6 +381,21 @@ function App() {
         />
       </BlockNoteView>
       <div style={{ height: "2000px", width: "100%", color: "gray" }} />
+
+      {/* Prompt overlay placeholder for positioning */}
+      <div
+        ref={promptOverlayRef}
+        style={{
+          position: "fixed",
+          bottom: "20px", // Add some padding from the bottom edge
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "540px",
+          height: "160px",
+          pointerEvents: "none", // Don't interfere with interactions
+          zIndex: -1, // Behind everything else
+        }}
+      />
     </div>
   );
 }

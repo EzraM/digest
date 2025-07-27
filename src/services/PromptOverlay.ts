@@ -12,6 +12,7 @@ export interface PromptOverlayState {
 export class PromptOverlay {
   private overlay: WebContentsView | null = null;
   private state: PromptOverlayState = {};
+  private currentBounds: { x: number; y: number; width: number; height: number } | null = null;
 
   constructor(
     initialState: PromptOverlayState,
@@ -36,19 +37,26 @@ export class PromptOverlay {
         },
       });
 
-      // Position at bottom center of screen
-      const windowBounds = this.baseWindow.getBounds();
-      const overlayWidth = 540; // 60px wider for better content fit
-      const overlayHeight = 240; // Taller to accommodate 4 text rows and better spacing
-      const centerX = Math.floor((windowBounds.width - overlayWidth) / 2);
-      const bottomY = Math.floor(windowBounds.height - overlayHeight); // Flush with bottom
+      // Use provided bounds if available, otherwise fallback to default positioning
+      if (this.currentBounds) {
+        log.debug(`Using provided bounds: ${JSON.stringify(this.currentBounds)}`, "PromptOverlay");
+        promptOverlay.setBounds(this.currentBounds);
+      } else {
+        // Fallback to default bottom center positioning
+        log.debug("Using fallback positioning (no bounds provided yet)", "PromptOverlay");
+        const windowBounds = this.baseWindow.getBounds();
+        const overlayWidth = 540;
+        const overlayHeight = 160;
+        const centerX = Math.floor((windowBounds.width - overlayWidth) / 2);
+        const bottomY = Math.floor(windowBounds.height - overlayHeight);
 
-      promptOverlay.setBounds({
-        x: centerX,
-        y: bottomY,
-        width: overlayWidth,
-        height: overlayHeight,
-      });
+        promptOverlay.setBounds({
+          x: centerX,
+          y: bottomY,
+          width: overlayWidth,
+          height: overlayHeight,
+        });
+      }
 
       promptOverlay.webContents.session.webRequest.onHeadersReceived(
         (details, callback) => {
@@ -256,6 +264,22 @@ export class PromptOverlay {
         "Brought prompt overlay to front via ViewLayerManager",
         "PromptOverlay"
       );
+    }
+  }
+
+  /**
+   * Update the bounds of the prompt overlay based on renderer calculations
+   */
+  updateBounds(bounds: { x: number; y: number; width: number; height: number }) {
+    log.debug(`PromptOverlay.updateBounds() called with: ${JSON.stringify(bounds)}`, "PromptOverlay");
+    
+    this.currentBounds = bounds;
+    
+    if (this.overlay) {
+      log.debug("Applying bounds to existing overlay", "PromptOverlay");
+      this.overlay.setBounds(bounds);
+    } else {
+      log.debug("Stored bounds for when overlay is created", "PromptOverlay");
     }
   }
 }

@@ -135,6 +135,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("prompt-overlay:focus");
   },
 
+  // Update prompt overlay bounds
+  updatePromptOverlayBounds: (bounds: { x: number; y: number; width: number; height: number }) => {
+    log.debug(`Updating prompt overlay bounds: ${JSON.stringify(bounds)}`, "preload");
+    ipcRenderer.send("prompt-overlay:update-bounds", bounds);
+  },
+
   // Update document state (continuous sync)
   updateDocumentState: (documentState: any) => {
     log.debug(
