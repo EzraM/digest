@@ -53,7 +53,14 @@ export class IntelligentUrlService {
   private sessionTotalCost = 0;
   private lastQueryCost = 0;
   private promptOverlayWebContents: WebContentsView | null = null;
-  private eventLogger = getEventLogger();
+  private _eventLogger: ReturnType<typeof getEventLogger> | null = null;
+
+  private get eventLogger() {
+    if (!this._eventLogger) {
+      this._eventLogger = getEventLogger();
+    }
+    return this._eventLogger;
+  }
 
   // Claude Sonnet 4 pricing (as of 2025)
   private static readonly PRICING = {

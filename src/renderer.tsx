@@ -25,7 +25,7 @@
  *  });
  * ```
  */
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
@@ -378,7 +378,11 @@ function App() {
   return (
     <MantineProvider>
       <AppShell
-        aside={{ width: 400, breakpoint: 'sm', collapsed: { desktop: !isDebugSidebarVisible } }}
+        aside={{
+          width: 400,
+          breakpoint: "sm",
+          collapsed: { desktop: !isDebugSidebarVisible },
+        }}
         padding="md"
       >
         <AppShell.Main>
@@ -421,9 +425,9 @@ function App() {
         </AppShell.Main>
 
         <AppShell.Aside p="md">
-          <DebugSidebar 
-            isVisible={isDebugSidebarVisible} 
-            onToggle={() => setIsDebugSidebarVisible(false)} 
+          <DebugSidebar
+            isVisible={isDebugSidebarVisible}
+            onToggle={() => setIsDebugSidebarVisible(false)}
           />
         </AppShell.Aside>
       </AppShell>

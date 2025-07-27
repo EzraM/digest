@@ -6,7 +6,14 @@ import { log } from "../utils/mainLogger";
 export class DebugEventService {
   private static instance: DebugEventService | null = null;
   private mainRendererWebContents: WebContentsView | null = null;
-  private eventLogger = getEventLogger();
+  private _eventLogger: ReturnType<typeof getEventLogger> | null = null;
+
+  private get eventLogger() {
+    if (!this._eventLogger) {
+      this._eventLogger = getEventLogger();
+    }
+    return this._eventLogger;
+  }
   private isDebugMode = false;
 
   constructor() {

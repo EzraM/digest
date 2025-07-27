@@ -16,7 +16,6 @@ import { LinkInterceptionService } from "./services/LinkInterceptionService";
 import { log } from "./utils/mainLogger";
 import { shouldOpenDevTools } from "./config/development";
 import {
-  IntelligentUrlService,
   ProcessingResult,
   DocumentContext,
 } from "./services/IntelligentUrlService";
@@ -24,9 +23,14 @@ import { BlockCreationService } from "./services/BlockCreationService";
 import { BlockCreationRequest } from "./services/ResponseExploder";
 import { PromptOverlay } from "./services/PromptOverlay";
 import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
-import { getDebugEventService } from "./services/DebugEventService";
-import { BlockOperationService } from "./services/BlockOperationService";
 import { welcomeContent } from "./content/welcomeContent";
+import { DatabaseManager } from "./database/DatabaseManager";
+import { Container } from "./services/Container";
+import {
+  registerServices,
+  initializeAllServices,
+  getServices,
+} from "./services/ServiceRegistry";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -44,21 +48,32 @@ const EVENTS = {
   },
 } as const;
 
-// Global reference to keep the window from being garbage collected
-let mainWindow: BrowserWindow | null = null;
-let globalViewManager: ViewManager | null = null;
+// Global references to keep objects from being garbage collected
 let globalAppView: WebContentsView | null = null;
 let globalPromptOverlay: PromptOverlay | null = null;
-let globalViewLayerManager: ViewLayerManager | null = null;
-let globalDocumentContext: any = null; // Store current document context for LLM prompts
+let globalDocumentContext: DocumentContext | null = null; // Store current document context for LLM prompts
 
-// Initialize intelligent URL service
-const intelligentUrlService = IntelligentUrlService.getInstance();
+// Global service container
+const serviceContainer = new Container();
 
 // Initialize block creation service
 const blockCreationService = new BlockCreationService();
 
-const createWindow = () => {
+const createWindow = async () => {
+  // Register all services with their dependencies
+  registerServices(serviceContainer);
+
+  // Initialize all services in dependency order
+  try {
+    await initializeAllServices(serviceContainer);
+    log.debug("All services initialized successfully", "main");
+  } catch (error) {
+    log.debug(`Service initialization failed: ${error}`, "main");
+    throw error;
+  }
+
+  // Get service instances
+  const services = getServices(serviceContainer);
   const baseWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -121,7 +136,6 @@ const createWindow = () => {
 
   // Create the view layer manager for proper z-ordering
   const viewLayerManager = new ViewLayerManager(baseWindow);
-  globalViewLayerManager = viewLayerManager;
 
   // Register the main app view with the layer manager
   viewLayerManager.addView("main-app", appViewInstance, ViewLayer.BACKGROUND);
@@ -147,7 +161,7 @@ const createWindow = () => {
   globalPromptOverlay = promptOverlay;
 
   // Connect prompt overlay to intelligent URL service for cost tracking
-  intelligentUrlService.setPromptOverlayWebContents(
+  services.intelligentUrlService.setPromptOverlayWebContents(
     promptOverlay.getWebContentsView()
   );
 
@@ -189,30 +203,22 @@ const createWindow = () => {
     }
   });
 
-  // Store global references
-  mainWindow = baseWindow;
-  globalViewManager = viewManager;
+  // Store global references (baseWindow and viewManager are kept alive by their usage)
 
   // Set up console log forwarding from renderer
   setupConsoleLogForwarding(appViewInstance);
 
-  // Initialize block operation service for unified persistence
-  const blockOperationService = BlockOperationService.getInstance();
-  blockOperationService.setRendererWebContents(appViewInstance);
-  
-  // Initialize debug event service for development
-  const debugEventService = getDebugEventService();
-  debugEventService.setMainRendererWebContents(appViewInstance);
+  // Set up service web contents references
+  services.blockOperationService.setRendererWebContents(appViewInstance);
+  services.debugEventService.setMainRendererWebContents(appViewInstance);
 
   // Document loading/seeding will happen when renderer signals it's ready
   // This prevents race condition where Y.js updates are broadcast before renderer can receive them
 
   // Set up IPC handlers (including renderer-ready handler)
-  setupIpcHandlers(viewManager, slashCommandManager, blockOperationService);
+  setupIpcHandlers(viewManager, slashCommandManager, services);
 
   baseWindow.on("closed", () => {
-    mainWindow = null;
-    globalViewManager = null;
     globalAppView = null;
     globalPromptOverlay = null;
   });
@@ -223,7 +229,7 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
   webContentsView.webContents.on(
     "console-message",
     (
-      event: any,
+      _event: any,
       level: number,
       message: string,
       line: number,
@@ -249,7 +255,7 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
   // Also capture renderer errors
   webContentsView.webContents.on(
     "render-process-gone",
-    (event: any, details: any) => {
+    (_event: any, details: any) => {
       log.debug(
         `Renderer process gone. Reason: ${details.reason}, Exit code: ${details.exitCode}`,
         "renderer-crash"
@@ -272,8 +278,9 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 const setupIpcHandlers = (
   viewManager: ViewManager,
   slashCommandManager: SlashCommandManager,
-  blockOperationService: BlockOperationService
+  services: ReturnType<typeof getServices>
 ) => {
+  const { blockOperationService, intelligentUrlService } = services;
   // Handle renderer ready signal - load/seed document only after renderer is ready
   ipcMain.on("renderer-ready", async () => {
     log.debug("Renderer ready signal received - loading document", "main");
@@ -299,7 +306,7 @@ const setupIpcHandlers = (
   });
 
   // Handle browser updates
-  ipcMain.on("update-browser", (_, browserLayout) => {
+  ipcMain.on("update-browser", (_, _browserLayout) => {
     log.debug(`Received update-browser event`, "main");
     // Migrate to unified event: you must provide both url and bounds here
     // Example: viewManager.handleBlockViewUpdate({ blockId, url, bounds })
@@ -341,7 +348,7 @@ const setupIpcHandlers = (
         source: string;
       }
     ) => {
-      const { level, message, timestamp, source } = logData;
+      const { level, message, source } = logData;
       const safeLevel = (level || "debug").toUpperCase();
       const safeMessage = message || "No message";
       const safeSource = source || "unknown";
@@ -467,7 +474,6 @@ const setupIpcHandlers = (
     "document-state:update",
     async (event: IpcMainEvent, documentState: any) => {
       if (documentState) {
-        const previousBlockCount = globalDocumentContext?.blockCount || 0;
         globalDocumentContext = documentState;
 
         log.debug(
@@ -483,7 +489,7 @@ const setupIpcHandlers = (
   );
 
   // Handle focus prompt overlay request
-  ipcMain.on("prompt-overlay:focus", (event: IpcMainEvent) => {
+  ipcMain.on("prompt-overlay:focus", () => {
     log.debug("IPC: Focus prompt overlay request received", "main");
     log.debug(
       `Current document context: ${
@@ -500,21 +506,30 @@ const setupIpcHandlers = (
   });
 
   // Handle prompt overlay bounds update
-  ipcMain.on("prompt-overlay:update-bounds", (event: IpcMainEvent, bounds: { x: number; y: number; width: number; height: number }) => {
-    log.debug(`IPC: Prompt overlay bounds update received: ${JSON.stringify(bounds)}`, "main");
-    
-    if (globalPromptOverlay) {
-      globalPromptOverlay.updateBounds(bounds);
+  ipcMain.on(
+    "prompt-overlay:update-bounds",
+    (
+      event: IpcMainEvent,
+      bounds: { x: number; y: number; width: number; height: number }
+    ) => {
+      log.debug(
+        `IPC: Prompt overlay bounds update received: ${JSON.stringify(bounds)}`,
+        "main"
+      );
+
+      if (globalPromptOverlay) {
+        globalPromptOverlay.updateBounds(bounds);
+      }
     }
-  });
+  );
 
   // Process input and create blocks
   ipcMain.handle(
     "process-input-create-blocks",
     async (
-      event: IpcMainInvokeEvent,
+      _event: IpcMainInvokeEvent,
       input: string,
-      context?: any
+      _context?: any
     ): Promise<{
       success: boolean;
       blocks?: BlockCreationRequest[];
@@ -615,18 +630,14 @@ const setupIpcHandlers = (
   });
 };
 
-// Create a new browser block for testing
-const testNewBrowserBlock = (url = "https://example.com") => {
-  log.debug("Creating test browser block", "main");
-
-  if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-    globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url });
-  }
-};
-
-app.on("ready", () => {
+app.on("ready", async () => {
   log.debug("App ready, creating window and setting up services", "main");
-  createWindow();
+  try {
+    await createWindow();
+  } catch (error) {
+    log.debug(`Failed to create window: ${error}`, "main");
+    app.quit();
+  }
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
@@ -638,15 +649,31 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("activate", () => {
+app.on("activate", async () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    try {
+      await createWindow();
+    } catch (error) {
+      log.debug(`Failed to create window on activate: ${error}`, "main");
+    }
   }
 });
 
 // Clean up global shortcuts when quitting
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+
+  // Close database connection
+  try {
+    const dbManager = DatabaseManager.getInstance();
+    if (dbManager.initialized) {
+      dbManager.close();
+      log.debug("Database connection closed", "main");
+    }
+  } catch (error) {
+    // Database might not be initialized if app is closing early
+    log.debug("Database cleanup skipped - not initialized", "main");
+  }
 });

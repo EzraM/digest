@@ -12,9 +12,6 @@ import { getEventLogger } from "./EventLogger";
 // Simple ID generator to replace uuid dependency
 const generateId = () =>
   `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-import path from "path";
-import fs from "fs";
-import { app } from "electron";
 
 /**
  * Unified service for handling block operations from both users and LLM
@@ -27,7 +24,14 @@ export class BlockOperationService {
   private database: Database.Database | null = null;
   private documentId: string;
   private rendererWebContents: Electron.WebContentsView | null = null;
-  private eventLogger = getEventLogger();
+  private _eventLogger: ReturnType<typeof getEventLogger> | null = null;
+
+  private get eventLogger() {
+    if (!this._eventLogger) {
+      this._eventLogger = getEventLogger();
+    }
+    return this._eventLogger;
+  }
 
   // Operation batching for performance
   private pendingOperations: BlockOperation[] = [];
@@ -42,7 +46,7 @@ export class BlockOperationService {
     // Set up Y.js change listener
     this.yDoc.on("update", this.handleYDocUpdate.bind(this));
 
-    this.initializeDatabase();
+    // Database will be set via setDatabase() method after initialization
 
     log.debug(
       `BlockOperationService initialized for document: ${documentId}`,
@@ -58,152 +62,13 @@ export class BlockOperationService {
   }
 
   /**
-   * Initialize SQLite database for persistence
+   * Set the database instance (called after migration system initialization)
    */
-  private initializeDatabase(): void {
-    try {
-      const userDataPath = app.getPath("userData");
-      const dbPath = path.join(userDataPath, "digest.db");
-
-      // Ensure directory exists
-      fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-
-      this.database = new Database(dbPath);
-
-      // Create tables if they don't exist
-      this.createTables();
-
-      log.debug(`Database initialized at: ${dbPath}`, "BlockOperationService");
-    } catch (error) {
-      log.debug(
-        `Failed to initialize database: ${error}`,
-        "BlockOperationService"
-      );
-    }
+  public setDatabase(database: Database.Database): void {
+    this.database = database;
+    log.debug("Database instance set for BlockOperationService", "BlockOperationService");
   }
 
-  /**
-   * Create database tables for persistence
-   */
-  private createTables(): void {
-    if (!this.database) return;
-
-    try {
-      // Operations table for event sourcing with transaction metadata
-      this.database.exec(`
-        CREATE TABLE IF NOT EXISTS operations (
-          id TEXT PRIMARY KEY,
-          document_id TEXT NOT NULL,
-          operation_type TEXT NOT NULL,
-          block_id TEXT NOT NULL,
-          operation_data TEXT NOT NULL,
-          applied_at INTEGER NOT NULL,
-          source TEXT NOT NULL,
-          user_id TEXT,
-          checksum TEXT,
-          batch_id TEXT,
-          request_id TEXT,
-          origin_data TEXT
-        )
-      `);
-
-      // Add missing columns if they don't exist (migration support)
-      this.migrateSchema();
-
-      // Documents table for metadata
-      this.database.exec(`
-        CREATE TABLE IF NOT EXISTS documents (
-          id TEXT PRIMARY KEY,
-          title TEXT,
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL,
-          block_count INTEGER DEFAULT 0
-        )
-      `);
-
-      // Snapshots table for performance (periodic Y.Doc snapshots)
-      this.database.exec(`
-        CREATE TABLE IF NOT EXISTS snapshots (
-          id TEXT PRIMARY KEY,
-          document_id TEXT NOT NULL,
-          snapshot_data BLOB NOT NULL,
-          created_at INTEGER NOT NULL,
-          operation_count INTEGER NOT NULL
-        )
-      `);
-
-      // Create indexes
-      this.database.exec(`
-        CREATE INDEX IF NOT EXISTS idx_operations_document ON operations(document_id, applied_at);
-        CREATE INDEX IF NOT EXISTS idx_operations_block ON operations(block_id);
-        CREATE INDEX IF NOT EXISTS idx_snapshots_document ON snapshots(document_id, created_at);
-      `);
-
-      log.debug(
-        "Database tables created successfully",
-        "BlockOperationService"
-      );
-    } catch (error) {
-      log.debug(
-        `Error creating database tables: ${error}`,
-        "BlockOperationService"
-      );
-    }
-  }
-
-  /**
-   * Handle database schema migrations
-   */
-  private migrateSchema(): void {
-    if (!this.database) return;
-
-    try {
-      // Check if we need to migrate the operations table
-      const tableInfo = this.database
-        .prepare("PRAGMA table_info(operations)")
-        .all() as any[];
-      const columnNames = tableInfo.map((col: any) => col.name);
-
-      // Add missing columns one by one
-      const requiredColumns = [
-        {
-          name: "batch_id",
-          definition: "ALTER TABLE operations ADD COLUMN batch_id TEXT",
-        },
-        {
-          name: "request_id",
-          definition: "ALTER TABLE operations ADD COLUMN request_id TEXT",
-        },
-        {
-          name: "origin_data",
-          definition: "ALTER TABLE operations ADD COLUMN origin_data TEXT",
-        },
-        {
-          name: "user_id",
-          definition: "ALTER TABLE operations ADD COLUMN user_id TEXT",
-        },
-        {
-          name: "checksum",
-          definition: "ALTER TABLE operations ADD COLUMN checksum TEXT",
-        },
-      ];
-
-      for (const column of requiredColumns) {
-        if (!columnNames.includes(column.name)) {
-          this.database.exec(column.definition);
-          log.debug(
-            `Added missing column: ${column.name}`,
-            "BlockOperationService"
-          );
-        }
-      }
-    } catch (error) {
-      log.debug(
-        `Error during schema migration: ${error}`,
-        "BlockOperationService"
-      );
-    }
-  }
 
   /**
    * Set the renderer web contents for sending updates

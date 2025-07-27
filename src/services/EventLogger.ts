@@ -1,44 +1,22 @@
 import Database from 'better-sqlite3';
 import { EventEmitter } from 'events';
 import { DigestEvent, EventFilter, EventType } from '../types/events';
-import { app } from 'electron';
-import path from 'path';
 import { randomUUID } from 'crypto';
 
 export class EventLogger extends EventEmitter {
   private db: Database.Database;
   private sessionId: string;
   private insertStmt: Database.Statement;
-  private selectStmt: Database.Statement;
 
-  constructor(dbPath?: string) {
+  constructor(database: Database.Database) {
     super();
     
     this.sessionId = randomUUID();
+    this.db = database;
     
-    const finalDbPath = dbPath || path.join(app.getPath('userData'), 'events.db');
-    this.db = new Database(finalDbPath);
-    
-    this.initializeDatabase();
     this.prepareStatements();
   }
 
-  private initializeDatabase(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp INTEGER NOT NULL,
-        session_id TEXT NOT NULL,
-        event_type TEXT NOT NULL,
-        event_data TEXT NOT NULL,
-        metadata TEXT NOT NULL
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
-      CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id);
-      CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
-    `);
-  }
 
   private prepareStatements(): void {
     this.insertStmt = this.db.prepare(`
@@ -208,7 +186,15 @@ let eventLogger: EventLogger | null = null;
 
 export function getEventLogger(): EventLogger {
   if (!eventLogger) {
-    eventLogger = new EventLogger();
+    // This will be called after database initialization
+    throw new Error('EventLogger not initialized. Call initializeEventLogger() first.');
+  }
+  return eventLogger;
+}
+
+export function initializeEventLogger(database: Database.Database): EventLogger {
+  if (!eventLogger) {
+    eventLogger = new EventLogger(database);
   }
   return eventLogger;
 }
