@@ -42,9 +42,9 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@blocknote/core": "^0.32.0",
-    "@blocknote/mantine": "^0.32.0",
-    "@blocknote/react": "^0.32.0",
+    "@blocknote/core": "^0.35.0",
+    "@blocknote/mantine": "^0.35.0",
+    "@blocknote/react": "^0.35.0",
     "@react-hook/resize-observer": "^2.0.1",
     "@types/lodash": "^4.17.6",
     "better-sqlite3": "^9.2.2",
@@ -57,6 +57,12 @@
     "uuid": "^10.0.0",
     "winston": "^3.17.0",
     "yjs": "^13.6.10"
+  },
+  "resolutions": {
+    "prosemirror-model": "1.25.1",
+    "prosemirror-view": "1.40.0",
+    "prosemirror-transform": "1.10.4",
+    "prosemirror-state": "1.4.3"
   },
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"
 }
