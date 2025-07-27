@@ -194,4 +194,49 @@ contextBridge.exposeInMainWorld("electronAPI", {
   }) => {
     ipcRenderer.send("renderer-log", logData);
   },
+
+  // Debug event functionality
+  debug: {
+    toggle: () => {
+      log.debug("Toggling debug mode", "preload");
+      return ipcRenderer.invoke("debug:toggle");
+    },
+    isEnabled: () => ipcRenderer.invoke("debug:is-enabled"),
+    getEvents: (filter?: any) => ipcRenderer.invoke("debug:get-events", filter),
+    getSessionEvents: () => ipcRenderer.invoke("debug:get-session-events"),
+    clearEvents: () => ipcRenderer.invoke("debug:clear-events"),
+    
+    onModeChanged: (callback: (enabled: boolean) => void) => {
+      const subscription = (_: any, enabled: boolean) => {
+        log.debug(`Debug mode changed: ${enabled}`, "preload");
+        callback(enabled);
+      };
+      ipcRenderer.on("debug:mode-changed", subscription);
+      return () => {
+        ipcRenderer.removeListener("debug:mode-changed", subscription);
+      };
+    },
+
+    onNewEvent: (callback: (event: any) => void) => {
+      const subscription = (_: any, event: any) => {
+        log.debug(`Received debug event: ${event.eventType}`, "preload");
+        callback(event);
+      };
+      ipcRenderer.on("debug:new-event", subscription);
+      return () => {
+        ipcRenderer.removeListener("debug:new-event", subscription);
+      };
+    },
+
+    onInitialEvents: (callback: (events: any[]) => void) => {
+      const subscription = (_: any, events: any[]) => {
+        log.debug(`Received ${events.length} initial debug events`, "preload");
+        callback(events);
+      };
+      ipcRenderer.on("debug:initial-events", subscription);
+      return () => {
+        ipcRenderer.removeListener("debug:initial-events", subscription);
+      };
+    },
+  },
 });

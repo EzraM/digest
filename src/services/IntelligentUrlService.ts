@@ -1,6 +1,7 @@
 import { log } from "../utils/mainLogger";
 import { getAnthropicApiKey } from "../config/development";
 import { WebContentsView } from "electron";
+import { getEventLogger } from "./EventLogger";
 
 // Simple result type - always returns XML to be exploded into blocks
 export interface ProcessingResult {
@@ -52,6 +53,7 @@ export class IntelligentUrlService {
   private sessionTotalCost = 0;
   private lastQueryCost = 0;
   private promptOverlayWebContents: WebContentsView | null = null;
+  private eventLogger = getEventLogger();
 
   // Claude Sonnet 4 pricing (as of 2025)
   private static readonly PRICING = {
@@ -160,10 +162,42 @@ export class IntelligentUrlService {
     }
   }
 
-  private async callAnthropic(prompt: string): Promise<string> {
+  private async callAnthropic(prompt: string, requestId: string): Promise<string> {
     if (!this.anthropicApiKey) {
       throw new Error("Anthropic API key not available");
     }
+
+    const requestBody = {
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 8000,
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      tools: [
+        {
+          type: "web_search_20250305",
+          name: "web_search",
+          max_uses: 10,
+        },
+      ],
+    };
+
+    const startTime = Date.now();
+
+    // Log the model call event
+    this.eventLogger.logModelCall(
+      "System prompt embedded in user content", 
+      prompt,
+      requestBody,
+      { 
+        requestId, 
+        timing: { startTime },
+        source: 'IntelligentUrlService'
+      }
+    );
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -172,23 +206,7 @@ export class IntelligentUrlService {
         "x-api-key": this.anthropicApiKey,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 8000,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        tools: [
-          {
-            type: "web_search_20250305",
-            name: "web_search",
-            max_uses: 10,
-          },
-        ],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -196,6 +214,7 @@ export class IntelligentUrlService {
     }
 
     const data = await response.json();
+    const endTime = Date.now();
 
     // Calculate and log costs
     if (data.usage) {
@@ -230,6 +249,24 @@ export class IntelligentUrlService {
 
       // Emit cost update to prompt overlay (if available)
       this.emitCostUpdate();
+
+      // Log the model response event
+      this.eventLogger.logModelResponse(
+        this.extractResponseText(data),
+        data.usage,
+        {
+          requestId,
+          cost: queryCost.totalCostUSD,
+          tokens: queryCost.inputTokens + queryCost.outputTokens,
+          timing: {
+            startTime,
+            endTime,
+            duration: endTime - startTime
+          },
+          webSearches: queryCost.webSearches,
+          source: 'IntelligentUrlService'
+        }
+      );
     }
 
     // Log the full response structure for debugging
@@ -274,11 +311,33 @@ export class IntelligentUrlService {
     return allText;
   }
 
+  private extractResponseText(data: any): string {
+    const textBlocks = data.content.filter(
+      (block: any) => block.type === "text"
+    );
+
+    if (textBlocks.length === 0) {
+      return "";
+    }
+
+    return textBlocks
+      .map((block: any) => block.text)
+      .join(" ");
+  }
+
   public async processInput(
     input: string,
     documentContext?: any
   ): Promise<ProcessingResult> {
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
     try {
+      // Log user prompt event
+      this.eventLogger.logUserPrompt(input, documentContext ? JSON.stringify(documentContext) : undefined, {
+        requestId,
+        source: 'IntelligentUrlService.processInput'
+      });
+
       // Handle empty input
       if (!input.trim()) {
         return {
@@ -469,12 +528,25 @@ Respond ONLY with XML tags. Do not include any other text or explanations.`;
       log.debug(fullPrompt, "IntelligentUrlService");
       log.debug("=== LLM PROMPT END ===", "IntelligentUrlService");
 
-      const response = await this.callAnthropic(fullPrompt);
+      const response = await this.callAnthropic(fullPrompt, requestId);
 
       // Log the LLM response
       log.debug("=== LLM RESPONSE START ===", "IntelligentUrlService");
       log.debug(response, "IntelligentUrlService");
       log.debug("=== LLM RESPONSE END ===", "IntelligentUrlService");
+
+      // Log response parsing event (for now, just capturing that we received XML)
+      this.eventLogger.logResponseParsing(
+        response,
+        null, // Will be parsed by ResponseExploder
+        [], // Will be populated by ResponseExploder
+        true, // Assume successful for now
+        undefined,
+        {
+          requestId,
+          source: 'IntelligentUrlService.processInput'
+        }
+      );
 
       return {
         success: true,

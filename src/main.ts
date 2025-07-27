@@ -24,6 +24,7 @@ import { BlockCreationService } from "./services/BlockCreationService";
 import { BlockCreationRequest } from "./services/ResponseExploder";
 import { PromptOverlay } from "./services/PromptOverlay";
 import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
+import { getDebugEventService } from "./services/DebugEventService";
 import { BlockOperationService } from "./services/BlockOperationService";
 import { welcomeContent } from "./content/welcomeContent";
 
@@ -198,6 +199,10 @@ const createWindow = () => {
   // Initialize block operation service for unified persistence
   const blockOperationService = BlockOperationService.getInstance();
   blockOperationService.setRendererWebContents(appViewInstance);
+  
+  // Initialize debug event service for development
+  const debugEventService = getDebugEventService();
+  debugEventService.setMainRendererWebContents(appViewInstance);
 
   // Document loading/seeding will happen when renderer signals it's ready
   // This prevents race condition where Y.js updates are broadcast before renderer can receive them

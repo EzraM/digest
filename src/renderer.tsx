@@ -32,6 +32,7 @@ import "./index.css";
 import "@blocknote/core/fonts/inter.css";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
+import "@mantine/core/styles.css";
 import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { insertOrUpdateBlock } from "@blocknote/core";
 import { log } from "./utils/rendererLogger";
@@ -42,6 +43,9 @@ import schema, {
 } from "./types/schema";
 import { useDocumentSync } from "./hooks/useDocumentSync";
 import { usePromptOverlayBounds } from "./hooks/usePromptOverlayBounds";
+import { DebugSidebar } from "./components/DebugSidebar";
+import { DebugToggle } from "./components/DebugToggle";
+import { AppShell, MantineProvider } from "@mantine/core";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
@@ -70,6 +74,9 @@ function CustomSlashMenu(): null {
 }
 
 function App() {
+  // Debug sidebar state
+  const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
+
   // Create editor immediately with no initial content - Y.js sync will populate it
   const editor = useCreateBlockNote({
     schema,
@@ -191,6 +198,11 @@ function App() {
 
   // Set up continuous document state synchronization
   useDocumentSync(editor);
+
+  // Handle debug sidebar toggle
+  const handleDebugToggle = (enabled: boolean) => {
+    setIsDebugSidebarVisible(enabled);
+  };
 
   // Set up global keyboard shortcut for prompt overlay focus
   useEffect(() => {
@@ -364,38 +376,57 @@ function App() {
   }, []);
 
   return (
-    <div className="App">
-      <BlockNoteView editor={editor} slashMenu={false}>
-        <SuggestionMenuController
-          triggerCharacter={"/"}
-          suggestionMenuComponent={CustomSlashMenu}
-          getItems={async () => {
-            // When BlockNote detects "/", trigger our custom HUD instead
-            log.debug(
-              "Slash menu triggered, starting custom slash command",
-              "renderer"
-            );
-            window.electronAPI?.startSlashCommand();
-            return []; // Return empty array since we handle items in HUD
-          }}
-        />
-      </BlockNoteView>
-      <div style={{ height: "2000px", width: "100%", color: "gray" }} />
+    <MantineProvider>
+      <AppShell
+        aside={{ width: 400, breakpoint: 'sm', collapsed: { desktop: !isDebugSidebarVisible } }}
+        padding="md"
+      >
+        <AppShell.Main>
+          <div className="App">
+            <BlockNoteView editor={editor} slashMenu={false}>
+              <SuggestionMenuController
+                triggerCharacter={"/"}
+                suggestionMenuComponent={CustomSlashMenu}
+                getItems={async () => {
+                  // When BlockNote detects "/", trigger our custom HUD instead
+                  log.debug(
+                    "Slash menu triggered, starting custom slash command",
+                    "renderer"
+                  );
+                  window.electronAPI?.startSlashCommand();
+                  return []; // Return empty array since we handle items in HUD
+                }}
+              />
+            </BlockNoteView>
+            <div style={{ height: "2000px", width: "100%", color: "gray" }} />
 
-      {/* Prompt overlay placeholder for positioning */}
-      <div
-        ref={promptOverlayRef}
-        style={{
-          position: "fixed",
-          bottom: "20px", // Add some padding from the bottom edge
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: "540px",
-          height: "160px",
-          pointerEvents: "none", // Don't interfere with interactions
-          zIndex: -1, // Behind everything else
-        }}
-      />
-    </div>
+            {/* Prompt overlay placeholder for positioning */}
+            <div
+              ref={promptOverlayRef}
+              style={{
+                position: "fixed",
+                bottom: "20px", // Add some padding from the bottom edge
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "540px",
+                height: "160px",
+                pointerEvents: "none", // Don't interfere with interactions
+                zIndex: -1, // Behind everything else
+              }}
+            />
+
+            {/* Debug toggle button */}
+            <DebugToggle onToggle={handleDebugToggle} />
+          </div>
+        </AppShell.Main>
+
+        <AppShell.Aside p="md">
+          <DebugSidebar 
+            isVisible={isDebugSidebarVisible} 
+            onToggle={() => setIsDebugSidebarVisible(false)} 
+          />
+        </AppShell.Aside>
+      </AppShell>
+    </MantineProvider>
   );
 }

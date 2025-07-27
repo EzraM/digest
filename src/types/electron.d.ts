@@ -75,6 +75,18 @@ interface ElectronAPI {
 
   // Update document state (continuous sync)
   updateDocumentState: (documentState: any) => void;
+
+  // Debug functionality
+  debug: {
+    toggle: () => Promise<boolean>;
+    isEnabled: () => Promise<boolean>;
+    getEvents: (filter?: any) => Promise<any[]>;
+    getSessionEvents: () => Promise<any[]>;
+    clearEvents: () => Promise<{ success: boolean }>;
+    onModeChanged: (callback: (enabled: boolean) => void) => () => void;
+    onNewEvent: (callback: (event: any) => void) => () => void;
+    onInitialEvents: (callback: (events: any[]) => void) => () => void;
+  };
 }
 
 declare global {

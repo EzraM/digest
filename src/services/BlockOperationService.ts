@@ -8,6 +8,7 @@ import {
   BatchOperation,
 } from "../types/operations";
 import { log } from "../utils/mainLogger";
+import { getEventLogger } from "./EventLogger";
 // Simple ID generator to replace uuid dependency
 const generateId = () =>
   `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -26,6 +27,7 @@ export class BlockOperationService {
   private database: Database.Database | null = null;
   private documentId: string;
   private rendererWebContents: Electron.WebContentsView | null = null;
+  private eventLogger = getEventLogger();
 
   // Operation batching for performance
   private pendingOperations: BlockOperation[] = [];
@@ -255,6 +257,21 @@ export class BlockOperationService {
         }
       }
     }, origin); // ← Pass transaction origin to Y.js
+
+    // Log block operation event
+    this.eventLogger.logBlockOperation(
+      operations,
+      origin?.source === 'ai' ? 'ai' : (origin?.source === 'sync' ? 'sync' : 'user'),
+      result,
+      {
+        batchId,
+        requestId: origin?.requestId,
+        timing: { startTime: Date.now(), endTime: Date.now() },
+        source: 'BlockOperationService',
+        documentId: this.documentId,
+        blockCount: this.yBlocks.length
+      }
+    );
 
     // Batch the update broadcast to renderer
     this.scheduleBroadcast(operations);

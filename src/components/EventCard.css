@@ -1,0 +1,152 @@
+.event-card {
+  background: #2a2a2a;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.event-card:hover {
+  border-color: #555;
+}
+
+.event-card-header {
+  padding: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.event-card-header:hover {
+  background: #333;
+}
+
+.event-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.event-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.event-title-text {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.event-time {
+  color: #aaa;
+}
+
+.event-duration {
+  color: #66d9ef;
+  font-weight: 500;
+}
+
+.event-expand-icon {
+  transition: transform 0.2s;
+  font-size: 10px;
+  color: #666;
+}
+
+.event-expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.event-details {
+  border-top: 1px solid #404040;
+  background: #1e1e1e;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.event-section {
+  padding: 12px;
+  border-bottom: 1px solid #333;
+}
+
+.event-section:last-child {
+  border-bottom: none;
+}
+
+.event-section h4 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f8f8f2;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.event-content {
+  color: #ddd;
+  line-height: 1.4;
+  word-wrap: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.event-content.error {
+  color: #f92672;
+}
+
+.event-code {
+  background: #000;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 8px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #f8f8f2;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Scrollbar styling for event details */
+.event-details::-webkit-scrollbar,
+.event-content::-webkit-scrollbar,
+.event-code::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.event-details::-webkit-scrollbar-track,
+.event-content::-webkit-scrollbar-track,
+.event-code::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.event-details::-webkit-scrollbar-thumb,
+.event-content::-webkit-scrollbar-thumb,
+.event-code::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+
+.event-details::-webkit-scrollbar-thumb:hover,
+.event-content::-webkit-scrollbar-thumb:hover,
+.event-code::-webkit-scrollbar-thumb:hover {
+  background: #505050;
+}
