@@ -1,7 +1,7 @@
 /// <reference types="../src/types/electron" />
 import React, { useEffect, useState, useRef } from "react";
 import ReactDOM from "react-dom/client";
-import { MantineProvider, Textarea, Button, Box } from "@mantine/core";
+import { MantineProvider, Textarea, Button, Box, Badge } from "@mantine/core";
 import { log } from "../src/utils/rendererLogger";
 import { useCostTracking } from "./useCostTracking";
 import { useAIAvailability } from "./useAIAvailability";
@@ -103,14 +103,14 @@ const App = () => {
     <MantineProvider theme={theme}>
       <Box
         style={{
-          margin: "10px 20px 30px 20px", // Less top, more bottom, same sides
+          margin: "0",
+          padding: "0",
           backgroundColor: "rgba(255, 255, 255, 0.98)",
-          border: "1px solid #e0e0e0",
-          borderRadius: "12px",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+          border: "none",
+          borderRadius: "0",
           backdropFilter: "blur(16px)",
-          width: "calc(100% - 40px)", // Account for left/right margin
-          height: "calc(100% - 40px)", // Account for top/bottom margin
+          width: "100%",
+          height: "100%",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -118,65 +118,61 @@ const App = () => {
       >
         <Box
           style={{
-            padding: "16px",
-            display: "flex",
-            flexDirection: "column",
+            padding: "12px",
             height: "100%",
-            minHeight: 0, // Allow flex child to shrink
+            border: "2px solid #e0e0e0",
+            boxSizing: "border-box",
+            display: "grid",
+            gridTemplateRows: "1fr auto",
+            gap: "8px",
           }}
         >
-          <Box style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <Textarea
-              ref={textareaRef}
-              placeholder={
-                isCheckingAvailability
-                  ? "Checking AI availability..."
-                  : isAvailable
-                  ? "Describe what you're looking for or enter a url..."
-                  : "AI processing not available"
-              }
-              value={prompt}
-              onChange={(event) => setPrompt(event.currentTarget.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isLoading || !isAvailable}
-              autosize
-              minRows={4}
-              maxRows={6}
-              size="md"
-              style={{
-                flex: 1,
-                width: "100%",
-              }}
-              styles={{
-                wrapper: {
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
+          <Textarea
+            ref={textareaRef}
+            placeholder={
+              isCheckingAvailability
+                ? "Checking AI availability..."
+                : isAvailable
+                ? "Describe what you're looking for or enter a url..."
+                : "AI processing not available"
+            }
+            value={prompt}
+            onChange={(event) => setPrompt(event.currentTarget.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isLoading || !isAvailable}
+            size="md"
+            style={{
+              width: "100%",
+              minHeight: "0",
+            }}
+            styles={{
+              wrapper: {
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+              },
+              input: {
+                border: "none",
+                background: "transparent",
+                fontSize: "14px",
+                resize: "none",
+                height: "100%",
+                "&:focus": {
+                  borderColor: "transparent",
+                  outline: "none",
                 },
-                input: {
-                  border: "none",
-                  background: "transparent",
-                  fontSize: "14px",
-                  resize: "none",
-                  flex: 1,
-                  "&:focus": {
-                    borderColor: "transparent",
-                    outline: "none",
-                  },
-                },
-              }}
-            />
-          </Box>
+              },
+            }}
+          />
 
           <Box
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              paddingTop: "12px",
-              marginTop: "8px",
               borderTop: "1px solid #f0f0f0",
-              flexShrink: 0, // Don't shrink the button bar
+              paddingTop: "8px",
+              height: "36px",
             }}
           >
             <CostDisplay
@@ -185,29 +181,30 @@ const App = () => {
               hasCostData={hasCostData}
             />
 
-            <Button
-              onClick={handleSubmit}
-              disabled={!prompt.trim() || isLoading || !isAvailable}
-              loading={isLoading}
-              size="sm"
-              color="blue"
-              style={{
-                minWidth: "70px",
-                fontSize: "11px",
-                height: "28px",
-              }}
-            >
-              {isLoading ? (
-                ""
-              ) : (
-                <Box
-                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
-                >
-                  <span style={{ fontSize: "10px" }}>⌘</span>
-                  <span style={{ fontSize: "10px" }}>↵</span>
-                </Box>
-              )}
-            </Button>
+            <Box style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Badge
+                variant="light"
+                color="gray"
+                size="sm"
+                style={{ fontSize: "10px", fontWeight: "normal" }}
+              >
+                ⌘↵
+              </Badge>
+              <Button
+                onClick={handleSubmit}
+                disabled={!prompt.trim() || isLoading || !isAvailable}
+                loading={isLoading}
+                size="sm"
+                color="blue"
+                style={{
+                  minWidth: "60px",
+                  fontSize: "12px",
+                  height: "28px",
+                }}
+              >
+                Run
+              </Button>
+            </Box>
           </Box>
         </Box>
       </Box>

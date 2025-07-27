@@ -39,9 +39,9 @@ export class PromptOverlay {
       // Position at bottom center of screen
       const windowBounds = this.baseWindow.getBounds();
       const overlayWidth = 540; // 60px wider for better content fit
-      const overlayHeight = 180; // Taller to accommodate 4 lines and better spacing
+      const overlayHeight = 240; // Taller to accommodate 4 text rows and better spacing
       const centerX = Math.floor((windowBounds.width - overlayWidth) / 2);
-      const bottomY = Math.floor(windowBounds.height - overlayHeight - 20); // 20px from bottom
+      const bottomY = Math.floor(windowBounds.height - overlayHeight); // Flush with bottom
 
       promptOverlay.setBounds({
         x: centerX,
