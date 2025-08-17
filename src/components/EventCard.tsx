@@ -1,6 +1,17 @@
-import React, { useState } from 'react';
-import { DigestEvent } from '../types/events';
-import './EventCard.css';
+import React, { useState } from "react";
+import {
+  Card,
+  Group,
+  Stack,
+  Text,
+  Badge,
+  Collapse,
+  UnstyledButton,
+  Code,
+  Divider,
+  ScrollArea,
+} from "@mantine/core";
+import { DigestEvent, DetailBlock } from "../types/events";
 
 interface EventCardProps {
   event: DigestEvent;
@@ -9,192 +20,149 @@ interface EventCardProps {
 export const EventCard: React.FC<EventCardProps> = ({ event }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // Safety check: if event is undefined or null, render nothing
+  if (!event) {
+    return null;
+  }
+
   const formatTime = (timestamp: number) => {
+    if (!timestamp) return "Unknown time";
     return new Date(timestamp).toLocaleTimeString();
   };
 
   const formatDuration = (duration?: number) => {
-    if (!duration) return '';
+    if (!duration) return "";
     return `${duration}ms`;
   };
 
-  const getEventIcon = (eventType: string) => {
-    switch (eventType) {
-      case 'user_prompt': return '💬';
-      case 'model_call': return '🤖';
-      case 'model_response': return '📤';
-      case 'response_parsing': return '⚙️';
-      case 'block_operation': return '📝';
-      case 'system_event': return '⚡';
-      default: return '📄';
-    }
+  const getEventIcon = () => {
+    // Safely access the icon with fallbacks
+    return event?.display?.icon || "📄";
   };
 
-  const getEventTitle = (event: DigestEvent) => {
-    switch (event.eventType) {
-      case 'user_prompt':
-        return `User Prompt: "${(event.data as any).prompt?.slice(0, 50)}${(event.data as any).prompt?.length > 50 ? '...' : ''}"`;
-      case 'model_call':
-        return 'Model API Call';
-      case 'model_response':
-        return `Model Response (${event.metadata.tokens || 0} tokens)`;
-      case 'response_parsing':
-        return `Response Parsing (${(event.data as any).proposedOperations?.length || 0} operations)`;
-      case 'block_operation':
-        return `Block Operations (${(event.data as any).operations?.length || 0} ops, ${(event.data as any).source})`;
-      case 'system_event':
-        return `System: ${(event.data as any).action}`;
-      default:
-        return event.eventType;
+  const getEventTitle = () => {
+    // Safely access the title with fallback
+    return event?.display?.title || "Untitled Event";
+  };
+
+  const getEventDetails = () => {
+    // Safely access the details with fallback
+    return event?.display?.details || [];
+  };
+
+  const getEventMetadata = () => {
+    // Safely access metadata with fallbacks
+    return {
+      timing: event?.metadata?.timing || {
+        startTime: 0,
+        endTime: undefined,
+        duration: undefined,
+      },
+      cost: event?.metadata?.cost,
+      tokens: event?.metadata?.tokens,
+    };
+  };
+
+  const renderDetailBlock = (detail: DetailBlock, index: number) => {
+    switch (detail.type) {
+      case "text":
+        return (
+          <Stack key={index} gap="xs">
+            <Text size="xs" tt="uppercase" fw={600} c="dimmed">
+              {detail.label}
+            </Text>
+            <Text size="sm">{detail.content}</Text>
+          </Stack>
+        );
+      case "code":
+        return (
+          <Stack key={index} gap="xs">
+            <Text size="xs" tt="uppercase" fw={600} c="dimmed">
+              {detail.label}
+            </Text>
+            <Code block>{detail.content}</Code>
+          </Stack>
+        );
     }
   };
 
   const renderEventDetails = () => {
     if (!isExpanded) return null;
 
-    switch (event.eventType) {
-      case 'user_prompt':
-        return (
-          <div className="event-details">
-            <div className="event-section">
-              <h4>User Input</h4>
-              <div className="event-content">{(event.data as any).prompt}</div>
-            </div>
-            {(event.data as any).context && (
-              <div className="event-section">
-                <h4>Context</h4>
-                <pre className="event-code">{(event.data as any).context}</pre>
-              </div>
-            )}
-          </div>
-        );
+    const details = getEventDetails();
 
-      case 'model_call':
-        return (
-          <div className="event-details">
-            <div className="event-section">
-              <h4>System Prompt</h4>
-              <div className="event-content">{(event.data as any).systemPrompt}</div>
-            </div>
-            <div className="event-section">
-              <h4>User Prompt</h4>
-              <div className="event-content">{(event.data as any).userPrompt}</div>
-            </div>
-            <div className="event-section">
-              <h4>Full Request</h4>
-              <pre className="event-code">{JSON.stringify((event.data as any).fullRequest, null, 2)}</pre>
-            </div>
-          </div>
-        );
-
-      case 'model_response':
-        return (
-          <div className="event-details">
-            <div className="event-section">
-              <h4>Raw Response</h4>
-              <div className="event-content">{(event.data as any).rawResponse}</div>
-            </div>
-            {(event.data as any).usage && (
-              <div className="event-section">
-                <h4>Token Usage</h4>
-                <pre className="event-code">{JSON.stringify((event.data as any).usage, null, 2)}</pre>
-              </div>
-            )}
-            {event.metadata.cost && (
-              <div className="event-section">
-                <h4>Cost</h4>
-                <div className="event-content">${event.metadata.cost.toFixed(6)}</div>
-              </div>
-            )}
-          </div>
-        );
-
-      case 'response_parsing':
-        return (
-          <div className="event-details">
-            <div className="event-section">
-              <h4>Parse Success</h4>
-              <div className="event-content">{(event.data as any).parseSuccess ? 'Yes' : 'No'}</div>
-            </div>
-            {(event.data as any).parseError && (
-              <div className="event-section">
-                <h4>Parse Error</h4>
-                <div className="event-content error">{(event.data as any).parseError}</div>
-              </div>
-            )}
-            <div className="event-section">
-              <h4>Proposed Operations ({(event.data as any).proposedOperations?.length || 0})</h4>
-              <pre className="event-code">{JSON.stringify((event.data as any).proposedOperations, null, 2)}</pre>
-            </div>
-            {(event.data as any).parsedXml && (
-              <div className="event-section">
-                <h4>Parsed XML</h4>
-                <pre className="event-code">{JSON.stringify((event.data as any).parsedXml, null, 2)}</pre>
-              </div>
-            )}
-          </div>
-        );
-
-      case 'block_operation':
-        return (
-          <div className="event-details">
-            <div className="event-section">
-              <h4>Operations ({(event.data as any).operations?.length || 0})</h4>
-              <pre className="event-code">{JSON.stringify((event.data as any).operations, null, 2)}</pre>
-            </div>
-            <div className="event-section">
-              <h4>Source</h4>
-              <div className="event-content">{(event.data as any).source}</div>
-            </div>
-            <div className="event-section">
-              <h4>Result</h4>
-              <pre className="event-code">{JSON.stringify((event.data as any).result, null, 2)}</pre>
-            </div>
-          </div>
-        );
-
-      case 'system_event':
-        return (
-          <div className="event-details">
-            <div className="event-section">
-              <h4>Action</h4>
-              <div className="event-content">{(event.data as any).action}</div>
-            </div>
-            <div className="event-section">
-              <h4>Details</h4>
-              <pre className="event-code">{JSON.stringify((event.data as any).details, null, 2)}</pre>
-            </div>
-          </div>
-        );
-
-      default:
-        return (
-          <div className="event-details">
-            <div className="event-section">
-              <h4>Event Data</h4>
-              <pre className="event-code">{JSON.stringify(event.data, null, 2)}</pre>
-            </div>
-          </div>
-        );
+    // Use display.details if available, otherwise fall back to default rendering
+    if (details && details.length > 0) {
+      return (
+        <Stack p="md" gap="md">
+          {details.map((detail, index) => renderDetailBlock(detail, index))}
+        </Stack>
+      );
     }
+
+    // Fallback: render raw event data if no display details provided
+    return (
+      <Stack p="md" gap="md">
+        <Stack gap="xs">
+          <Text size="xs" tt="uppercase" fw={600} c="dimmed">
+            Event Data
+          </Text>
+          <Code block>{JSON.stringify(event?.data || {}, null, 2)}</Code>
+        </Stack>
+      </Stack>
+    );
   };
 
   return (
-    <div className="event-card">
-      <div className="event-card-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="event-card-title">
-          <span className="event-icon">{getEventIcon(event.eventType)}</span>
-          <span className="event-title-text">{getEventTitle(event)}</span>
-        </div>
-        <div className="event-card-meta">
-          <span className="event-time">{formatTime(event.timestamp)}</span>
-          {event.metadata.timing?.duration && (
-            <span className="event-duration">{formatDuration(event.metadata.timing.duration)}</span>
-          )}
-          <span className={`event-expand-icon ${isExpanded ? 'expanded' : ''}`}>▼</span>
-        </div>
-      </div>
-      {renderEventDetails()}
-    </div>
+    <Card
+      p={0}
+      radius="md"
+      withBorder
+      style={{ backgroundColor: "var(--mantine-color-dark-7)" }}
+    >
+      <UnstyledButton
+        onClick={() => setIsExpanded(!isExpanded)}
+        style={{ width: "100%" }}
+      >
+        <Group p="md" justify="space-between" align="center" wrap="nowrap">
+          <Group gap="sm" style={{ flex: 1, minWidth: 0 }}>
+            <Text size="lg" style={{ flexShrink: 0 }}>
+              {getEventIcon()}
+            </Text>
+            <Text
+              size="sm"
+              fw={500}
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                flex: 1,
+              }}
+            >
+              {getEventTitle()}
+            </Text>
+          </Group>
+
+          <Group gap="xs" style={{ flexShrink: 0 }}>
+            <Badge variant="light" size="xs" c="dimmed">
+              {formatTime(event.timestamp)}
+            </Badge>
+            {Boolean(getEventMetadata().timing?.duration) && (
+              <Badge variant="light" size="xs" c="blue">
+                {formatDuration(getEventMetadata().timing.duration)}
+              </Badge>
+            )}
+            <Text size="xs" c="dimmed">
+              {isExpanded ? "▲" : "▼"}
+            </Text>
+          </Group>
+        </Group>
+      </UnstyledButton>
+
+      <Collapse in={isExpanded}>
+        <Divider />
+        <ScrollArea h={400}>{renderEventDetails()}</ScrollArea>
+      </Collapse>
+    </Card>
   );
 };

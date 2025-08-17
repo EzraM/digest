@@ -1,9 +1,32 @@
+export interface TextDetailBlock {
+  type: 'text';
+  label: string;
+  content: string;
+}
+
+export interface CodeDetailBlock {
+  type: 'code';
+  label: string;
+  content: string;
+  language?: string;
+}
+
+export type DetailBlock = TextDetailBlock | CodeDetailBlock;
+
+export interface EventDisplay {
+  title?: string;
+  description?: string;
+  icon?: string;
+  details?: DetailBlock[];
+}
+
 export interface BaseEvent {
   id?: number;
   timestamp: number;
   sessionId: string;
   eventType: EventType;
   metadata: EventMetadata;
+  display: EventDisplay;
 }
 
 export type EventType = 

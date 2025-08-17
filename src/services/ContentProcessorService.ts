@@ -70,10 +70,11 @@ export class ClaudeContentProcessor implements ContentProcessor {
     
     try {
       // Event: Processing started
-      this.eventLogger.logEvent('content:processing-started', {
-        requestId,
+      this.eventLogger.logSystemEvent('content:processing-started', {
         input: request.input,
-        hasDocumentContext: !!request.documentContext,
+        hasDocumentContext: !!request.documentContext
+      }, {
+        requestId,
         source: 'ClaudeContentProcessor'
       });
 
@@ -97,9 +98,10 @@ export class ClaudeContentProcessor implements ContentProcessor {
 
       // Handle direct URLs - create a simple page block
       if (this.isDirectUrl(request.input)) {
-        this.eventLogger.logEvent('content:direct-url-detected', {
+        this.eventLogger.logSystemEvent('content:direct-url-detected', {
+          url: request.input
+        }, {
           requestId,
-          url: request.input,
           source: 'ClaudeContentProcessor'
         });
 
@@ -125,7 +127,7 @@ export class ClaudeContentProcessor implements ContentProcessor {
       }
 
       // Event: Model call starting
-      this.eventLogger.logEvent('content:model-call-starting', {
+      this.eventLogger.logSystemEvent('content:model-call-starting', {}, {
         requestId,
         source: 'ClaudeContentProcessor'
       });
@@ -134,14 +136,15 @@ export class ClaudeContentProcessor implements ContentProcessor {
       const xmlResponse = await this.callClaude(request, requestId);
       
       // Event: Response received
-      this.eventLogger.logEvent('content:response-received', {
+      this.eventLogger.logSystemEvent('content:response-received', {
+        responseLength: xmlResponse.length
+      }, {
         requestId,
-        responseLength: xmlResponse.length,
         source: 'ClaudeContentProcessor'
       });
 
       // Event: Parsing started
-      this.eventLogger.logEvent('content:parsing-started', {
+      this.eventLogger.logSystemEvent('content:parsing-started', {}, {
         requestId,
         source: 'ClaudeContentProcessor'
       });
@@ -150,9 +153,10 @@ export class ClaudeContentProcessor implements ContentProcessor {
       const blockOperations = await this.parseXmlToBlockOperations(xmlResponse, requestId);
 
       // Event: Operations ready
-      this.eventLogger.logEvent('content:operations-ready', {
+      this.eventLogger.logSystemEvent('content:operations-ready', {
+        operationCount: blockOperations?.operations?.length || 0
+      }, {
         requestId,
-        operationCount: blockOperations.operations.length,
         source: 'ClaudeContentProcessor'
       });
 
@@ -169,9 +173,10 @@ export class ClaudeContentProcessor implements ContentProcessor {
       };
     } catch (error) {
       // Event: Processing failed
-      this.eventLogger.logEvent('content:processing-failed', {
+      this.eventLogger.logSystemEvent('content:processing-failed', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }, {
         requestId,
-        error: error instanceof Error ? error.message : 'Unknown error',
         source: 'ClaudeContentProcessor'
       });
 
@@ -250,7 +255,7 @@ export class ClaudeContentProcessor implements ContentProcessor {
 
     // Calculate and track costs
     if (data.usage) {
-      this.trackCosts(data.usage, requestId, startTime, endTime);
+      this.trackCosts(data.usage, requestId, startTime, endTime, data);
     }
 
     return this.extractResponseText(data);
@@ -320,14 +325,15 @@ Respond ONLY with XML tags. Do not include any other text or explanations.`;
     return `${systemPrompt}\n\nUser request: ${request.input}`;
   }
 
-  private trackCosts(usage: any, requestId: string, startTime: number, endTime: number): void {
+  private trackCosts(usage: any, requestId: string, startTime: number, endTime: number, responseData: any): void {
     const queryCost = this.calculateQueryCost(usage);
     this.lastQueryCost = queryCost.totalCostUSD;
     this.sessionTotalCost += queryCost.totalCostUSD;
 
     // Log the model response event
+    const responseText = this.extractResponseText(responseData);
     this.eventLogger.logModelResponse(
-      "", // Response text will be extracted separately
+      responseText,
       usage,
       {
         requestId,
@@ -419,9 +425,10 @@ Respond ONLY with XML tags. Do not include any other text or explanations.`;
         batchId: `claude-batch-${Date.now()}`
       };
     } catch (error) {
-      this.eventLogger.logEvent('content:xml-parsing-failed', {
+      this.eventLogger.logSystemEvent('content:xml-parsing-failed', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }, {
         requestId,
-        error: error instanceof Error ? error.message : 'Unknown error',
         source: 'ClaudeContentProcessor'
       });
 

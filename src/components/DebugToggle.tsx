@@ -43,9 +43,9 @@ export const DebugToggle: React.FC<DebugToggleProps> = ({ onToggle }) => {
       className={`debug-toggle ${isEnabled ? 'active' : ''}`}
       onClick={handleToggle}
       disabled={isLoading}
-      title={isEnabled ? 'Hide debug sidebar' : 'Show debug sidebar'}
+      title={isEnabled ? 'Hide sidebar' : 'Show sidebar'}
     >
-      {isLoading ? '⏳' : '🐛'}
+      {isLoading ? '⏳' : '☰'}
     </button>
   );
 };

@@ -40,37 +40,41 @@ export class XmlResponseParser {
    */
   async parseXmlResponse(xmlResponse: string, requestId: string): Promise<BlockCreationRequest[]> {
     try {
-      this.eventLogger.logEvent('xml-parser:parsing-started', {
+      this.eventLogger.logSystemEvent('xml-parser:parsing-started', {
+        responseLength: xmlResponse.length
+      }, {
         requestId,
-        responseLength: xmlResponse.length,
         source: 'XmlResponseParser'
       });
 
       // Parse XML elements from Claude's response
       const xmlElements = this.parseXMLElements(xmlResponse);
 
-      this.eventLogger.logEvent('xml-parser:elements-parsed', {
-        requestId,
+      this.eventLogger.logSystemEvent('xml-parser:elements-parsed', {
         elementCount: xmlElements.length,
-        elementTypes: xmlElements.map(e => e.tag),
+        elementTypes: xmlElements.map(e => e.tag)
+      }, {
+        requestId,
         source: 'XmlResponseParser'
       });
 
       // Convert XML elements to block creation requests
       const blockRequests = this.convertElementsToBlocks(xmlElements, xmlResponse);
 
-      this.eventLogger.logEvent('xml-parser:blocks-converted', {
-        requestId,
+      this.eventLogger.logSystemEvent('xml-parser:blocks-converted', {
         blockCount: blockRequests.length,
-        blockTypes: blockRequests.map(b => b.type),
+        blockTypes: blockRequests.map(b => b.type)
+      }, {
+        requestId,
         source: 'XmlResponseParser'
       });
 
       return blockRequests;
     } catch (error) {
-      this.eventLogger.logEvent('xml-parser:parsing-failed', {
+      this.eventLogger.logSystemEvent('xml-parser:parsing-failed', {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }, {
         requestId,
-        error: error instanceof Error ? error.message : 'Unknown error',
         source: 'XmlResponseParser'
       });
 

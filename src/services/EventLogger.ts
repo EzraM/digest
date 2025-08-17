@@ -28,6 +28,13 @@ export class EventLogger extends EventEmitter {
   }
 
   logEvent(eventData: Omit<DigestEvent, 'id' | 'timestamp' | 'sessionId'>): DigestEvent {
+    // Validate event structure before logging
+    const validationError = this.validateEventData(eventData);
+    if (validationError) {
+      console.error('Event validation failed:', validationError);
+      throw new Error(`Invalid event data: ${validationError}`);
+    }
+
     const event: DigestEvent = {
       ...eventData,
       timestamp: Date.now(),
@@ -54,6 +61,46 @@ export class EventLogger extends EventEmitter {
       console.error('Failed to log event:', error);
       throw error;
     }
+  }
+
+  private validateEventData(eventData: Omit<DigestEvent, 'id' | 'timestamp' | 'sessionId'>): string | null {
+    // Basic structural validation only
+    if (!eventData.eventType) {
+      return 'Missing eventType';
+    }
+    
+    if (!eventData.data) {
+      return 'Missing data property';
+    }
+    
+    if (!eventData.metadata) {
+      return 'Missing metadata property';
+    }
+    
+    if (!eventData.display) {
+      return 'Missing display property';
+    }
+
+    // Validate eventType is one of the allowed values
+    const validEventTypes: EventType[] = [
+      'user_prompt', 'model_call', 'model_response', 
+      'block_operation', 'response_parsing', 'system_event'
+    ];
+    if (!validEventTypes.includes(eventData.eventType as EventType)) {
+      return `Invalid eventType: ${eventData.eventType}. Must be one of: ${validEventTypes.join(', ')}`;
+    }
+
+    // Light validation of display details if present
+    if (eventData.display.details) {
+      for (let i = 0; i < eventData.display.details.length; i++) {
+        const detail = eventData.display.details[i];
+        if (detail.type && detail.type !== 'text' && detail.type !== 'code') {
+          return `Invalid detail type at index ${i}: must be 'text' or 'code'`;
+        }
+      }
+    }
+
+    return null; // Valid
   }
 
   getEvents(filter: EventFilter = {}): DigestEvent[] {
@@ -136,7 +183,10 @@ export class EventLogger extends EventEmitter {
     return this.logEvent({
       eventType: 'user_prompt',
       data: { prompt, context },
-      metadata: { source: 'prompt_overlay', ...metadata }
+      metadata: { source: 'prompt_overlay', ...metadata },
+      display: {
+        icon: '💬'
+      }
     });
   }
 
@@ -144,7 +194,10 @@ export class EventLogger extends EventEmitter {
     return this.logEvent({
       eventType: 'model_call',
       data: { systemPrompt, userPrompt, fullRequest },
-      metadata
+      metadata,
+      display: {
+        icon: '🤖'
+      }
     });
   }
 
@@ -152,7 +205,10 @@ export class EventLogger extends EventEmitter {
     return this.logEvent({
       eventType: 'model_response',
       data: { rawResponse, usage },
-      metadata
+      metadata,
+      display: {
+        icon: '📝'
+      }
     });
   }
 
@@ -160,7 +216,10 @@ export class EventLogger extends EventEmitter {
     return this.logEvent({
       eventType: 'response_parsing',
       data: { rawResponse, parsedXml, proposedOperations, parseSuccess, parseError },
-      metadata
+      metadata,
+      display: {
+        icon: parseSuccess ? '✅' : '❌'
+      }
     });
   }
 
@@ -168,7 +227,10 @@ export class EventLogger extends EventEmitter {
     return this.logEvent({
       eventType: 'block_operation',
       data: { operations, source, result },
-      metadata
+      metadata,
+      display: {
+        icon: source === 'user' ? '👤' : source === 'ai' ? '🤖' : '🔄'
+      }
     });
   }
 
@@ -176,7 +238,16 @@ export class EventLogger extends EventEmitter {
     return this.logEvent({
       eventType: 'system_event',
       data: { action, details },
-      metadata
+      metadata,
+      display: {
+        title: 'System Event',
+        description: `System action: ${action}`,
+        icon: '⚙️',
+        details: [
+          { type: 'text', label: 'Action', content: action },
+          { type: 'code', label: 'Details', content: JSON.stringify(details, null, 2) }
+        ]
+      }
     });
   }
 }
