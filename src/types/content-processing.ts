@@ -1,9 +1,9 @@
 /**
  * Content Processing Types
- * 
+ *
  * These types define the clean boundary between content processing services
- * (like IntelligentUrlService) and the rest of the application. This allows
- * for pluggable implementations in the future.
+ * and the rest of the application. This allows for pluggable implementations
+ * in the future.
  */
 
 // Tools that can be used by content processing services

@@ -366,7 +366,7 @@ const setupIpcHandlers = (
 
   // Content processing
   ipcMain.handle(
-    "intelligent-url-process",
+    "content-process",
     async (
       _event: IpcMainInvokeEvent,
       input: string,
@@ -405,13 +405,13 @@ const setupIpcHandlers = (
   );
 
   // Check if content processing is available
-  ipcMain.handle("intelligent-url-available", async (): Promise<boolean> => {
+  ipcMain.handle("content-available", async (): Promise<boolean> => {
     return contentCoordinator.isAvailable();
   });
 
   // Get current cost summary
   ipcMain.handle(
-    "intelligent-url-cost-summary",
+    "content-cost-summary",
     async (): Promise<{ queryCost: number; sessionTotal: number }> => {
       return contentCoordinator.getCostSummary();
     }

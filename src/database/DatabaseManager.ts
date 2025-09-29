@@ -27,7 +27,9 @@ export class DatabaseManager {
     migration003,
   ];
 
-  private constructor() {}
+  private constructor() {
+    // Private constructor for singleton pattern
+  }
 
   /**
    * Get the singleton instance

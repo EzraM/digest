@@ -115,12 +115,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener(EVENTS.BROWSER.NEW_BLOCK, subscription);
     };
   },
-  // Intelligent URL processing
+  // Content processing
   processIntelligentUrl: (input: string, context?: any) =>
-    ipcRenderer.invoke("intelligent-url-process", input, context),
+    ipcRenderer.invoke("content-process", input, context),
 
   isIntelligentUrlAvailable: () =>
-    ipcRenderer.invoke("intelligent-url-available"),
+    ipcRenderer.invoke("content-available"),
 
   // Block creation processing
   processInputCreateBlocks: (input: string, context?: any) =>

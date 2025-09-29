@@ -13,10 +13,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return ipcRenderer.invoke("prompt-overlay:submit", input);
   },
   isIntelligentUrlAvailable: () => {
-    return ipcRenderer.invoke("intelligent-url-available");
+    return ipcRenderer.invoke("content-available");
   },
   getCostSummary: () => {
-    return ipcRenderer.invoke("intelligent-url-cost-summary");
+    return ipcRenderer.invoke("content-cost-summary");
   },
   onFocusRequest: (callback: () => void) => {
     const subscription = () => {
