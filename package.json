@@ -5,12 +5,14 @@
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "scripts": {
-    "start": "electron-forge start",
+    "start": "yarn clean && electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
-    "clean": "rm -rf ./vite && rm -rf ./node_modules/.vite"
+    "clean": "rm -rf ./vite && rm -rf ./node_modules/.vite",
+    "debug:events": "bb scripts/debug-events.clj",
+    "debug:events:project": "bb scripts/debug-events.clj --project"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.4.0",
@@ -22,7 +24,7 @@
     "@electron-forge/plugin-fuses": "^7.4.0",
     "@electron-forge/plugin-vite": "^7.4.0",
     "@electron/fuses": "^1.8.0",
-    "@types/better-sqlite3": "^7.6.8",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
@@ -47,7 +49,7 @@
     "@blocknote/react": "^0.35.0",
     "@react-hook/resize-observer": "^2.0.1",
     "@types/lodash": "^4.17.6",
-    "better-sqlite3": "^9.2.2",
+    "better-sqlite3": "^12.4.1",
     "electron-squirrel-startup": "^1.0.1",
     "immer": "^10.1.1",
     "lodash": "^4.17.21",
