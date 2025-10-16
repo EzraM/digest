@@ -1,5 +1,11 @@
 import React from "react";
-import { SearchResult } from "../../services/IntelligentUrlHandler";
+interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  domain: string;
+  relevanceScore: number;
+}
 
 interface SearchResultsProps {
   results: SearchResult[];

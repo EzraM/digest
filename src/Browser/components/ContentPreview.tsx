@@ -1,5 +1,12 @@
 import React from "react";
-import { ContentPreview as ContentPreviewData } from "../../services/IntelligentUrlHandler";
+interface ContentPreviewData {
+  title: string;
+  description: string;
+  url: string;
+  domain: string;
+  type: "article" | "documentation" | "tool" | "social" | "other" | string;
+  keyPoints?: string[];
+}
 
 interface ContentPreviewProps {
   preview: ContentPreviewData;

@@ -11,11 +11,7 @@ export default defineConfig((env) => {
 
   // Set root path based on the renderer name
   const rootPath =
-    name === "app_overlay"
-      ? "app-overlay"
-      : name === "prompt_overlay"
-      ? "prompt-overlay"
-      : (forgeEnv as any).root || ".";
+    name === "app_overlay" ? "app-overlay" : (forgeEnv as any).root || ".";
 
   return {
     root: rootPath,

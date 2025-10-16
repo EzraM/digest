@@ -101,7 +101,7 @@ export const DebugSidebar: React.FC<DebugSidebarProps> = ({ isVisible, onToggle 
           <Stack align="center" justify="center" h={200} spacing="xs">
             <Text size="sm" c="dimmed">No debug events yet</Text>
             <Text size="xs" c="dimmed" ta="center">
-              Try using the prompt overlay or editing documents to see events appear here.
+              Try editing the notebook to see events appear here.
             </Text>
           </Stack>
         ) : (

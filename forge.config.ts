@@ -36,10 +36,6 @@ const config: ForgeConfig = {
           entry: "src/app-overlay.preload.ts",
           config: "vite.preload.config.ts",
         },
-        {
-          entry: "src/prompt-overlay.preload.ts",
-          config: "vite.preload.config.ts",
-        },
       ],
       renderer: [
         {
@@ -48,10 +44,6 @@ const config: ForgeConfig = {
         },
         {
           name: "app_overlay",
-          config: "vite.renderer.config.ts",
-        },
-        {
-          name: "prompt_overlay",
           config: "vite.renderer.config.ts",
         },
       ],

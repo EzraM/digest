@@ -19,19 +19,19 @@ export const welcomeContent: CustomPartialBlock[] = [
   {
     type: "paragraph",
     content:
-      "Use the AI-powered prompt at the bottom of your screen to open pages and do research:",
+      "Use the HUD and slash commands to add content blocks as you explore:",
   },
   {
     type: "bulletListItem",
-    content: "Press Cmd+L to focus the prompt",
+    content: "Type \"/\" to open the block menu and pick a block type",
   },
   {
     type: "bulletListItem",
-    content: "Enter a URL or describe what you're looking for",
+    content: "Click any link to open it as an in-document browser block",
   },
   {
     type: "bulletListItem",
-    content: "Press Cmd+Enter to submit and let the AI help you",
+    content: "Capture notes, tables, and todos as you research",
   },
   {
     type: "paragraph",
@@ -42,9 +42,5 @@ export const welcomeContent: CustomPartialBlock[] = [
     type: "paragraph",
     content:
       "Everything in this document is fully editable—delete, reorder, reword, and refine as you go. Make it yours.",
-  },
-  {
-    type: "paragraph",
-    content: "Try it now: Press Cmd+L and enter a topic you'd like to explore!",
   },
 ];

@@ -48,24 +48,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener(EVENTS.BLOCK_MENU.SELECT, subscription);
     };
   },
-  onPromptOverlayCreateBlocks: (
-    callback: (data: { xmlResponse: string; originalInput: string }) => void
-  ) => {
-    const subscription = (
-      _: any,
-      data: { xmlResponse: string; originalInput: string }
-    ) => {
-      log.debug(
-        `Received prompt overlay create blocks: ${data.originalInput}`,
-        "preload"
-      );
-      callback(data);
-    };
-    ipcRenderer.on("prompt-overlay:create-blocks", subscription);
-    return () => {
-      ipcRenderer.removeListener("prompt-overlay:create-blocks", subscription);
-    };
-  },
   onSlashCommandInsert: (callback: (blockKey: string) => void) => {
     const subscription = (_: any, blockKey: string) => {
       log.debug(
@@ -115,41 +97,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener(EVENTS.BROWSER.NEW_BLOCK, subscription);
     };
   },
-  // Content processing
-  processIntelligentUrl: (input: string, context?: any) =>
-    ipcRenderer.invoke("content-process", input, context),
-
-  isIntelligentUrlAvailable: () =>
-    ipcRenderer.invoke("content-available"),
-
-  // Block creation processing
-  processInputCreateBlocks: (input: string, context?: any) =>
-    ipcRenderer.invoke("process-input-create-blocks", input, context),
-
-  isBlockCreationAvailable: () =>
-    ipcRenderer.invoke("block-creation-available"),
-
-  // Focus prompt overlay
-  focusPromptOverlay: () => {
-    log.debug("Requesting prompt overlay focus", "preload");
-    ipcRenderer.send("prompt-overlay:focus");
-  },
-
-  // Update prompt overlay bounds
-  updatePromptOverlayBounds: (bounds: { x: number; y: number; width: number; height: number }) => {
-    log.debug(`Updating prompt overlay bounds: ${JSON.stringify(bounds)}`, "preload");
-    ipcRenderer.send("prompt-overlay:update-bounds", bounds);
-  },
-
-  // Update document state (continuous sync)
-  updateDocumentState: (documentState: any) => {
-    log.debug(
-      `Updating document state: ${documentState?.blockCount || 0} blocks`,
-      "preload"
-    );
-    ipcRenderer.send("document-state:update", documentState);
-  },
-
   // Block operations for unified processing with transaction metadata
   applyBlockOperations: (operations: any[], origin?: any) => {
     log.debug(

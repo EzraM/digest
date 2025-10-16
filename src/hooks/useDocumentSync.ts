@@ -4,10 +4,8 @@ import { log } from "../utils/rendererLogger";
 import { useDebounced } from "./useDebounced";
 
 /**
- * Custom hook to synchronize document state and operations with the main process
- * Serves two roles:
- * 1. Persistence: Save user operations to Y.js + SQLite for document persistence
- * 2. LLM Context: Continuously update document state for AI prompt context
+ * Custom hook to synchronize document state and operations with the main process.
+ * Handles persistence by saving user operations to Y.js + SQLite.
  */
 export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
   // Track the last known document state to detect real changes
@@ -55,25 +53,6 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
       });
   }, 2000);
 
-  // ROLE 2: Debounced function to update document state for LLM context
-  const updateLLMContext = useDebounced<any[]>(
-    (document: any[]) => {
-      const documentState = {
-        document: document,
-        blockCount: document.length,
-        timestamp: Date.now(),
-      };
-
-      window.electronAPI.updateDocumentState(documentState);
-
-      log.debug(
-        `Updated LLM context: ${document.length} blocks`,
-        "useDocumentSync"
-      );
-    },
-    500 // Faster updates for LLM context (0.5s vs 2s for persistence)
-  );
-
   useEffect(() => {
     if (!editor || !window.electronAPI) return;
 
@@ -84,14 +63,11 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
       // Check if this change was expected from Y.js sync
       if (expectingYjsSyncRef.current) {
         log.debug(
-          "Document changed from Y.js sync - updating tracking but not saving",
+          "Document changed from Y.js sync - updating tracking without persisting",
           "useDocumentSync"
         );
         lastDocumentRef.current = currentDocument;
         expectingYjsSyncRef.current = false; // Reset flag
-
-        // Still update LLM context even for Y.js sync (LLM needs current state)
-        updateLLMContext(currentDocument);
         return;
       }
 
@@ -105,17 +81,13 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
         return;
       }
 
-      // This is a genuine user edit - handle both roles
+      // This is a genuine user edit - persist changes
       lastDocumentRef.current = currentDocument;
 
-      // ROLE 1: Save operation for persistence (debounced 2s)
       saveUserOperation(currentDocument);
 
-      // ROLE 2: Update LLM context (debounced 0.5s - faster for AI responsiveness)
-      updateLLMContext(currentDocument);
-
       log.debug(
-        `User edited document: ${currentDocument.length} blocks (queued for save + context update)`,
+        `User edited document: ${currentDocument.length} blocks (queued for save)`,
         "useDocumentSync"
       );
     };
@@ -167,17 +139,6 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
     const initialDocument = editor.document;
     lastDocumentRef.current = initialDocument;
 
-    // ROLE 2: Initialize LLM context immediately (no debounce for initial state)
-    window.electronAPI.updateDocumentState({
-      document: initialDocument,
-      blockCount: initialDocument.length,
-      timestamp: Date.now(),
-    });
-    log.debug(
-      `Sent initial document state: ${initialDocument.length} blocks`,
-      "useDocumentSync"
-    );
-
     // Set up event listeners (no handler manipulation!)
     editor.onChange(handleDocumentChange);
 
@@ -196,5 +157,5 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
         window.electronAPI.removeDocumentUpdateListener(handleYjsSync);
       }
     };
-  }, [editor, saveUserOperation, updateLLMContext]);
+  }, [editor, saveUserOperation]);
 };

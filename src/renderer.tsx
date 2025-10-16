@@ -25,7 +25,7 @@
  *  });
  * ```
  */
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
@@ -36,13 +36,11 @@ import "@mantine/core/styles.css";
 import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { insertOrUpdateBlock } from "@blocknote/core";
 import { log } from "./utils/rendererLogger";
-import { ResponseExploder } from "./services/ResponseExploder";
 import schema, {
   CustomBlockNoteEditor,
   CustomPartialBlock,
 } from "./types/schema";
 import { useDocumentSync } from "./hooks/useDocumentSync";
-import { usePromptOverlayBounds } from "./hooks/usePromptOverlayBounds";
 import { DebugSidebar } from "./components/DebugSidebar";
 import { DebugToggle } from "./components/DebugToggle";
 import { AppShell, MantineProvider } from "@mantine/core";
@@ -82,10 +80,6 @@ function App() {
     schema,
     initialContent: undefined, // Start with no content, Y.js will sync content automatically
   }) as CustomBlockNoteEditor;
-
-  // Set up prompt overlay positioning
-  const promptOverlayRef = useRef<HTMLDivElement>(null);
-  usePromptOverlayBounds(promptOverlayRef);
 
   // Store editor reference for IPC handlers
   useEffect(() => {
@@ -204,176 +198,6 @@ function App() {
     setIsDebugSidebarVisible(enabled);
   };
 
-  // Set up global keyboard shortcut for prompt overlay focus
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Cmd+L (or Ctrl+L on Windows/Linux) to focus prompt overlay
-      if ((event.metaKey || event.ctrlKey) && event.key === "l") {
-        event.preventDefault();
-        log.debug("Cmd+L pressed, focusing prompt overlay", "renderer");
-
-        // Send IPC message to focus the prompt overlay (document context is already synced)
-        if (window.electronAPI?.focusPromptOverlay) {
-          window.electronAPI.focusPromptOverlay();
-        }
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
-  // Set up IPC listener for prompt overlay block creation
-  useEffect(() => {
-    log.debug("Setting up prompt overlay block creation listener", "renderer");
-
-    if (!window.electronAPI?.onPromptOverlayCreateBlocks) {
-      log.debug(
-        "onPromptOverlayCreateBlocks not available in electronAPI",
-        "renderer"
-      );
-      return;
-    }
-
-    const unsubscribe = window.electronAPI.onPromptOverlayCreateBlocks(
-      (data: { xmlResponse: string; originalInput: string }) => {
-        log.debug(
-          `[PROMPT OVERLAY] Received block creation event for: ${data.originalInput}`,
-          "renderer"
-        );
-        log.debug(
-          `[PROMPT OVERLAY] XML response length: ${data.xmlResponse.length}`,
-          "renderer"
-        );
-
-        if (currentEditor) {
-          try {
-            // Use ResponseExploder to parse XML and create blocks
-            log.debug(
-              "[PROMPT OVERLAY] Starting ResponseExploder.explodeResponse",
-              "renderer"
-            );
-            const explodedResponse = ResponseExploder.explodeResponse(
-              data.xmlResponse,
-              data.originalInput
-            );
-
-            log.debug(
-              `[PROMPT OVERLAY] Exploded ${explodedResponse.blocks.length} blocks`,
-              "renderer"
-            );
-            log.debug(
-              `[PROMPT OVERLAY] Block types: ${explodedResponse.blocks
-                .map((b) => b.type)
-                .join(", ")}`,
-              "renderer"
-            );
-
-            // Insert or update blocks
-            let processedCount = 0;
-
-            for (const blockRequest of explodedResponse.blocks) {
-              log.debug(
-                `[PROMPT OVERLAY] Processing block ${processedCount + 1}: ${
-                  blockRequest.type
-                }`,
-                "renderer"
-              );
-              log.debug(
-                `[PROMPT OVERLAY] Block props: ${JSON.stringify(
-                  blockRequest.props
-                )}`,
-                "renderer"
-              );
-              log.debug(
-                `[PROMPT OVERLAY] Block ID: ${
-                  blockRequest.blockId || "none (new block)"
-                }`,
-                "renderer"
-              );
-
-              try {
-                if (blockRequest.blockId) {
-                  // Update existing block
-                  log.debug(
-                    `[PROMPT OVERLAY] Updating existing block with ID: ${blockRequest.blockId}`,
-                    "renderer"
-                  );
-
-                  // Find the block by ID in the current document
-                  const existingBlock = currentEditor.document.find(
-                    (block: any) => block.id === blockRequest.blockId
-                  );
-
-                  if (existingBlock) {
-                    // Create the updated block data
-                    const updatedBlockData: any = {
-                      type: blockRequest.type,
-                      props: blockRequest.props || {},
-                    };
-
-                    if (blockRequest.content !== undefined) {
-                      updatedBlockData.content = blockRequest.content;
-                    }
-
-                    // Update the existing block
-                    currentEditor.updateBlock(existingBlock, updatedBlockData);
-                    log.debug(
-                      `[PROMPT OVERLAY] Successfully updated block ${blockRequest.blockId}`,
-                      "renderer"
-                    );
-                  } else {
-                    log.debug(
-                      `[PROMPT OVERLAY] Block with ID ${blockRequest.blockId} not found, inserting as new block`,
-                      "renderer"
-                    );
-                    // Block not found, insert as new block
-                    insertOrUpdateBlock(currentEditor, blockRequest as any);
-                  }
-                } else {
-                  // Insert new block
-                  log.debug(`[PROMPT OVERLAY] Inserting new block`, "renderer");
-                  insertOrUpdateBlock(currentEditor, blockRequest as any);
-                }
-
-                processedCount++;
-                log.debug(
-                  `[PROMPT OVERLAY] Successfully processed block ${processedCount}`,
-                  "renderer"
-                );
-              } catch (blockError) {
-                log.debug(
-                  `[PROMPT OVERLAY] Error processing individual block: ${blockError}`,
-                  "renderer"
-                );
-              }
-            }
-
-            log.debug(
-              `[PROMPT OVERLAY] Finished processing ${processedCount} blocks`,
-              "renderer"
-            );
-          } catch (error) {
-            log.debug(
-              `[PROMPT OVERLAY] Error in block creation process: ${error}`,
-              "renderer"
-            );
-          }
-        } else {
-          log.debug("[PROMPT OVERLAY] No current editor available", "renderer");
-        }
-      }
-    );
-
-    log.debug(
-      "Prompt overlay block creation listener set up successfully",
-      "renderer"
-    );
-    return unsubscribe;
-  }, []);
 
   return (
     <MantineProvider>
@@ -403,21 +227,6 @@ function App() {
               />
             </BlockNoteView>
             <div style={{ height: "2000px", width: "100%", color: "gray" }} />
-
-            {/* Prompt overlay placeholder for positioning */}
-            <div
-              ref={promptOverlayRef}
-              style={{
-                position: "fixed",
-                bottom: "20px", // Add some padding from the bottom edge
-                left: "50%",
-                transform: "translateX(-50%)",
-                width: "540px",
-                height: "160px",
-                pointerEvents: "none", // Don't interfere with interactions
-                zIndex: -1, // Behind everything else
-              }}
-            />
 
             {/* Debug toggle button */}
             <DebugToggle onToggle={handleDebugToggle} />

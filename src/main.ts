@@ -15,8 +15,6 @@ import { SlashCommandManager } from "./services/SlashCommandManager";
 import { LinkInterceptionService } from "./services/LinkInterceptionService";
 import { log } from "./utils/mainLogger";
 import { shouldOpenDevTools } from "./config/development";
-import { DocumentContext } from "./types/content-processing";
-import { PromptOverlay } from "./services/PromptOverlay";
 import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
 import { welcomeContent } from "./content/welcomeContent";
 import { DatabaseManager } from "./database/DatabaseManager";
@@ -45,13 +43,8 @@ const EVENTS = {
 
 // Global references to keep objects from being garbage collected
 let globalAppView: WebContentsView | null = null;
-let globalPromptOverlay: PromptOverlay | null = null;
-let globalDocumentContext: DocumentContext | null = null; // Store current document context for LLM prompts
-
 // Global service container
 const serviceContainer = new Container();
-
-// Content coordination services will be resolved from service container
 
 const createWindow = async () => {
   // Register all services with their dependencies
@@ -68,7 +61,7 @@ const createWindow = async () => {
 
   // Get service instances
   const services = getServices(serviceContainer);
-  const { contentCoordinator, blockEventManager } = services;
+  const { blockEventManager } = services;
   const baseWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -150,21 +143,6 @@ const createWindow = async () => {
     globalAppView
   );
 
-  // Create and show the prompt overlay (always visible)
-  const promptOverlay = new PromptOverlay(
-    {},
-    baseWindow,
-    globalAppView,
-    viewLayerManager
-  );
-  promptOverlay.show();
-  globalPromptOverlay = promptOverlay;
-
-  // Connect prompt overlay to content coordinator for cost tracking
-  contentCoordinator.setPromptOverlayWebContents(
-    promptOverlay.getWebContentsView()
-  );
-
   // Set up the link click callback for ViewManager to properly target the correct WebContents
   viewManager.setLinkClickCallback((url: string) => {
     log.debug(`Link click callback called with URL: ${url}`, "main");
@@ -212,17 +190,15 @@ const createWindow = async () => {
   services.blockOperationService.setRendererWebContents(appViewInstance);
   services.debugEventService.setMainRendererWebContents(appViewInstance);
   blockEventManager.setRendererWebContents(appViewInstance);
-  contentCoordinator.setRendererWebContents(appViewInstance);
 
   // Document loading/seeding will happen when renderer signals it's ready
   // This prevents race condition where Y.js updates are broadcast before renderer can receive them
 
   // Set up IPC handlers (including renderer-ready handler)
-  setupIpcHandlers(viewManager, slashCommandManager, services, contentCoordinator, blockEventManager);
+  setupIpcHandlers(viewManager, slashCommandManager, services);
 
   baseWindow.on("closed", () => {
     globalAppView = null;
-    globalPromptOverlay = null;
   });
 };
 
@@ -280,9 +256,7 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 const setupIpcHandlers = (
   viewManager: ViewManager,
   slashCommandManager: SlashCommandManager,
-  services: ReturnType<typeof getServices>,
-  contentCoordinator: ReturnType<typeof getServices>['contentCoordinator'],
-  blockEventManager: ReturnType<typeof getServices>['blockEventManager']
+  services: ReturnType<typeof getServices>
 ) => {
   const { blockOperationService } = services;
   // Handle renderer ready signal - load/seed document only after renderer is ready
@@ -363,203 +337,6 @@ const setupIpcHandlers = (
       );
     }
   );
-
-  // Content processing
-  ipcMain.handle(
-    "content-process",
-    async (
-      _event: IpcMainInvokeEvent,
-      input: string,
-      context?: DocumentContext
-    ) => {
-      try {
-        log.debug(`IPC: Processing content input: "${input}"`, "main");
-        // Use the globally stored document context if available, otherwise use passed context
-        const documentContext = globalDocumentContext || context;
-        log.debug(
-          `Using document context: ${
-            documentContext
-              ? `${documentContext.blocks?.length || 0} blocks`
-              : "none"
-          }`,
-          "main"
-        );
-
-        const result = await contentCoordinator.processInput(
-          input,
-          documentContext
-        );
-        log.debug(
-          `IPC: Content processing result: ${JSON.stringify(result)}`,
-          "main"
-        );
-        return result;
-      } catch (error) {
-        log.debug(`IPC: Error processing content: ${error}`, "main");
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    }
-  );
-
-  // Check if content processing is available
-  ipcMain.handle("content-available", async (): Promise<boolean> => {
-    return contentCoordinator.isAvailable();
-  });
-
-  // Get current cost summary
-  ipcMain.handle(
-    "content-cost-summary",
-    async (): Promise<{ queryCost: number; sessionTotal: number }> => {
-      return contentCoordinator.getCostSummary();
-    }
-  );
-
-  // Handle prompt submission from the prompt overlay
-  ipcMain.handle(
-    "prompt-overlay:submit",
-    async (_event: IpcMainInvokeEvent, input: string) => {
-      try {
-        log.debug(`IPC: Processing prompt overlay input: "${input}"`, "main");
-        log.debug(
-          `Using document context: ${
-            globalDocumentContext
-              ? `${globalDocumentContext.blocks?.length || 0} blocks`
-              : "none"
-          }`,
-          "main"
-        );
-
-        const result = await contentCoordinator.processInput(
-          input,
-          globalDocumentContext
-        );
-        log.debug(
-          `IPC: Prompt overlay result: ${JSON.stringify(result)}`,
-          "main"
-        );
-
-        return result;
-      } catch (error) {
-        log.debug(
-          `IPC: Error processing prompt overlay input: ${error}`,
-          "main"
-        );
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    }
-  );
-
-  // Handle document state updates (continuous sync) with initial state persistence
-  ipcMain.on(
-    "document-state:update",
-    async (_event: IpcMainEvent, documentState: DocumentContext) => {
-      if (documentState) {
-        globalDocumentContext = documentState;
-
-        log.debug(
-          `Document state updated: ${
-            documentState.blocks?.length || 0
-          } blocks at ${new Date(
-            documentState.timestamp
-          ).toLocaleTimeString()}`,
-          "main"
-        );
-      }
-    }
-  );
-
-  // Handle focus prompt overlay request
-  ipcMain.on("prompt-overlay:focus", () => {
-    log.debug("IPC: Focus prompt overlay request received", "main");
-    log.debug(
-      `Current document context: ${
-        globalDocumentContext
-          ? `${globalDocumentContext.blocks?.length || 0} blocks`
-          : "none"
-      }`,
-      "main"
-    );
-
-    if (globalPromptOverlay && globalPromptOverlay.isVisible()) {
-      globalPromptOverlay.focus();
-    }
-  });
-
-  // Handle prompt overlay bounds update
-  ipcMain.on(
-    "prompt-overlay:update-bounds",
-    (
-      _event: IpcMainEvent,
-      bounds: { x: number; y: number; width: number; height: number }
-    ) => {
-      log.debug(
-        `IPC: Prompt overlay bounds update received: ${JSON.stringify(bounds)}`,
-        "main"
-      );
-
-      if (globalPromptOverlay) {
-        globalPromptOverlay.updateBounds(bounds);
-      }
-    }
-  );
-
-  // Legacy support - redirect to content coordinator
-  ipcMain.handle(
-    "process-input-create-blocks",
-    async (
-      _event: IpcMainInvokeEvent,
-      input: string,
-      _context?: DocumentContext
-    ) => {
-      try {
-        log.debug(
-          `IPC: Processing input for block creation (legacy): "${input}"`,
-          "main"
-        );
-        const result = await contentCoordinator.processInput(
-          input,
-          globalDocumentContext
-        );
-        log.debug(
-          `IPC: Block creation result: ${JSON.stringify(result)}`,
-          "main"
-        );
-
-        // Convert to legacy format for backward compatibility
-        return {
-          success: result.success,
-          blocks: result.blockOperations?.operations.map((op) => ({
-            type: op.content?.type || "paragraph",
-            props: op.content?.props,
-            content: op.content?.content,
-            blockId: op.blockId,
-          })),
-          error: result.error,
-          metadata: result.metadata,
-        };
-      } catch (error) {
-        log.debug(`IPC: Error in block creation: ${error}`, "main");
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-          metadata: {
-            originalInput: input,
-          },
-        };
-      }
-    }
-  );
-
-  // Check if content processing is available
-  ipcMain.handle("block-creation-available", async (): Promise<boolean> => {
-    return contentCoordinator.isAvailable();
-  });
 
   // Handle block operations for unified processing with transaction metadata
   ipcMain.handle(

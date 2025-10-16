@@ -5,7 +5,6 @@ export enum ViewLayer {
   BACKGROUND = 0, // Main app content
   BROWSER_BLOCKS = 10, // Browser block WebContentsViews
   OVERLAYS = 20, // HUD overlays
-  PROMPT = 30, // Prompt overlay (highest priority)
 }
 
 interface ManagedView {

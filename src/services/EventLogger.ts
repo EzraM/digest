@@ -183,7 +183,7 @@ export class EventLogger extends EventEmitter {
     return this.logEvent({
       eventType: 'user_prompt',
       data: { prompt, context },
-      metadata: { source: 'prompt_overlay', ...metadata },
+      metadata,
       display: {
         icon: '💬'
       }
