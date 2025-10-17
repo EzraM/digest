@@ -76,6 +76,8 @@ const createWindow = async () => {
       sandbox: false, // Need to disable sandbox to use contextBridge
       webSecurity: true,
       allowRunningInsecureContent: false,
+      // Use a shared session partition for cookie sharing across all browser blocks
+      partition: "persist:shared-browser-session",
     },
   });
   appViewInstance.setBounds({ x: 0, y: 0, height: 900, width: 1400 });
