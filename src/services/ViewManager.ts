@@ -121,6 +121,8 @@ export class ViewManager {
             contextIsolation: true,
             webSecurity: true,
             allowRunningInsecureContent: false,
+            // Use a shared session partition for cookie sharing across all browser blocks
+            partition: "persist:shared-browser-session",
           },
         });
 
