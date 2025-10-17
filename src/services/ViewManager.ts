@@ -1,11 +1,8 @@
-import { WebContentsView, BrowserWindow, ipcMain } from "electron";
+import { WebContentsView, BrowserWindow } from "electron";
 import { Subject } from "rxjs";
 import set from "lodash/set";
-import {
-  BlockEvent,
-  BlockViewUpdateEvent,
-  BlockViewState,
-} from "../types/window";
+
+import { BlockViewUpdateEvent, BlockViewState } from "../types/window";
 import { log } from "../utils/mainLogger";
 import { shouldOpenDevTools } from "../config/development";
 import { ViewLayerManager, ViewLayer } from "./ViewLayerManager";
@@ -288,17 +285,36 @@ export class ViewManager {
           }
         );
 
-        // Handle new window requests (e.g., link clicks with target="_blank")
-        newView.webContents.setWindowOpenHandler(({ url }) => {
+        // Handle new window requests with disposition check
+        newView.webContents.setWindowOpenHandler(({ url, disposition }) => {
           log.debug(
-            `New window request in blockId: ${blockId}, URL: ${url}`,
+            `New window request in blockId: ${blockId}, URL: ${url}, disposition: ${disposition}`,
             "ViewManager"
           );
-          this.handleLinkClick(url);
-          return { action: "deny" }; // Prevent the default window open behavior
+
+          // Only create new blocks for actual "new tab/window" scenarios
+          if (
+            disposition === "foreground-tab" ||
+            disposition === "background-tab" ||
+            disposition === "new-window"
+          ) {
+            log.debug(
+              `Creating new block for disposition: ${disposition}`,
+              "ViewManager"
+            );
+            this.handleLinkClick(url);
+            return { action: "deny" };
+          }
+
+          // Allow default disposition to navigate in current page
+          log.debug(
+            `Allowing navigation in current page for disposition: ${disposition}`,
+            "ViewManager"
+          );
+          return { action: "deny" };
         });
 
-        // Handle regular link navigation
+        // Handle regular link navigation - allow all navigation to proceed
         newView.webContents.on("will-navigate", (event, url) => {
           const currentUrl = newView.webContents.getURL();
 
@@ -309,22 +325,13 @@ export class ViewManager {
             "ViewManager"
           );
 
-          // Only intercept external links, not page refreshes or internal navigation
-          if (currentUrl && this.isExternalNavigation(currentUrl, url)) {
-            log.debug(
-              `Navigation intercepted in blockId: ${blockId}, from: ${currentUrl} to: ${url}`,
-              "ViewManager"
-            );
-            event.preventDefault();
-            this.handleLinkClick(url);
-          } else {
-            log.debug(
-              `Allowing internal navigation in blockId: ${blockId}, from: ${
-                currentUrl || "unknown"
-              } to: ${url}`,
-              "ViewManager"
-            );
-          }
+          // Allow all navigation to proceed - new blocks are only created via setWindowOpenHandler
+          log.debug(
+            `Allowing navigation in blockId: ${blockId}, from: ${
+              currentUrl || "unknown"
+            } to: ${url}`,
+            "ViewManager"
+          );
         });
 
         // Also listen for page redirects to catch server-side redirects
@@ -472,29 +479,6 @@ export class ViewManager {
     } catch (e) {
       log.debug(`URL validation failed: ${e}`, "ViewManager");
       return false;
-    }
-  }
-
-  // Helper method to determine if navigation is to an external URL
-  private isExternalNavigation(currentUrl: string, targetUrl: string): boolean {
-    try {
-      const current = new URL(currentUrl);
-      const target = new URL(targetUrl);
-
-      // Check if it's the same origin (hostname and port)
-      if (current.origin !== target.origin) {
-        return true;
-      }
-
-      // Same origin but different path (ignoring hash changes)
-      const currentPathAndQuery = current.pathname + current.search;
-      const targetPathAndQuery = target.pathname + target.search;
-
-      return currentPathAndQuery !== targetPathAndQuery;
-    } catch (e) {
-      // If there's any error in parsing URLs, treat as external
-      log.debug(`Error comparing URLs: ${e}`, "ViewManager");
-      return true;
     }
   }
 
