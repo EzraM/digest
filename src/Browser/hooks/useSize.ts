@@ -1,53 +1,39 @@
-import React, { useState, useLayoutEffect, useEffect } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
+
+const readRect = (element: HTMLElement) => element.getBoundingClientRect();
 
 export const useSize = (target: React.RefObject<HTMLElement>) => {
+  const [element, setElement] = useState<HTMLElement | null>(null);
   const [size, setSize] = useState<DOMRect>();
 
   useLayoutEffect(() => {
-    if (target?.current) {
-      setSize(target.current.getBoundingClientRect());
-    }
-  }, [target.current]);
+    if (target.current === element) return;
+    setElement(target.current ?? null);
+  });
 
-  // Handle scroll events
+  useLayoutEffect(() => {
+    if (!element) return;
+    setSize(readRect(element));
+  }, [element]);
+
   useEffect(() => {
-    const listener = () => {
-      if (target?.current) {
-        setSize(target.current.getBoundingClientRect());
-      }
-    };
-    window.addEventListener("scroll", listener, { passive: true });
-    return () => window.removeEventListener("scroll", listener);
-  }, [target]);
+    if (!element) return;
 
-  // Handle resize events using ResizeObserver
-  useEffect(() => {
-    if (!target.current) return;
+    const updateSize = () => setSize(readRect(element));
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      if (!entries.length) return;
+    window.addEventListener("scroll", updateSize, { passive: true });
 
-      const entry = entries[0];
-      // Use border-box size to include padding and border
-      const boxSize = entry.borderBoxSize[0];
-      if (boxSize) {
-        const rect = target.current?.getBoundingClientRect();
-        if (rect) {
-          setSize({
-            ...rect,
-            width: boxSize.inlineSize,
-            height: boxSize.blockSize,
-          });
-        }
-      } else {
-        // Fallback for browsers that don't support borderBoxSize
-        setSize(target.current?.getBoundingClientRect());
-      }
+    const resizeObserver = new ResizeObserver(() => {
+      updateSize();
     });
 
-    resizeObserver.observe(target.current);
-    return () => resizeObserver.disconnect();
-  }, [target]);
+    resizeObserver.observe(element);
+
+    return () => {
+      window.removeEventListener("scroll", updateSize);
+      resizeObserver.disconnect();
+    };
+  }, [element]);
 
   return size;
-}; 
+};
