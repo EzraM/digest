@@ -80,7 +80,15 @@ const createWindow = async () => {
       partition: "persist:shared-browser-session",
     },
   });
-  appViewInstance.setBounds({ x: 0, y: 0, height: 900, width: 1400 });
+
+  // Helper function to update view bounds to match window size
+  const updateViewBounds = () => {
+    const bounds = baseWindow.getBounds();
+    appViewInstance.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+  };
+
+  // Set initial bounds to match window size
+  updateViewBounds();
 
   // Set Content-Security-Policy
   appViewInstance.webContents.session.webRequest.onHeadersReceived(
@@ -198,6 +206,9 @@ const createWindow = async () => {
 
   // Set up IPC handlers (including renderer-ready handler)
   setupIpcHandlers(viewManager, slashCommandManager, services);
+
+  // Update view bounds when window is resized
+  baseWindow.on("resize", updateViewBounds);
 
   baseWindow.on("closed", () => {
     globalAppView = null;
