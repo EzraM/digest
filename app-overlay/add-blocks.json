@@ -121,5 +121,12 @@
     "subtext": "Insert a file",
     "aliases": ["file", "upload", "embed", "media", "url"],
     "group": "Media"
+  },
+  {
+    "key": "google_search",
+    "title": "Google Search",
+    "subtext": "Search Google and view results",
+    "aliases": ["g", "google", "search"],
+    "group": "Media"
   }
 ]

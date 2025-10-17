@@ -172,6 +172,9 @@ function App() {
               case "file":
                 insertOrUpdateBlock(currentEditor, { type: "file" });
                 break;
+              case "google_search":
+                insertOrUpdateBlock(currentEditor, { type: "googleSearch" });
+                break;
               default:
                 log.debug(`Unknown block type: ${blockKey}`, "renderer");
             }
@@ -197,7 +200,6 @@ function App() {
   const handleDebugToggle = (enabled: boolean) => {
     setIsDebugSidebarVisible(enabled);
   };
-
 
   return (
     <MantineProvider>
