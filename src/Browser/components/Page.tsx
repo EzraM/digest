@@ -60,7 +60,6 @@ export function Page({ blockId, url }: PageProps) {
     <div
       key="browserContainer"
       style={{
-        border: "2px solid black",
         width: "100%",
         height: 800,
       }}
