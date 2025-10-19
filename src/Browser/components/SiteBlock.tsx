@@ -48,6 +48,7 @@ export const site = createReactBlockSpec(
             overflow: "hidden",
             backgroundColor: "#fff",
             position: "relative",
+            width: "100%",
           }}
         >
           {/* Read-only URL bar */}

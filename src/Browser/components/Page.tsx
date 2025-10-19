@@ -61,7 +61,7 @@ export function Page({ blockId, url }: PageProps) {
       key="browserContainer"
       style={{
         border: "2px solid black",
-        width: "calc(96vw - 118px)",
+        width: "100%",
         height: 800,
       }}
     >
