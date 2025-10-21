@@ -122,6 +122,10 @@ function App() {
         // Handle the block insertion based on the selected block type
         if (currentEditor) {
           try {
+            // Mimic BlockNote's default slash command cleanup so the "/" trigger is removed.
+            currentEditor.suggestionMenus.closeMenu();
+            currentEditor.suggestionMenus.clearQuery();
+
             // Use BlockNote's insertOrUpdateBlock like the built-in slash menu items do
             // This handles all focus, cursor positioning, and insertion logic automatically
             switch (blockKey) {
