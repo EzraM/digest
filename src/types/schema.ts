@@ -4,12 +4,17 @@ import {
   GoogleSearch,
   GoogleSearchExtensionName,
 } from "../Search/GoogleSearchBlock";
+import {
+  ChatGPT,
+  ChatGPTExtensionName,
+} from "../Search/ChatGPTBlock";
 
 export const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
     site: site(),
     [GoogleSearchExtensionName]: GoogleSearch(),
+    [ChatGPTExtensionName]: ChatGPT(),
   },
 });
 

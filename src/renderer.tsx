@@ -47,6 +47,7 @@ import { DebugSidebar } from "./components/DebugSidebar";
 import { DebugToggle } from "./components/DebugToggle";
 import { AppShell, MantineProvider } from "@mantine/core";
 import { GoogleSearchExtensionName } from "./Search/GoogleSearchBlock";
+import { ChatGPTExtensionName } from "./Search/ChatGPTBlock";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
@@ -181,6 +182,9 @@ function App() {
                 break;
               case "google_search":
                 insertOrUpdateBlock(currentEditor, { type: GoogleSearchExtensionName });
+                break;
+              case "chatgpt":
+                insertOrUpdateBlock(currentEditor, { type: ChatGPTExtensionName });
                 break;
               default:
                 log.debug(`Unknown block type: ${blockKey}`, "renderer");
