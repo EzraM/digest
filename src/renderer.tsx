@@ -29,14 +29,16 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
-import "@blocknote/core/fonts/inter.css";
 import { BlockNoteView } from "@blocknote/mantine";
-import "@blocknote/mantine/style.css";
 import "@mantine/core/styles.css";
+import "@blocknote/mantine/style.css";
+import "@blocknote/core/fonts/inter.css";
+
 import { useCreateBlockNote, SuggestionMenuController } from "@blocknote/react";
 import { insertOrUpdateBlock } from "@blocknote/core";
 import { log } from "./utils/rendererLogger";
-import schema, {
+import {
+  schema,
   CustomBlockNoteEditor,
   CustomPartialBlock,
 } from "./types/schema";
@@ -60,7 +62,7 @@ const createNewBrowserBlock = (url: string): void => {
     insertOrUpdateBlock(currentEditor, {
       type: "site",
       props: { url },
-    } as CustomPartialBlock);
+    } as unknown as CustomPartialBlock);
   }
 };
 
@@ -132,19 +134,19 @@ function App() {
                 insertOrUpdateBlock(currentEditor, {
                   type: "heading",
                   props: { level: 1 },
-                } as CustomPartialBlock);
+                } as unknown as CustomPartialBlock);
                 break;
               case "heading_2":
                 insertOrUpdateBlock(currentEditor, {
                   type: "heading",
                   props: { level: 2 },
-                } as CustomPartialBlock);
+                } as unknown as CustomPartialBlock);
                 break;
               case "heading_3":
                 insertOrUpdateBlock(currentEditor, {
                   type: "heading",
                   props: { level: 3 },
-                } as CustomPartialBlock);
+                } as unknown as CustomPartialBlock);
                 break;
               case "bullet_list":
                 insertOrUpdateBlock(currentEditor, { type: "bulletListItem" });
