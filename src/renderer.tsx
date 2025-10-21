@@ -46,6 +46,7 @@ import { useDocumentSync } from "./hooks/useDocumentSync";
 import { DebugSidebar } from "./components/DebugSidebar";
 import { DebugToggle } from "./components/DebugToggle";
 import { AppShell, MantineProvider } from "@mantine/core";
+import { GoogleSearchExtensionName } from "./Search/GoogleSearchBlock";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
@@ -179,7 +180,7 @@ function App() {
                 insertOrUpdateBlock(currentEditor, { type: "file" });
                 break;
               case "google_search":
-                insertOrUpdateBlock(currentEditor, { type: "googleSearch" });
+                insertOrUpdateBlock(currentEditor, { type: GoogleSearchExtensionName });
                 break;
               default:
                 log.debug(`Unknown block type: ${blockKey}`, "renderer");

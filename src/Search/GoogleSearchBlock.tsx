@@ -1,11 +1,14 @@
 import { useCallback } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
-import { insertOrUpdateBlock, createBlockNoteExtension } from "@blocknote/core";
+import { createBlockNoteExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
+  CustomBlock,
   CustomPartialBlock,
 } from "../types/schema";
+
+export const GoogleSearchExtensionName = "Digest/GoogleSearch";
 
 // Type for inline content items
 interface InlineContentItem {
@@ -26,10 +29,9 @@ function getPlainTextFromInlineContent(content: InlineContentItem[]): string {
     .join("");
 }
 
-// Well-factored search execution logic
 function executeGoogleSearch(
   query: string,
-  blockId: string,
+  block: CustomBlock,
   editor: CustomBlockNoteEditor
 ): void {
   if (!query.trim()) {
@@ -39,21 +41,21 @@ function executeGoogleSearch(
   const encodedQuery = encodeURIComponent(query.trim());
   const googleUrl = `https://www.google.com/search?q=${encodedQuery}`;
 
-  // Remove the search block and insert a site block in its place
-  editor.removeBlocks([blockId]);
-  insertOrUpdateBlock(editor, {
+  // Replace the search block with a site block in place
+  editor.updateBlock(block, {
     type: "site",
     props: { url: googleUrl },
+    content: undefined,
   } as unknown as CustomPartialBlock);
 }
 
 // Extension for handling Enter key in GoogleSearchBlock
 const googleSearchExtension = createBlockNoteExtension({
-  key: "google-search-enter",
+  key: "Digest/GoogleSearch/Enter",
   keyboardShortcuts: {
     Enter: ({ editor }: { editor: CustomBlockNoteEditor }) => {
       const { block } = editor.getTextCursorPosition();
-      if (block.type !== "googleSearch") {
+      if (block.type !== GoogleSearchExtensionName) {
         return false; // Let other handlers process
       }
 
@@ -62,7 +64,7 @@ const googleSearchExtension = createBlockNoteExtension({
         block.content as InlineContentItem[]
       );
       if (query.trim()) {
-        executeGoogleSearch(query, block.id, editor);
+        executeGoogleSearch(query, block as CustomBlock, editor);
         return true; // Prevent default Enter behavior
       }
 
@@ -72,9 +74,9 @@ const googleSearchExtension = createBlockNoteExtension({
 });
 
 // Create a type-safe google search block spec
-export const googleSearch = createReactBlockSpec(
+export const GoogleSearch = createReactBlockSpec(
   {
-    type: "googleSearch" as const,
+    type: GoogleSearchExtensionName,
     propSchema: {},
     content: "inline", // Use inline content so users can type directly
   },
@@ -89,11 +91,7 @@ export const googleSearch = createReactBlockSpec(
         );
 
         // Use the well-factored search execution logic
-        executeGoogleSearch(
-          query,
-          block.id,
-          editor as unknown as CustomBlockNoteEditor
-        );
+        executeGoogleSearch(query, block as CustomBlock, editor);
       }, [block, editor]);
 
       return (
@@ -151,4 +149,4 @@ export const googleSearch = createReactBlockSpec(
 );
 
 // Export the type for other parts of the application
-export type GoogleSearchBlockSpec = typeof googleSearch;
+export type GoogleSearchBlockSpec = typeof GoogleSearch;

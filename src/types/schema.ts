@@ -1,12 +1,15 @@
 import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { site } from "../Browser/components/SiteBlock";
-import { googleSearch } from "../Search/GoogleSearchBlock";
+import {
+  GoogleSearch,
+  GoogleSearchExtensionName,
+} from "../Search/GoogleSearchBlock";
 
 export const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
     site: site(),
-    googleSearch: googleSearch(),
+    [GoogleSearchExtensionName]: GoogleSearch(),
   },
 });
 
