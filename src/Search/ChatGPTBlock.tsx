@@ -7,6 +7,7 @@ import type {
   CustomBlock,
   CustomPartialBlock,
 } from "../types/schema";
+import { SearchBlockShell } from "./SearchBlockShell";
 
 export const ChatGPTExtensionName = "Digest/ChatGPT";
 const ChatGPTBlockTypes = new Set([ChatGPTExtensionName, "chatGPT"]);
@@ -95,50 +96,24 @@ export const ChatGPT = createReactBlockSpec(
       }, [block, editor]);
 
       return (
-        <div
-          style={{
-            width: "100%",
-            position: "relative",
-            border: "1px solid #d0d0d0",
-            borderRadius: "8px",
-            padding: "12px 80px 12px 16px",
-            backgroundColor: "#fff",
-            minHeight: "44px",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <div
-            ref={contentRef}
-            style={{
-              flex: 1,
-              outline: "none",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              right: "12px",
-              top: "50%",
-              transform: "translateY(-50%)",
-            }}
-          >
+        <SearchBlockShell
+          contentRef={contentRef}
+          action={
             <Button
               size="xs"
               variant="light"
+              radius="xl"
               color="gray"
               onClick={handleQuery}
-              styles={{
-                root: {
-                  textTransform: "none",
-                  fontWeight: 500,
-                },
+              style={{
+                textTransform: "none",
+                fontWeight: 500,
               }}
             >
               ChatGPT
             </Button>
-          </div>
-        </div>
+          }
+        />
       );
     },
   },
