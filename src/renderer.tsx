@@ -59,6 +59,8 @@ root.render(<App />);
 // Store current editor globally to access in IPC handlers
 let currentEditor: CustomBlockNoteEditor | null = null;
 
+const URL_BLOCK_TYPES = new Set([URLExtensionName, "url"]);
+
 // Function to create a new browser block with the specified URL
 const createNewBrowserBlock = (url: string): void => {
   if (currentEditor) {
@@ -182,10 +184,14 @@ function App() {
                 insertOrUpdateBlock(currentEditor, { type: "file" });
                 break;
               case "google_search":
-                insertOrUpdateBlock(currentEditor, { type: GoogleSearchExtensionName });
+                insertOrUpdateBlock(currentEditor, {
+                  type: GoogleSearchExtensionName,
+                });
                 break;
               case "chatgpt":
-                insertOrUpdateBlock(currentEditor, { type: ChatGPTExtensionName });
+                insertOrUpdateBlock(currentEditor, {
+                  type: ChatGPTExtensionName,
+                });
                 break;
               case "url":
                 insertOrUpdateBlock(currentEditor, { type: URLExtensionName });
@@ -216,6 +222,22 @@ function App() {
     setIsDebugSidebarVisible(enabled);
   };
 
+  const handleSlashMenuItems = React.useCallback(async (): Promise<never[]> => {
+    const { block } = editor.getTextCursorPosition();
+    if (block && URL_BLOCK_TYPES.has(block.type)) {
+      log.debug("Slash menu suppressed inside URL block", "renderer");
+      editor.suggestionMenus.closeMenu();
+      return [];
+    }
+
+    log.debug(
+      "Slash menu triggered, starting custom slash command",
+      "renderer"
+    );
+    window.electronAPI?.startSlashCommand();
+    return [];
+  }, [editor]);
+
   return (
     <MantineProvider>
       <AppShell
@@ -232,14 +254,9 @@ function App() {
               <SuggestionMenuController
                 triggerCharacter={"/"}
                 suggestionMenuComponent={CustomSlashMenu}
-                getItems={async () => {
-                  // When BlockNote detects "/", trigger our custom HUD instead
-                  log.debug(
-                    "Slash menu triggered, starting custom slash command",
-                    "renderer"
-                  );
-                  window.electronAPI?.startSlashCommand();
-                  return []; // Return empty array since we handle items in HUD
+                getItems={handleSlashMenuItems}
+                onItemClick={() => {
+                  // No-op since we handle items in the HUD overlay
                 }}
               />
             </BlockNoteView>
