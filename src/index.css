@@ -1,6 +1,22 @@
+html {
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;
   margin: auto;
   padding: 2rem;
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Ensure the root element also uses Mantine theme colors */
+#root {
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  min-height: 100vh;
 }
