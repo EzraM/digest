@@ -2,6 +2,19 @@ import React, { useEffect, useLayoutEffect, useState } from "react";
 
 const readRect = (element: HTMLElement) => element.getBoundingClientRect();
 
+const hasRectChanged = (prev: DOMRect | undefined, next: DOMRect) => {
+  if (!prev) {
+    return true;
+  }
+
+  return (
+    prev.x !== next.x ||
+    prev.y !== next.y ||
+    prev.width !== next.width ||
+    prev.height !== next.height
+  );
+};
+
 export const useSize = (target: React.RefObject<HTMLElement>) => {
   const [element, setElement] = useState<HTMLElement | null>(null);
   const [size, setSize] = useState<DOMRect>();
@@ -11,27 +24,35 @@ export const useSize = (target: React.RefObject<HTMLElement>) => {
     setElement(target.current ?? null);
   });
 
-  useLayoutEffect(() => {
-    if (!element) return;
-    setSize(readRect(element));
-  }, [element]);
-
   useEffect(() => {
     if (!element) return;
 
-    const updateSize = () => setSize(readRect(element));
+    let frameId: number | null = null;
+    let prevRect: DOMRect | undefined;
 
-    window.addEventListener("scroll", updateSize, { passive: true });
+    const measure = () => {
+      if (!element.isConnected) {
+        frameId = window.requestAnimationFrame(measure);
+        return;
+      }
 
-    const resizeObserver = new ResizeObserver(() => {
-      updateSize();
-    });
+      const nextRect = readRect(element);
+      if (hasRectChanged(prevRect, nextRect)) {
+        prevRect = nextRect;
+        setSize(nextRect);
+      }
 
-    resizeObserver.observe(element);
+      frameId = window.requestAnimationFrame(measure);
+    };
+
+    prevRect = readRect(element);
+    setSize(prevRect);
+    frameId = window.requestAnimationFrame(measure);
 
     return () => {
-      window.removeEventListener("scroll", updateSize);
-      resizeObserver.disconnect();
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
     };
   }, [element]);
 
