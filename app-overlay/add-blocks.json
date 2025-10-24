@@ -128,5 +128,19 @@
     "subtext": "Search Google and view results",
     "aliases": ["g", "google", "search"],
     "group": "Media"
+  },
+  {
+    "key": "chatgpt",
+    "title": "ChatGPT",
+    "subtext": "Start a ChatGPT conversation from a prompt",
+    "aliases": ["c", "chat", "gpt", "chatgpt"],
+    "group": "Media"
+  },
+  {
+    "key": "url",
+    "title": "URL",
+    "subtext": "Load a URL in an embedded browser",
+    "aliases": ["l", "location", "url"],
+    "group": "Media"
   }
 ]
