@@ -300,7 +300,7 @@ function App() {
   );
 
   return (
-    <MantineProvider>
+    <MantineProvider defaultColorScheme="auto">
       <AppShell
         aside={{
           width: 400,
