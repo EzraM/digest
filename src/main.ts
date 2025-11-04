@@ -321,6 +321,22 @@ const setupIpcHandlers = (
     slashCommandManager.cancelSlashCommand();
   });
 
+  ipcMain.on(
+    "slash-command:update-results",
+    (_event, payload: import("./types/slashCommand").SlashCommandResultsPayload) => {
+      log.debug(
+        `Slash command results update received (items: ${payload.items.length}, selected: ${payload.selectedIndex})`,
+        "main",
+      );
+      slashCommandManager.updateResults(payload);
+    },
+  );
+
+  ipcMain.on("slash-command:overlay-ready", () => {
+    log.debug("Slash command overlay ready event received", "main");
+    slashCommandManager.handleOverlayReady();
+  });
+
   // Handle block selection from HUD through the state manager
   ipcMain.on("block-menu:select", (_, blockKey) => {
     log.debug(`Block selected from HUD: ${blockKey}`, "main");

@@ -2,6 +2,7 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 import { contextBridge, ipcRenderer } from "electron";
 import { log } from "./utils/mainLogger";
+import { SlashCommandResultsPayload } from "./types/slashCommand";
 
 const EVENTS = {
   BLOCK_MENU: {
@@ -45,5 +46,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cancelSlashCommand: () => {
     log.debug("Cancelling slash command from HUD", "app-overlay:preload");
     ipcRenderer.send("slash-command:cancel");
+  },
+  onSlashCommandResults: (
+    callback: (payload: SlashCommandResultsPayload) => void,
+  ) => {
+    const channel = "slash-command:update-results";
+    const handler = (_event: unknown, payload: SlashCommandResultsPayload) => {
+      callback(payload);
+    };
+    ipcRenderer.on(channel, handler);
+    return () => {
+      ipcRenderer.removeListener(channel, handler);
+    };
+  },
+  notifySlashCommandOverlayReady: () => {
+    log.debug("HUD overlay ready signal sent", "app-overlay:preload");
+    ipcRenderer.send("slash-command:overlay-ready");
   },
 });
