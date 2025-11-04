@@ -13,6 +13,12 @@ import { getEventLogger } from "./EventLogger";
 const generateId = () =>
   `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+type StoredSnapshot = {
+  data: Uint8Array;
+  createdAt: number;
+  operationCount: number;
+};
+
 /**
  * Unified service for handling block operations from both users and LLM
  * Manages Y.js document state and SQLite persistence
@@ -37,6 +43,15 @@ export class BlockOperationService {
   private pendingOperations: BlockOperation[] = [];
   private batchTimeout: NodeJS.Timeout | null = null;
   private readonly BATCH_DELAY_MS = 50;
+
+  // Snapshot tracking for efficient reloads
+  private operationsSinceLastSnapshot = 0;
+  private lastSnapshotOperationCount = 0;
+  private lastSnapshotCreatedAt = 0;
+  private readonly INITIAL_SNAPSHOT_OPERATION_THRESHOLD = 1;
+  private readonly SNAPSHOT_OPERATION_THRESHOLD = 200;
+  private readonly SNAPSHOT_MIN_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+  private readonly MAX_STORED_SNAPSHOTS = 5;
 
   private constructor(documentId = "default") {
     this.documentId = documentId;
@@ -140,6 +155,8 @@ export class BlockOperationService {
 
     // Batch the update broadcast to renderer
     this.scheduleBroadcast(operations);
+
+    await this.evaluateSnapshotCreation(result.operationsApplied);
 
     return result;
   }
@@ -343,21 +360,52 @@ export class BlockOperationService {
       // Try to load latest snapshot first
       const snapshot = this.loadLatestSnapshot();
       if (snapshot) {
-        Y.applyUpdate(this.yDoc, snapshot);
+        Y.applyUpdate(this.yDoc, snapshot.data);
+        this.updateSnapshotTracking(snapshot);
         log.debug("Loaded document from snapshot", "BlockOperationService");
       } else {
         // Fallback: replay operations from scratch
         await this.replayOperations();
+        this.updateSnapshotTracking(null);
         log.debug(
           "Loaded document by replaying operations",
           "BlockOperationService"
         );
       }
 
+      await this.evaluateSnapshotCreation(0, { forceIfNoSnapshot: true });
+
       return this.yBlocks.toArray();
     } catch (error) {
       log.debug(`Error loading document: ${error}`, "BlockOperationService");
       return [];
+    }
+  }
+
+  /**
+   * Update snapshot tracking counters
+   */
+  private updateSnapshotTracking(snapshot: StoredSnapshot | null): void {
+    if (!this.database) {
+      this.operationsSinceLastSnapshot = 0;
+      this.lastSnapshotCreatedAt = snapshot?.createdAt ?? 0;
+      this.lastSnapshotOperationCount = snapshot?.operationCount ?? 0;
+      return;
+    }
+
+    const totalOperations = this.getOperationCount();
+
+    if (snapshot) {
+      this.lastSnapshotCreatedAt = snapshot.createdAt;
+      this.lastSnapshotOperationCount = snapshot.operationCount;
+      this.operationsSinceLastSnapshot = Math.max(
+        0,
+        totalOperations - snapshot.operationCount
+      );
+    } else {
+      this.lastSnapshotCreatedAt = 0;
+      this.lastSnapshotOperationCount = 0;
+      this.operationsSinceLastSnapshot = totalOperations;
     }
   }
 
@@ -414,19 +462,25 @@ export class BlockOperationService {
   /**
    * Load latest document snapshot
    */
-  private loadLatestSnapshot(): Uint8Array | null {
+  private loadLatestSnapshot(): StoredSnapshot | null {
     if (!this.database) return null;
 
     try {
       const stmt = this.database.prepare(`
-        SELECT snapshot_data FROM snapshots 
-        WHERE document_id = ? 
-        ORDER BY created_at DESC 
+        SELECT snapshot_data, created_at, operation_count FROM snapshots
+        WHERE document_id = ?
+        ORDER BY created_at DESC
         LIMIT 1
       `);
 
       const row = stmt.get(this.documentId) as any;
-      return row ? new Uint8Array(row.snapshot_data) : null;
+      return row
+        ? {
+            data: new Uint8Array(row.snapshot_data),
+            createdAt: row.created_at || 0,
+            operationCount: row.operation_count || 0,
+          }
+        : null;
     } catch (error) {
       log.debug(`Error loading snapshot: ${error}`, "BlockOperationService");
       return null;
@@ -462,6 +516,43 @@ export class BlockOperationService {
   }
 
   /**
+   * Determine if a snapshot should be created based on recent activity
+   */
+  private async evaluateSnapshotCreation(
+    operationsApplied = 0,
+    options: { forceIfNoSnapshot?: boolean } = {}
+  ): Promise<void> {
+    if (!this.database) return;
+
+    if (operationsApplied > 0) {
+      this.operationsSinceLastSnapshot += operationsApplied;
+    }
+
+    const hasSnapshot = this.lastSnapshotCreatedAt > 0;
+
+    if (!hasSnapshot) {
+      if (
+        (options.forceIfNoSnapshot && this.operationsSinceLastSnapshot > 0) ||
+        this.operationsSinceLastSnapshot >= this.INITIAL_SNAPSHOT_OPERATION_THRESHOLD
+      ) {
+        await this.createSnapshot();
+      }
+      return;
+    }
+
+    if (this.operationsSinceLastSnapshot < this.SNAPSHOT_OPERATION_THRESHOLD) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - this.lastSnapshotCreatedAt < this.SNAPSHOT_MIN_INTERVAL_MS) {
+      return;
+    }
+
+    await this.createSnapshot();
+  }
+
+  /**
    * Create periodic snapshot for performance
    */
   async createSnapshot(): Promise<void> {
@@ -470,6 +561,7 @@ export class BlockOperationService {
     try {
       const snapshot = Y.encodeStateAsUpdate(this.yDoc);
       const operationCount = this.getOperationCount();
+      const createdAt = Date.now();
 
       const stmt = this.database.prepare(`
         INSERT INTO snapshots (id, document_id, snapshot_data, created_at, operation_count)
@@ -480,13 +572,42 @@ export class BlockOperationService {
         generateId(),
         this.documentId,
         snapshot,
-        Date.now(),
+        createdAt,
         operationCount
       );
+
+      this.lastSnapshotCreatedAt = createdAt;
+      this.lastSnapshotOperationCount = operationCount;
+      this.operationsSinceLastSnapshot = 0;
+
+      this.pruneOldSnapshots();
 
       log.debug("Created document snapshot", "BlockOperationService");
     } catch (error) {
       log.debug(`Error creating snapshot: ${error}`, "BlockOperationService");
+    }
+  }
+
+  /**
+   * Remove stale snapshots beyond retention threshold
+   */
+  private pruneOldSnapshots(): void {
+    if (!this.database) return;
+
+    try {
+      const stmt = this.database.prepare(`
+        DELETE FROM snapshots
+        WHERE id IN (
+          SELECT id FROM snapshots
+          WHERE document_id = ?
+          ORDER BY created_at DESC
+          LIMIT -1 OFFSET ?
+        )
+      `);
+
+      stmt.run(this.documentId, this.MAX_STORED_SNAPSHOTS);
+    } catch (error) {
+      log.debug(`Error pruning snapshots: ${error}`, "BlockOperationService");
     }
   }
 
