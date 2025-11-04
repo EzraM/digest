@@ -455,6 +455,91 @@ export class ViewManager {
     }
   }
 
+  public getDevToolsState(blockId: string): {
+    success: boolean;
+    isOpen: boolean;
+    error?: string;
+  } {
+    const view = this.views[blockId];
+
+    if (!view?.contents) {
+      const errorMessage = `No WebContentsView found for blockId: ${blockId}`;
+      log.debug(errorMessage, "ViewManager");
+      return { success: false, isOpen: false, error: errorMessage };
+    }
+
+    try {
+      const { webContents } = view.contents;
+
+      if (webContents.isDestroyed()) {
+        const destroyedMessage = `WebContents destroyed for blockId: ${blockId}`;
+        log.debug(destroyedMessage, "ViewManager");
+        return { success: false, isOpen: false, error: destroyedMessage };
+      }
+
+      const isOpen = webContents.isDevToolsOpened();
+      log.debug(
+        `DevTools state for blockId ${blockId}: ${isOpen ? "open" : "closed"}`,
+        "ViewManager"
+      );
+
+      return { success: true, isOpen };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : `Unknown error: ${error}`;
+      log.debug(
+        `Failed to get DevTools state for blockId ${blockId}: ${message}`,
+        "ViewManager"
+      );
+      return { success: false, isOpen: false, error: message };
+    }
+  }
+
+  public toggleDevTools(blockId: string): {
+    success: boolean;
+    isOpen: boolean;
+    error?: string;
+  } {
+    const view = this.views[blockId];
+
+    if (!view?.contents) {
+      const errorMessage = `Cannot toggle DevTools, no WebContentsView for blockId: ${blockId}`;
+      log.debug(errorMessage, "ViewManager");
+      return { success: false, isOpen: false, error: errorMessage };
+    }
+
+    try {
+      const { webContents } = view.contents;
+
+      if (webContents.isDestroyed()) {
+        const destroyedMessage = `Cannot toggle DevTools, WebContents destroyed for blockId: ${blockId}`;
+        log.debug(destroyedMessage, "ViewManager");
+        return { success: false, isOpen: false, error: destroyedMessage };
+      }
+
+      if (webContents.isDevToolsOpened()) {
+        log.debug(
+          `Closing DevTools for blockId: ${blockId}`,
+          "ViewManager"
+        );
+        webContents.closeDevTools();
+        return { success: true, isOpen: false };
+      }
+
+      log.debug(`Opening DevTools for blockId: ${blockId}`, "ViewManager");
+      webContents.openDevTools({ mode: "detach" });
+      return { success: true, isOpen: true };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : `Unknown error: ${error}`;
+      log.debug(
+        `Failed to toggle DevTools for blockId ${blockId}: ${message}`,
+        "ViewManager"
+      );
+      return { success: false, isOpen: false, error: message };
+    }
+  }
+
   public handleBlockViewUpdate(update: {
     blockId: string;
     url: string;
