@@ -362,7 +362,15 @@ export class BlockOperationService {
       if (snapshot) {
         Y.applyUpdate(this.yDoc, snapshot.data);
         this.updateSnapshotTracking(snapshot);
-        log.debug("Loaded document from snapshot", "BlockOperationService");
+
+        const appliedAfterSnapshot = await this.replayOperations({
+          offset: snapshot.operationCount,
+        });
+
+        log.debug(
+          `Loaded document from snapshot (applied ${appliedAfterSnapshot} operations after snapshot)`,
+          "BlockOperationService"
+        );
       } else {
         // Fallback: replay operations from scratch
         await this.replayOperations();
@@ -490,25 +498,32 @@ export class BlockOperationService {
   /**
    * Replay operations from database (for loading without snapshot)
    */
-  private async replayOperations(): Promise<void> {
-    if (!this.database) return;
+  private async replayOperations(options: { offset?: number } = {}): Promise<number> {
+    if (!this.database) return 0;
+
+    const { offset = 0 } = options;
 
     try {
       const stmt = this.database.prepare(`
         SELECT operation_data FROM operations 
         WHERE document_id = ? 
         ORDER BY applied_at ASC
+        LIMIT -1 OFFSET ?
       `);
 
-      const rows = stmt.all(this.documentId) as any[];
+      const rows = stmt.all(this.documentId, offset) as any[];
+      let applied = 0;
 
       for (const row of rows) {
         const operation: BlockOperation = JSON.parse(row.operation_data);
         this.applyToYDoc(operation);
+        applied++;
       }
+
+      return applied;
     } catch (error) {
       log.debug(
-        `Error replaying operations: ${error}`,
+        `Error replaying operations${offset > 0 ? " after snapshot" : ""}: ${error}`,
         "BlockOperationService"
       );
       throw error;
