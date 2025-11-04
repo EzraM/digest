@@ -76,52 +76,28 @@ export const slashCommandOptions: SlashCommandOption[] = [
     key: "image",
     title: "Image",
     subtext: "Insert an image",
-    aliases: [
-      "image",
-      "imageUpload",
-      "upload",
-      "img",
-      "picture",
-      "media",
-      "url",
-    ],
+    aliases: ["image", "imageUpload", "upload", "img", "picture", "media"],
     group: "Media",
   },
   {
     key: "video",
     title: "Video",
     subtext: "Insert a video",
-    aliases: [
-      "video",
-      "videoUpload",
-      "upload",
-      "mp4",
-      "film",
-      "media",
-      "url",
-    ],
+    aliases: ["video", "videoUpload", "upload", "mp4", "film", "media"],
     group: "Media",
   },
   {
     key: "audio",
     title: "Audio",
     subtext: "Insert audio",
-    aliases: [
-      "audio",
-      "audioUpload",
-      "upload",
-      "mp3",
-      "sound",
-      "media",
-      "url",
-    ],
+    aliases: ["audio", "audioUpload", "upload", "mp3", "sound", "media"],
     group: "Media",
   },
   {
     key: "file",
     title: "File",
     subtext: "Insert a file",
-    aliases: ["file", "upload", "embed", "media", "url"],
+    aliases: ["file", "upload", "embed", "media"],
     group: "Media",
   },
   {
@@ -147,23 +123,80 @@ export const slashCommandOptions: SlashCommandOption[] = [
   },
 ];
 
+/**
+ * Calculate a match score for a slash command option based on how well it matches the search query.
+ * Higher scores indicate better matches.
+ */
+const calculateMatchScore = (
+  option: SlashCommandOption,
+  search: string
+): number => {
+  const titleLower = option.title.toLowerCase();
+  const subtextLower = option.subtext?.toLowerCase() ?? "";
+
+  // Check for exact alias match (highest priority)
+  const exactAliasMatch = option.aliases?.some((alias) => {
+    const normalized = alias.toLowerCase();
+    return normalized === search;
+  });
+
+  if (exactAliasMatch) {
+    return 100; // Highest priority for exact alias match
+  }
+
+  // Check for alias starts with search
+  const aliasStartsWith = option.aliases?.some((alias) => {
+    const normalized = alias.toLowerCase();
+    return normalized.startsWith(search);
+  });
+
+  if (aliasStartsWith) {
+    return 80;
+  }
+
+  // Check for alias contains search
+  const aliasContains = option.aliases?.some((alias) => {
+    const normalized = alias.toLowerCase();
+    return normalized.includes(search);
+  });
+
+  if (aliasContains) {
+    return 60;
+  }
+
+  // Check for title/subtext matches (lower priority)
+  if (titleLower.startsWith(search)) {
+    return 40;
+  }
+
+  if (titleLower.includes(search)) {
+    return 20;
+  }
+
+  if (subtextLower.includes(search)) {
+    return 10;
+  }
+
+  return 0; // No match
+};
+
 export const filterSlashCommandOptions = (
   query: string,
-  options: SlashCommandOption[] = slashCommandOptions,
+  options: SlashCommandOption[] = slashCommandOptions
 ): SlashCommandOption[] => {
   const search = query.trim().toLowerCase();
   if (!search) {
     return options;
   }
 
-  return options.filter((option) => {
-    const titleMatch = option.title.toLowerCase().includes(search);
-    const subtextMatch = option.subtext?.toLowerCase().includes(search);
-    const aliasMatch = option.aliases?.some((alias) => {
-      const normalized = alias.toLowerCase();
-      return normalized === search || normalized.includes(search);
-    });
+  // Score each option based on match quality (higher = better match)
+  const scoredOptions = options
+    .map((option) => ({
+      option,
+      score: calculateMatchScore(option, search),
+    }))
+    .filter((item) => item.score > 0) // Only include items that match
+    .sort((a, b) => b.score - a.score); // Sort by score descending
 
-    return Boolean(titleMatch || subtextMatch || aliasMatch);
-  });
+  return scoredOptions.map((item) => item.option);
 };
