@@ -2,6 +2,7 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 import { contextBridge, ipcRenderer } from "electron";
 import { log } from "./utils/mainLogger";
+import { SlashCommandResultsPayload } from "./types/slashCommand";
 
 log.debug("Preload script initialized", "preload");
 
@@ -37,6 +38,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cancelSlashCommand: () => {
     log.debug("Cancelling slash command", "preload");
     ipcRenderer.send("slash-command:cancel");
+  },
+  updateSlashCommandResults: (payload: SlashCommandResultsPayload) => {
+    log.debug(
+      `Updating slash command results (items: ${payload.items.length}, selected: ${payload.selectedIndex})`,
+      "preload",
+    );
+    ipcRenderer.send("slash-command:update-results", payload);
+  },
+  selectSlashCommandBlock: (blockKey: string) => {
+    log.debug(
+      `Selecting slash command block from renderer: ${blockKey}`,
+      "preload",
+    );
+    ipcRenderer.send("block-menu:select", blockKey);
   },
   onSelectBlockType: (callback: (blockKey: string) => void) => {
     const subscription = (_: any, blockKey: string) => {

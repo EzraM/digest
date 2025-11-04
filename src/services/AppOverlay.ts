@@ -184,22 +184,20 @@ export class AppOverlay {
       this.baseWindow.contentView.addChildView(this.overlay);
       log.debug("Overlay added to baseWindow contentView", "AppOverlay");
 
-      // Transfer focus to the HUD WebContents so keyboard input goes there
-      // Use a small delay to let the BlockNote suggestion menu stabilize
+      // Ensure the editor retains focus so the query continues updating
       setTimeout(() => {
-        if (this.overlay && !this.overlay.webContents.isDestroyed()) {
-          log.debug("Transferring focus to HUD WebContents", "AppOverlay");
-          try {
-            this.overlay.webContents.focus();
-            log.debug("Successfully focused HUD WebContents", "AppOverlay");
-          } catch (error) {
-            log.debug(
-              `Failed to focus HUD WebContents: ${error}`,
-              "AppOverlay"
-            );
+        try {
+          if (
+            this.globalAppView &&
+            !this.globalAppView.webContents.isDestroyed()
+          ) {
+            this.globalAppView.webContents.focus();
+            log.debug("Reaffirmed focus on main app view", "AppOverlay");
           }
+        } catch (error) {
+          log.debug(`Failed to refocus main app view: ${error}`, "AppOverlay");
         }
-      }, 100); // Brief delay to let suggestion menu stabilize
+      }, 50);
     }
   }
 
@@ -236,6 +234,21 @@ export class AppOverlay {
       this.overlay = null;
       this.state.overlay = null;
       log.debug("Overlay destroyed", "AppOverlay");
+    }
+  }
+
+  send(channel: string, payload: unknown) {
+    if (this.overlay && !this.overlay.webContents.isDestroyed()) {
+      this.overlay.webContents.send(channel, payload);
+      log.debug(
+        `Sent payload on channel ${channel} to HUD overlay`,
+        "AppOverlay",
+      );
+    } else {
+      log.debug(
+        `Skipped sending payload on channel ${channel} - overlay not ready`,
+        "AppOverlay",
+      );
     }
   }
 }

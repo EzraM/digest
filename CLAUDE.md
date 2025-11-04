@@ -126,7 +126,7 @@ export const DEV_CONFIG = {
 - **HUD Overlay**: `app-overlay/app-overlay.tsx`
 - **Prompt Overlay**: `prompt-overlay/prompt-overlay.tsx`
 - **Browser Blocks**: `src/Browser/Browser.tsx`
-- **Block Types**: `app-overlay/add-blocks.json`
+- **Block Types**: `src/data/slashCommandOptions.ts`
 
 ## Testing Requirements
 

@@ -1,5 +1,6 @@
 import { AppOverlay } from "./AppOverlay";
 import { log } from "../utils/mainLogger";
+import { SlashCommandResultsPayload } from "../types/slashCommand";
 
 export enum SlashCommandState {
   INACTIVE = "inactive",
@@ -12,6 +13,7 @@ export class SlashCommandManager {
   private state: SlashCommandState = SlashCommandState.INACTIVE;
   private appOverlay: AppOverlay;
   private globalAppView: any; // WebContentsView reference
+  private latestResults: SlashCommandResultsPayload | null = null;
 
   constructor(appOverlay: AppOverlay, globalAppView: any) {
     this.appOverlay = appOverlay;
@@ -39,6 +41,7 @@ export class SlashCommandManager {
 
     // Transition to HUD active state
     this.state = SlashCommandState.HUD_ACTIVE;
+    this.latestResults = null;
     log.debug("Slash command mode active, HUD shown", "SlashCommandManager");
   }
 
@@ -92,6 +95,7 @@ export class SlashCommandManager {
 
     // Reset state
     this.state = SlashCommandState.INACTIVE;
+    this.latestResults = null;
 
     log.debug("Slash command mode ended", "SlashCommandManager");
   }
@@ -108,5 +112,33 @@ export class SlashCommandManager {
    */
   isActive(): boolean {
     return this.state !== SlashCommandState.INACTIVE;
+  }
+
+  updateResults(payload: SlashCommandResultsPayload): void {
+    this.latestResults = payload;
+
+    if (this.state !== SlashCommandState.HUD_ACTIVE) {
+      log.debug(
+        `Received slash command results while inactive (state: ${this.state}), stored for later`,
+        "SlashCommandManager",
+      );
+      return;
+    }
+
+    log.debug(
+      `Forwarding slash command results to HUD (items: ${payload.items.length}, selected: ${payload.selectedIndex})`,
+      "SlashCommandManager",
+    );
+    this.appOverlay.send("slash-command:update-results", payload);
+  }
+
+  handleOverlayReady(): void {
+    if (this.state === SlashCommandState.HUD_ACTIVE && this.latestResults) {
+      log.debug(
+        "HUD overlay reported ready - replaying latest results",
+        "SlashCommandManager",
+      );
+      this.appOverlay.send("slash-command:update-results", this.latestResults);
+    }
   }
 }

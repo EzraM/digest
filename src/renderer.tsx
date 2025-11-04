@@ -49,6 +49,14 @@ import { AppShell, MantineProvider } from "@mantine/core";
 import { GoogleSearchExtensionName } from "./Search/GoogleSearchBlock";
 import { ChatGPTExtensionName } from "./Search/ChatGPTBlock";
 import { URLExtensionName } from "./Search/URLBlock";
+import {
+  slashCommandOptions,
+  filterSlashCommandOptions,
+} from "./data/slashCommandOptions";
+import {
+  SlashCommandLoadingState,
+  SlashCommandOption,
+} from "./types/slashCommand";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
@@ -71,12 +79,12 @@ const createNewBrowserBlock = (url: string): void => {
   }
 };
 
-// Custom suggestion menu component that triggers HUD instead of showing BlockNote's menu
-function CustomSlashMenu(): null {
-  // Always return null since we don't want to render anything
-  // The HUD overlay will be shown instead
-  return null;
-}
+type SlashCommandMenuProps = {
+  items: SlashCommandOption[];
+  selectedIndex?: number;
+  loadingState: SlashCommandLoadingState;
+  onItemClick?: (item: SlashCommandOption) => void;
+};
 
 function App() {
   // Debug sidebar state
@@ -222,21 +230,74 @@ function App() {
     setIsDebugSidebarVisible(enabled);
   };
 
-  const handleSlashMenuItems = React.useCallback(async (): Promise<never[]> => {
-    const { block } = editor.getTextCursorPosition();
-    if (block && URL_BLOCK_TYPES.has(block.type)) {
-      log.debug("Slash menu suppressed inside URL block", "renderer");
-      editor.suggestionMenus.closeMenu();
-      return [];
-    }
+  const slashCommandActiveRef = React.useRef(false);
+  const slashQueryRef = React.useRef("");
 
-    log.debug(
-      "Slash menu triggered, starting custom slash command",
-      "renderer"
-    );
-    window.electronAPI?.startSlashCommand();
-    return [];
-  }, [editor]);
+  const handleSlashMenuItems = React.useCallback(
+    async (query: string): Promise<SlashCommandOption[]> => {
+      const { block } = editor.getTextCursorPosition();
+      if (block && URL_BLOCK_TYPES.has(block.type)) {
+        log.debug("Slash menu suppressed inside URL block", "renderer");
+        editor.suggestionMenus.closeMenu();
+        slashCommandActiveRef.current = false;
+        window.electronAPI?.cancelSlashCommand();
+        return [];
+      }
+
+      slashQueryRef.current = query;
+
+      if (!slashCommandActiveRef.current) {
+        log.debug(
+          "Slash menu triggered, starting custom slash command",
+          "renderer",
+        );
+        slashCommandActiveRef.current = true;
+        window.electronAPI?.startSlashCommand();
+      }
+
+      const filtered = filterSlashCommandOptions(query, slashCommandOptions);
+      return filtered;
+    },
+    [editor],
+  );
+
+  const SlashCommandSyncMenu = ({
+    items,
+    selectedIndex,
+    loadingState,
+  }: SlashCommandMenuProps) => {
+    React.useEffect(() => {
+      const normalizedIndex =
+        typeof selectedIndex === "number"
+          ? selectedIndex
+          : items.length > 0
+            ? 0
+            : null;
+
+      window.electronAPI?.updateSlashCommandResults({
+        query: slashQueryRef.current,
+        items,
+        selectedIndex: normalizedIndex,
+        loadingState,
+      });
+    }, [items, selectedIndex, loadingState]);
+
+    React.useEffect(() => {
+      return () => {
+        slashCommandActiveRef.current = false;
+        window.electronAPI?.cancelSlashCommand();
+      };
+    }, []);
+
+    return null;
+  };
+
+  const handleSlashMenuItemClick = React.useCallback(
+    (item: SlashCommandOption) => {
+      window.electronAPI?.selectSlashCommandBlock(item.key);
+    },
+    [],
+  );
 
   return (
     <MantineProvider>
@@ -253,11 +314,9 @@ function App() {
             <BlockNoteView editor={editor} slashMenu={false}>
               <SuggestionMenuController
                 triggerCharacter={"/"}
-                suggestionMenuComponent={CustomSlashMenu}
+                suggestionMenuComponent={SlashCommandSyncMenu}
                 getItems={handleSlashMenuItems}
-                onItemClick={() => {
-                  // No-op since we handle items in the HUD overlay
-                }}
+                onItemClick={handleSlashMenuItemClick}
               />
             </BlockNoteView>
             <div style={{ height: "2000px", width: "100%", color: "gray" }} />
