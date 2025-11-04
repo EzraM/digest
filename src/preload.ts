@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeBrowser: (blockId: string) => {
     ipcRenderer.send("remove-browser", blockId);
   },
+  browser: {
+    getDevToolsState: (blockId: string) =>
+      ipcRenderer.invoke("browser:get-devtools-state", blockId),
+    toggleDevTools: (blockId: string) =>
+      ipcRenderer.invoke("browser:toggle-devtools", blockId),
+  },
   addBlockEvent: (e: { type: "open" | "close" }) => {
     log.debug(`Sending event: block-menu:${e.type}`, "preload");
     ipcRenderer.send(`block-menu:${e.type}`);

@@ -7,6 +7,14 @@ interface ElectronAPI {
     bounds: { x: number; y: number; width: number; height: number };
   }) => void;
   removeBrowser: (blockId: string) => void;
+  browser: {
+    getDevToolsState: (
+      blockId: string
+    ) => Promise<{ success: boolean; isOpen: boolean; error?: string }>;
+    toggleDevTools: (
+      blockId: string
+    ) => Promise<{ success: boolean; isOpen: boolean; error?: string }>;
+  };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
   startSlashCommand: () => void;
   cancelSlashCommand: () => void;

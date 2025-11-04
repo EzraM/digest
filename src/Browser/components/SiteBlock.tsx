@@ -1,6 +1,7 @@
 import React from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { Page } from "./Page";
+import { useDevToolsState } from "../../hooks/useDevToolsState";
 
 // Define the prop schema with proper typing
 const sitePropSchema = {
@@ -20,6 +21,12 @@ export const site = createReactBlockSpec(
     render: (props) => {
       const { block } = props;
       const { url } = block.props;
+      const {
+        isAvailable: devToolsAvailable,
+        isOpen: devToolsOpen,
+        isBusy: isTogglingDevTools,
+        toggleDevTools,
+      } = useDevToolsState(block.id);
 
       // Site blocks must always have a URL - if not, show an error
       if (!url) {
@@ -66,6 +73,32 @@ export const site = createReactBlockSpec(
           >
             <span>🌐</span>
             <span style={{ flex: 1, fontFamily: "monospace" }}>{url}</span>
+            {devToolsAvailable && (
+              <button
+                type="button"
+                onClick={toggleDevTools}
+                disabled={isTogglingDevTools}
+                aria-pressed={devToolsOpen}
+                style={{
+                  border: "1px solid #d0d0d0",
+                  backgroundColor: devToolsOpen ? "#e7f5ff" : "#fff",
+                  color: devToolsOpen ? "#1c7ed6" : "#333",
+                  borderRadius: "4px",
+                  padding: "4px 8px",
+                  cursor: isTogglingDevTools ? "wait" : "pointer",
+                  fontSize: "12px",
+                }}
+                title={
+                  devToolsOpen ? "Close developer tools" : "Open developer tools"
+                }
+              >
+                {isTogglingDevTools
+                  ? "…"
+                  : devToolsOpen
+                  ? "Close DevTools"
+                  : "Open DevTools"}
+              </button>
+            )}
           </div>
 
           {/* Browser content */}

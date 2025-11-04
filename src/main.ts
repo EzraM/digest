@@ -310,6 +310,22 @@ const setupIpcHandlers = (
     viewManager.handleRemoveView(blockId);
   });
 
+  ipcMain.handle("browser:get-devtools-state", (_, blockId: string) => {
+    log.debug(
+      `Received browser:get-devtools-state request for block ${blockId}`,
+      "main"
+    );
+    return viewManager.getDevToolsState(blockId);
+  });
+
+  ipcMain.handle("browser:toggle-devtools", (_, blockId: string) => {
+    log.debug(
+      `Received browser:toggle-devtools request for block ${blockId}`,
+      "main"
+    );
+    return viewManager.toggleDevTools(blockId);
+  });
+
   // Handle slash command events through the new state manager
   ipcMain.on("slash-command:start", () => {
     log.debug("Slash command start event received", "main");
