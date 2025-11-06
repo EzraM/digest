@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { BrowserInitError } from "../types";
+import { buildBrowserInitError } from "../utils/errorMessages";
 
 /**
  * A custom hook to manage the initialization lifecycle of a browser view.
@@ -8,9 +10,19 @@ import { useState, useEffect, useRef, useCallback } from "react";
  * @param blockId The ID of the block being initialized.
  * @returns An object with the current initialization state and a retry function.
  */
+type BrowserInitializedEvent = {
+  blockId: string;
+  success: boolean;
+  status?: "created" | "loaded" | "existing";
+  error?: string;
+  errorCode?: number;
+  errorDescription?: string;
+  url?: string;
+};
+
 export const useBrowserInitialization = (blockId: string) => {
   const [isInitialized, setIsInitialized] = useState(false);
-  const [initError, setInitError] = useState<string | null>(null);
+  const [initError, setInitError] = useState<BrowserInitError | null>(null);
   const [initStatus, setInitStatus] = useState<string | null>(null);
   const initAttemptRef = useRef(0);
 
@@ -19,12 +31,13 @@ export const useBrowserInitialization = (blockId: string) => {
     console.log(
       `[useBrowserInitialization] Setting up listener for blockId: ${blockId}`
     );
-    const unsubscribe = window.electronAPI.onBrowserInitialized((data) => {
-      if (data.blockId === blockId) {
-        console.log(
-          `[useBrowserInitialization] Received status for ${blockId}:`,
-          data
-        );
+    const unsubscribe = window.electronAPI.onBrowserInitialized(
+      (data: BrowserInitializedEvent) => {
+        if (data.blockId === blockId) {
+          console.log(
+            `[useBrowserInitialization] Received status for ${blockId}:`,
+            data
+          );
         setInitStatus(data.status || null);
 
         if (data.success) {
@@ -33,10 +46,17 @@ export const useBrowserInitialization = (blockId: string) => {
             setInitError(null);
           }
         } else {
-          setInitError(data.error || "Failed to initialize browser");
+          const errorDetails = buildBrowserInitError({
+            code: data.errorCode,
+            description: data.errorDescription,
+            url: data.url,
+            rawMessage: data.error || null,
+          });
+          setInitError(errorDetails);
         }
       }
-    });
+      }
+    );
 
     return () => {
       console.log(
@@ -54,7 +74,11 @@ export const useBrowserInitialization = (blockId: string) => {
           console.warn(
             `[useBrowserInitialization] Timeout for blockId: ${blockId}`
           );
-          setInitError("Initialization timed out. Please try again.");
+          setInitError(
+            buildBrowserInitError({
+              rawMessage: "Initialization timed out. Please try again.",
+            })
+          );
         }
       }, 10000); // 10-second timeout
 

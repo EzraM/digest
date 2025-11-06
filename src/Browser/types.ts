@@ -13,7 +13,16 @@ export interface BrowserSlotProps {
     height: number;
   }) => void;
   isInitialized?: boolean;
-  initError?: string | null;
+  initError?: BrowserInitError | null;
   initStatus?: string | null;
   onRetry?: () => void;
+}
+
+export interface BrowserInitError {
+  friendlyTitle: string;
+  friendlySubtitle?: string;
+  technicalMessage?: string;
+  code?: number;
+  description?: string;
+  url?: string;
 }

@@ -93,6 +93,7 @@ export class ViewManager {
         blockId,
         success: false,
         error: `Invalid URL: ${view.url}`,
+        errorDescription: "invalid-url",
       });
       return;
     }
@@ -272,6 +273,9 @@ export class ViewManager {
                 blockId,
                 success: false,
                 error: `Failed to load: ${errorDescription} (${errorCode})`,
+                errorCode,
+                errorDescription,
+                url: validatedURL,
               });
             } else {
               log.debug(

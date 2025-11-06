@@ -33,6 +33,9 @@ interface ElectronAPI {
       success: boolean;
       status?: string;
       error?: string;
+      errorCode?: number;
+      errorDescription?: string;
+      url?: string;
     }) => void
   ) => () => void;
   onBrowserNavigation: (
