@@ -2,6 +2,8 @@ import React from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { Page } from "./Page";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
+import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
+import type { CustomBlockNoteEditor } from "../../types/schema";
 
 // Define the prop schema with proper typing
 const sitePropSchema = {
@@ -19,7 +21,9 @@ export const site = createReactBlockSpec(
   },
   {
     render: (props) => {
-      const { block } = props;
+      const { block, editor } = props as typeof props & {
+        editor: CustomBlockNoteEditor;
+      };
       const { url } = block.props;
       const {
         isAvailable: devToolsAvailable,
@@ -27,6 +31,8 @@ export const site = createReactBlockSpec(
         isBusy: isTogglingDevTools,
         toggleDevTools,
       } = useDevToolsState(block.id);
+      const { canGoBack, isNavigatingBack, goBack } =
+        useBrowserNavigationState(block.id, editor, url);
 
       // Site blocks must always have a URL - if not, show an error
       if (!url) {
@@ -71,8 +77,44 @@ export const site = createReactBlockSpec(
               color: "#666",
             }}
           >
-            <span>🌐</span>
-            <span style={{ flex: 1, fontFamily: "monospace" }}>{url}</span>
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={!canGoBack || isNavigatingBack}
+              style={{
+                border: "1px solid #d0d0d0",
+                backgroundColor: "#fff",
+                color: canGoBack ? "#333" : "#bbb",
+                borderRadius: "4px",
+                padding: "2px 8px",
+                cursor:
+                  !canGoBack || isNavigatingBack ? "not-allowed" : "pointer",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: "36px",
+              }}
+              title={
+                canGoBack ? "Go back" : "No previous page available"
+              }
+              aria-disabled={!canGoBack}
+            >
+              {isNavigatingBack ? "⏳" : "←"}
+            </button>
+            <span aria-hidden="true">🌐</span>
+            <span
+              style={{
+                flex: 1,
+                fontFamily: "monospace",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={url}
+            >
+              {url}
+            </span>
             {devToolsAvailable && (
               <button
                 type="button"
