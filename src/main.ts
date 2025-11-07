@@ -147,7 +147,11 @@ const createWindow = async () => {
   // Set up link interception for the main renderer process
   const linkInterceptionService = new LinkInterceptionService(appViewInstance);
 
-  const viewManager = new ViewManager(baseWindow, viewLayerManager);
+  const viewManager = new ViewManager(
+    baseWindow,
+    viewLayerManager,
+    appViewInstance.webContents
+  );
   const appOverlay = new AppOverlay({}, baseWindow, globalAppView);
   const slashCommandManager = new SlashCommandManager(
     appOverlay,

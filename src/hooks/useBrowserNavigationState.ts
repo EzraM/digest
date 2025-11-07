@@ -56,6 +56,7 @@ export function useBrowserNavigationState(
         }
 
         const currentUrl = (block.props as { url?: string } | undefined)?.url ?? "";
+
         if (event.url && event.url !== currentUrl) {
           editor.updateBlock(block, {
             props: {

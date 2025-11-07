@@ -21,11 +21,18 @@ export class ViewManager {
     BlockViewUpdateEvent | { type: "remove-view"; blockId: string }
   >();
   private onLinkClickCallback?: (url: string) => void;
+  private rendererWebContents: Electron.WebContents;
 
   constructor(
     private baseWindow: BrowserWindow,
-    private viewLayerManager?: ViewLayerManager
+    private viewLayerManager: ViewLayerManager | undefined,
+    rendererWebContents: Electron.WebContents
   ) {
+    this.rendererWebContents = rendererWebContents;
+    log.debug(
+      `ViewManager: Renderer WebContents set to ID ${rendererWebContents.id}`,
+      "ViewManager"
+    );
     this.setupEventHandlers();
   }
 
@@ -156,17 +163,6 @@ export class ViewManager {
             "ViewManager"
           );
         });
-
-        // Log console messages from the WebContents
-        newView.webContents.on(
-          "console-message",
-          (event, level, message, line, sourceId) => {
-            log.debug(
-              `[${blockId}] Console ${level}: ${message} (${sourceId}:${line})`,
-              "ViewManager"
-            );
-          }
-        );
 
         // Log all navigation attempts
         newView.webContents.on(
@@ -502,6 +498,14 @@ export class ViewManager {
       return;
     }
 
+    if (this.rendererWebContents.isDestroyed()) {
+      log.warn(
+        `ViewManager: Renderer WebContents is destroyed, cannot broadcast navigation for blockId: ${blockId}`,
+        "ViewManager"
+      );
+      return;
+    }
+
     const view = this.views[blockId];
     if (!view?.contents) {
       log.debug(
@@ -530,12 +534,14 @@ export class ViewManager {
 
     const canGoBack = webContents.canGoBack();
 
+    const payload = {
+      blockId,
+      url: currentUrl,
+      canGoBack,
+    };
+
     try {
-      this.baseWindow.webContents.send(EVENTS.BROWSER.NAVIGATION, {
-        blockId,
-        url: currentUrl,
-        canGoBack,
-      });
+      this.rendererWebContents.send(EVENTS.BROWSER.NAVIGATION, payload);
     } catch (error) {
       log.debug(
         `Failed to send navigation update for blockId ${blockId}: ${error}`,

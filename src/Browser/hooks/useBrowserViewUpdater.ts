@@ -17,9 +17,6 @@ export const useBrowserViewUpdater = (blockId: string) => {
   const sendUpdate = useCallback(() => {
     // Only send the update if we have both a URL and bounds.
     if (urlRef.current && boundsRef.current) {
-      console.log(
-        `[useBrowserViewUpdater] Sending update for block ${blockId}`
-      );
       window.electronAPI.updateBrowser({
         blockId,
         url: urlRef.current,
