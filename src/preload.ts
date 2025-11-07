@@ -15,6 +15,7 @@ const EVENTS = {
   BROWSER: {
     INITIALIZED: "browser:initialized",
     NEW_BLOCK: "browser:new-block",
+    NAVIGATION: "browser:navigation-state",
   },
 } as const;
 
@@ -32,6 +33,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("browser:get-devtools-state", blockId),
     toggleDevTools: (blockId: string) =>
       ipcRenderer.invoke("browser:toggle-devtools", blockId),
+    goBack: (blockId: string) => ipcRenderer.invoke("browser:go-back", blockId),
   },
   addBlockEvent: (e: { type: "open" | "close" }) => {
     log.debug(`Sending event: block-menu:${e.type}`, "preload");
@@ -91,6 +93,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }) => void
   ) => {
     const channel = "browser:initialized";
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  onBrowserNavigation: (
+    callback: (data: { blockId: string; url: string; canGoBack?: boolean }) => void
+  ) => {
+    const channel = EVENTS.BROWSER.NAVIGATION;
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);

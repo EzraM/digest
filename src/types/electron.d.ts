@@ -14,6 +14,9 @@ interface ElectronAPI {
     toggleDevTools: (
       blockId: string
     ) => Promise<{ success: boolean; isOpen: boolean; error?: string }>;
+    goBack: (
+      blockId: string
+    ) => Promise<{ success: boolean; canGoBack: boolean; error?: string }>;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
   startSlashCommand: () => void;
@@ -31,6 +34,9 @@ interface ElectronAPI {
       status?: string;
       error?: string;
     }) => void
+  ) => () => void;
+  onBrowserNavigation: (
+    callback: (data: { blockId: string; url: string; canGoBack?: boolean }) => void
   ) => () => void;
   onNewBrowserBlock: (callback: (data: { url: string }) => void) => () => void;
   applyBlockOperations: (

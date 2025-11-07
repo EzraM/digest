@@ -11,6 +11,7 @@ const EVENTS = {
   BROWSER: {
     INITIALIZED: "browser:initialized",
     NEW_BLOCK: "browser:new-block",
+    NAVIGATION: "browser:navigation-state",
   },
 };
 
@@ -334,16 +335,51 @@ export class ViewManager {
           );
         });
 
+        const handleNavigationUpdate = (nextUrl?: string) => {
+          if (nextUrl) {
+            log.debug(
+              `Navigation event in blockId: ${blockId}, new URL: ${nextUrl}`,
+              "ViewManager"
+            );
+          }
+          this.broadcastNavigationState(blockId, nextUrl);
+        };
+
         // Also listen for page redirects to catch server-side redirects
         newView.webContents.on(
           "did-navigate",
-          (event, url, httpResponseCode, httpStatusText) => {
+          (_event, url, httpResponseCode, httpStatusText) => {
             log.debug(
               `Did navigate in blockId: ${blockId}, to: ${url}, status: ${httpResponseCode} ${httpStatusText}`,
               "ViewManager"
             );
+            handleNavigationUpdate(url);
           }
         );
+
+        newView.webContents.on("did-navigate-in-page", (_event, url) => {
+          log.debug(
+            `In-page navigation in blockId: ${blockId}, to: ${url}`,
+            "ViewManager"
+          );
+          handleNavigationUpdate(url);
+        });
+
+        newView.webContents.on("did-redirect-navigation", (_event, url) => {
+          log.debug(
+            `Redirect navigation in blockId: ${blockId}, to: ${url}`,
+            "ViewManager"
+          );
+          handleNavigationUpdate(url);
+        });
+
+        newView.webContents.on("did-finish-load", () => {
+          log.debug(
+            `Finished load for blockId: ${blockId}, current URL: ${newView.webContents.getURL()}`,
+            "ViewManager"
+          );
+          handleNavigationUpdate(newView.webContents.getURL());
+        });
 
         // Listen for click events
         newView.webContents.on("before-input-event", (event, input) => {
@@ -395,6 +431,9 @@ export class ViewManager {
           "ViewManager"
         );
         newView.webContents.loadURL(view.url);
+
+        // Ensure the renderer has the initial navigation state
+        this.broadcastNavigationState(blockId, view.url);
 
         // Store the view
         this.views[blockId].contents = newView;
@@ -452,6 +491,56 @@ export class ViewManager {
     const view = this.views[blockId];
     if (view?.contents && ev.type === "update-block-view") {
       view.contents.setBounds(ev.bounds);
+    }
+  }
+
+  private broadcastNavigationState(blockId: string, explicitUrl?: string) {
+    if (this.baseWindow.isDestroyed()) {
+      log.warn(
+        `ViewManager: baseWindow is destroyed, skipping navigation broadcast for blockId: ${blockId}`
+      );
+      return;
+    }
+
+    const view = this.views[blockId];
+    if (!view?.contents) {
+      log.debug(
+        `No WebContentsView available to broadcast navigation for blockId: ${blockId}`,
+        "ViewManager"
+      );
+      return;
+    }
+
+    const { webContents } = view.contents;
+
+    if (webContents.isDestroyed()) {
+      log.warn(
+        `Cannot broadcast navigation, WebContents destroyed for blockId: ${blockId}`,
+        "ViewManager"
+      );
+      return;
+    }
+
+    const currentUrl = explicitUrl || webContents.getURL();
+    if (!currentUrl) {
+      return;
+    }
+
+    set(this.views, [blockId, "url"], currentUrl);
+
+    const canGoBack = webContents.canGoBack();
+
+    try {
+      this.baseWindow.webContents.send(EVENTS.BROWSER.NAVIGATION, {
+        blockId,
+        url: currentUrl,
+        canGoBack,
+      });
+    } catch (error) {
+      log.debug(
+        `Failed to send navigation update for blockId ${blockId}: ${error}`,
+        "ViewManager"
+      );
     }
   }
 
@@ -537,6 +626,49 @@ export class ViewManager {
         "ViewManager"
       );
       return { success: false, isOpen: false, error: message };
+    }
+  }
+
+  public goBack(blockId: string): {
+    success: boolean;
+    canGoBack: boolean;
+    error?: string;
+  } {
+    const view = this.views[blockId];
+
+    if (!view?.contents) {
+      const errorMessage = `Cannot navigate back, no WebContentsView for blockId: ${blockId}`;
+      log.debug(errorMessage, "ViewManager");
+      return { success: false, canGoBack: false, error: errorMessage };
+    }
+
+    try {
+      const { webContents } = view.contents;
+
+      if (webContents.isDestroyed()) {
+        const destroyedMessage = `Cannot navigate back, WebContents destroyed for blockId: ${blockId}`;
+        log.debug(destroyedMessage, "ViewManager");
+        return { success: false, canGoBack: false, error: destroyedMessage };
+      }
+
+      if (!webContents.canGoBack()) {
+        log.debug(
+          `No history to navigate back for blockId: ${blockId}`,
+          "ViewManager"
+        );
+        return { success: false, canGoBack: false };
+      }
+
+      webContents.goBack();
+      return { success: true, canGoBack: webContents.canGoBack() };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : `Unknown error: ${error}`;
+      log.debug(
+        `Failed to navigate back for blockId ${blockId}: ${message}`,
+        "ViewManager"
+      );
+      return { success: false, canGoBack: false, error: message };
     }
   }
 

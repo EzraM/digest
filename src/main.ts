@@ -38,6 +38,7 @@ const EVENTS = {
   BROWSER: {
     INITIALIZED: "browser:initialized",
     NEW_BLOCK: "browser:new-block",
+    NAVIGATION: "browser:navigation-state",
   },
 } as const;
 
@@ -324,6 +325,14 @@ const setupIpcHandlers = (
       "main"
     );
     return viewManager.toggleDevTools(blockId);
+  });
+
+  ipcMain.handle("browser:go-back", async (_, blockId: string) => {
+    log.debug(
+      `Received browser:go-back request for block ${blockId}`,
+      "main"
+    );
+    return viewManager.goBack(blockId);
   });
 
   // Handle slash command events through the new state manager
