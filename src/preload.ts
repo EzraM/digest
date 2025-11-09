@@ -90,6 +90,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
       success: boolean;
       error?: string;
       status?: "created" | "loaded" | "existing";
+      errorCode?: number;
+      errorDescription?: string;
+      url?: string;
     }) => void
   ) => {
     const channel = "browser:initialized";

@@ -4,6 +4,12 @@ export interface PageProps {
   url: string;
 }
 
+export type BrowserInitStatus =
+  | { state: "idle" }
+  | { state: "initializing"; detail?: "created" | "existing" | "loaded" }
+  | { state: "initialized" }
+  | { state: "error"; error: BrowserInitError };
+
 export interface BrowserSlotProps {
   blockId: string;
   onBoundsChange?: (bounds: {
@@ -12,8 +18,15 @@ export interface BrowserSlotProps {
     width: number;
     height: number;
   }) => void;
-  isInitialized?: boolean;
-  initError?: string | null;
-  initStatus?: string | null;
+  initStatus: BrowserInitStatus;
   onRetry?: () => void;
+}
+
+export interface BrowserInitError {
+  friendlyTitle: string;
+  friendlySubtitle?: string;
+  technicalMessage?: string;
+  code?: number;
+  description?: string;
+  url?: string;
 }

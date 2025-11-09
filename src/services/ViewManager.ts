@@ -6,6 +6,13 @@ import { BlockViewUpdateEvent, BlockViewState } from "../types/window";
 import { log } from "../utils/mainLogger";
 import { shouldOpenDevTools } from "../config/development";
 import { ViewLayerManager, ViewLayer } from "./ViewLayerManager";
+import {
+  ViewState,
+  isValidTransition,
+  getDefaultState,
+  allowsBoundsUpdate,
+  allowsRetry,
+} from "./ViewState";
 
 const EVENTS = {
   BROWSER: {
@@ -22,6 +29,13 @@ export class ViewManager {
   >();
   private onLinkClickCallback?: (url: string) => void;
   private rendererWebContents: Electron.WebContents;
+  // Track errors per blockId to prevent success messages from overriding them
+  private blockErrors: Map<
+    string,
+    { errorCode: number; errorDescription: string; url: string }
+  > = new Map();
+  // Track state for each view
+  private viewStates: Map<string, ViewState> = new Map();
 
   constructor(
     private baseWindow: BrowserWindow,
@@ -41,6 +55,43 @@ export class ViewManager {
     this.onLinkClickCallback = callback;
   }
 
+  /**
+   * Transition view to a new state (with validation)
+   */
+  private transitionState(
+    blockId: string,
+    newState: ViewState,
+    reason?: string
+  ): boolean {
+    const currentState = this.viewStates.get(blockId) ?? getDefaultState();
+
+    if (!isValidTransition(currentState, newState)) {
+      log.debug(
+        `[${blockId}] Invalid state transition: ${currentState} → ${newState}${
+          reason ? ` (${reason})` : ""
+        }`,
+        "ViewManager"
+      );
+      return false;
+    }
+
+    this.viewStates.set(blockId, newState);
+    log.debug(
+      `[${blockId}] State transition: ${currentState} → ${newState}${
+        reason ? ` (${reason})` : ""
+      }`,
+      "ViewManager"
+    );
+    return true;
+  }
+
+  /**
+   * Get current state for a view
+   */
+  private getViewState(blockId: string): ViewState {
+    return this.viewStates.get(blockId) ?? getDefaultState();
+  }
+
   private setupEventHandlers() {
     this.events$.subscribe((ev) => {
       const { blockId } = ev;
@@ -58,8 +109,22 @@ export class ViewManager {
         );
         set(this.views, [blockId, "url"], ev.url);
         set(this.views, [blockId, "bounds"], ev.bounds);
-        this.handleViewCreation(blockId);
-        this.handleViewUpdate(blockId, ev);
+
+        // Only trigger view creation if state allows it
+        // Bounds updates should not change state when in ERROR or LOADED
+        const currentState = this.getViewState(blockId);
+        if (allowsBoundsUpdate(currentState)) {
+          // Just update bounds, don't recreate view or change state
+          this.handleViewUpdate(blockId, ev);
+          log.debug(
+            `[${blockId}] Bounds update only (state: ${currentState})`,
+            "ViewManager"
+          );
+        } else {
+          // State allows creation/initialization
+          this.handleViewCreation(blockId);
+          this.handleViewUpdate(blockId, ev);
+        }
       } else if (ev.type === "remove-view") {
         log.debug(`Removing view for blockId: ${blockId}`, "ViewManager");
         this.handleViewRemoval(blockId);
@@ -93,6 +158,7 @@ export class ViewManager {
         blockId,
         success: false,
         error: `Invalid URL: ${view.url}`,
+        errorDescription: "invalid-url",
       });
       return;
     }
@@ -110,6 +176,17 @@ export class ViewManager {
 
     // If we have both URL and bounds but no contents, create a new view
     if (!view.contents) {
+      // Transition to CREATING state
+      if (
+        !this.transitionState(
+          blockId,
+          ViewState.CREATING,
+          "starting view creation"
+        )
+      ) {
+        return; // Invalid transition, abort
+      }
+
       try {
         log.debug(
           `Creating new WebContentsView for blockId: ${blockId}`,
@@ -231,6 +308,25 @@ export class ViewManager {
             "ViewManager"
           );
 
+          // Check if there was a previous error for this block
+          const hasError = this.blockErrors.has(blockId);
+          if (hasError) {
+            const errorInfo = this.blockErrors.get(blockId);
+            log.debug(
+              `[${blockId}] Skipping success notification - error already reported: ${errorInfo?.errorDescription} (${errorInfo?.errorCode})`,
+              "ViewManager"
+            );
+            // Don't send success message if there was an error
+            return;
+          }
+
+          // Transition to LOADED state
+          this.transitionState(
+            blockId,
+            ViewState.LOADED,
+            "page loaded successfully"
+          );
+
           // Send success notification when page is fully loaded
           this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
             blockId,
@@ -238,7 +334,7 @@ export class ViewManager {
             status: "loaded",
           });
           log.debug(
-            `Sent success notification for blockId: ${blockId}`,
+            `[${blockId}] Sent success notification to renderer`,
             "ViewManager"
           );
         });
@@ -268,11 +364,69 @@ export class ViewManager {
                 `Main frame failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
                 "ViewManager"
               );
+              // Track the error to prevent success messages from overriding it
+              this.blockErrors.set(blockId, {
+                errorCode,
+                errorDescription,
+                url: validatedURL,
+              });
+              // Transition to ERROR state
+              this.transitionState(
+                blockId,
+                ViewState.ERROR,
+                `load failed: ${errorDescription}`
+              );
+              log.debug(
+                `[${blockId}] Tracking error: ${errorDescription} (${errorCode}) for ${validatedURL}`,
+                "ViewManager"
+              );
+
+              // Hide/remove the WebContentsView when there's an error
+              // This ensures only the renderer's error UI is shown
+              try {
+                const view = this.views[blockId];
+                if (view?.contents) {
+                  log.debug(
+                    `[${blockId}] Hiding WebContentsView due to error`,
+                    "ViewManager"
+                  );
+                  if (this.viewLayerManager) {
+                    // Remove from layer manager to hide it
+                    this.viewLayerManager.removeView(
+                      `browser-block-${blockId}`
+                    );
+                    log.debug(
+                      `[${blockId}] Removed WebContentsView from ViewLayerManager`,
+                      "ViewManager"
+                    );
+                  } else {
+                    // Fallback: remove from window directly
+                    this.baseWindow.contentView.removeChildView(view.contents);
+                    log.debug(
+                      `[${blockId}] Removed WebContentsView from baseWindow`,
+                      "ViewManager"
+                    );
+                  }
+                }
+              } catch (error) {
+                log.debug(
+                  `[${blockId}] Failed to hide WebContentsView: ${error}`,
+                  "ViewManager"
+                );
+              }
+
               this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
                 blockId,
                 success: false,
                 error: `Failed to load: ${errorDescription} (${errorCode})`,
+                errorCode,
+                errorDescription,
+                url: validatedURL,
               });
+              log.debug(
+                `[${blockId}] Sent error notification to renderer: ${errorDescription} (${errorCode})`,
+                "ViewManager"
+              );
             } else {
               log.debug(
                 `Resource failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
@@ -426,6 +580,8 @@ export class ViewManager {
           `Loading URL for blockId: ${blockId}: ${view.url}`,
           "ViewManager"
         );
+        // Transition to LOADING state
+        this.transitionState(blockId, ViewState.LOADING, "loading URL");
         newView.webContents.loadURL(view.url);
 
         // Ensure the renderer has the initial navigation state
@@ -434,12 +590,41 @@ export class ViewManager {
         // Store the view
         this.views[blockId].contents = newView;
 
+        // Only clear errors if we're creating a completely new view (not retrying after error)
+        // If there's an existing error, don't clear it - let the error handler manage it
+        const hadError = this.blockErrors.has(blockId);
+        if (!hadError) {
+          // Clear any previous errors only if we're not in an error state
+          this.blockErrors.delete(blockId);
+          log.debug(
+            `[${blockId}] Cleared previous errors, creating new view`,
+            "ViewManager"
+          );
+        } else {
+          log.debug(
+            `[${blockId}] Keeping error state, not clearing on view creation`,
+            "ViewManager"
+          );
+        }
+
         // Send immediate notification that view was created (not yet loaded)
-        this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-          blockId,
-          success: true,
-          status: "created",
-        });
+        // But don't send if we're in an error state - let the error handler send the error message
+        if (!hadError) {
+          this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+            blockId,
+            success: true,
+            status: "created",
+          });
+          log.debug(
+            `[${blockId}] Sent 'created' status notification to renderer`,
+            "ViewManager"
+          );
+        } else {
+          log.debug(
+            `[${blockId}] Skipping 'created' notification - error state exists`,
+            "ViewManager"
+          );
+        }
 
         // Ensure overlays stay on top after adding a new browser block
         if (this.viewLayerManager) {
@@ -468,12 +653,78 @@ export class ViewManager {
         `WebContentsView already exists for blockId: ${blockId}`,
         "ViewManager"
       );
-      // If view already exists, send success notification
-      this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-        blockId,
-        success: true,
-        status: "existing",
-      });
+
+      // Check if the view was removed due to an error and needs to be re-added
+      const needsReAdd = this.blockErrors.has(blockId);
+      const currentState = this.getViewState(blockId);
+      if (needsReAdd && allowsRetry(currentState)) {
+        log.debug(
+          `[${blockId}] Re-adding WebContentsView after error (retry)`,
+          "ViewManager"
+        );
+        try {
+          // Transition to LOADING state for retry
+          this.transitionState(
+            blockId,
+            ViewState.LOADING,
+            "retrying after error"
+          );
+          // Clear the error so we can retry
+          this.blockErrors.delete(blockId);
+
+          // Re-add the view to the hierarchy
+          if (this.viewLayerManager) {
+            this.viewLayerManager.addView(
+              `browser-block-${blockId}`,
+              view.contents,
+              ViewLayer.BROWSER_BLOCKS
+            );
+            log.debug(
+              `[${blockId}] Re-added WebContentsView via ViewLayerManager`,
+              "ViewManager"
+            );
+          } else {
+            this.baseWindow.contentView.addChildView(view.contents);
+            log.debug(
+              `[${blockId}] Re-added WebContentsView to baseWindow`,
+              "ViewManager"
+            );
+          }
+
+          // Reload the URL
+          if (view.url) {
+            log.debug(
+              `[${blockId}] Reloading URL after retry: ${view.url}`,
+              "ViewManager"
+            );
+            view.contents.webContents.loadURL(view.url);
+          }
+        } catch (error) {
+          log.debug(
+            `[${blockId}] Failed to re-add WebContentsView: ${error}`,
+            "ViewManager"
+          );
+        }
+      }
+
+      // If view already exists, only send success notification if we're not in an error state
+      // This prevents bounds updates from clearing error states
+      if (!this.blockErrors.has(blockId)) {
+        this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+          blockId,
+          success: true,
+          status: needsReAdd ? "created" : "existing",
+        });
+        log.debug(
+          `[${blockId}] Sent 'existing' status notification to renderer`,
+          "ViewManager"
+        );
+      } else {
+        log.debug(
+          `[${blockId}] Skipping 'existing' notification - error state exists`,
+          "ViewManager"
+        );
+      }
     }
   }
 
@@ -613,10 +864,7 @@ export class ViewManager {
       }
 
       if (webContents.isDevToolsOpened()) {
-        log.debug(
-          `Closing DevTools for blockId: ${blockId}`,
-          "ViewManager"
-        );
+        log.debug(`Closing DevTools for blockId: ${blockId}`, "ViewManager");
         webContents.closeDevTools();
         return { success: true, isOpen: false };
       }
@@ -779,6 +1027,10 @@ export class ViewManager {
         view.contents.webContents.close();
         // Remove the view from our state
         delete this.views[blockId];
+        // Clean up error tracking
+        this.blockErrors.delete(blockId);
+        // Transition to REMOVED state
+        this.transitionState(blockId, ViewState.REMOVED, "view removed");
         log.debug(
           `Successfully removed WebContentsView for blockId: ${blockId}`,
           "ViewManager"
@@ -792,6 +1044,8 @@ export class ViewManager {
     } else {
       // If there's no contents but we have the blockId in our state, clean it up
       delete this.views[blockId];
+      // Clean up error tracking
+      this.blockErrors.delete(blockId);
       log.debug(
         `Removed view state for blockId: ${blockId} (no WebContentsView)`,
         "ViewManager"

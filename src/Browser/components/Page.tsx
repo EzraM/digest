@@ -8,8 +8,6 @@ export function Page({ blockId, url }: PageProps) {
   const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
     useBrowserViewUpdater(blockId);
   const {
-    isInitialized,
-    initError,
     initStatus,
     retryInitialization,
     getInitAttemptRef,
@@ -22,14 +20,13 @@ export function Page({ blockId, url }: PageProps) {
       if (
         bounds.width > 0 &&
         bounds.height > 0 &&
-        !isInitialized &&
-        !initStatus
+        (initStatus.state === "idle" || initStatus.state === "initializing")
       ) {
         initAttemptRef.current += 1;
       }
       handleBoundsChangeUpdater(bounds);
     },
-    [handleBoundsChangeUpdater, getInitAttemptRef, isInitialized, initStatus]
+    [handleBoundsChangeUpdater, getInitAttemptRef, initStatus]
   );
 
   useEffect(() => {
@@ -68,8 +65,6 @@ export function Page({ blockId, url }: PageProps) {
         key={blockId}
         blockId={blockId}
         onBoundsChange={handleBoundsChange}
-        isInitialized={isInitialized}
-        initError={initError}
         initStatus={initStatus}
         onRetry={handleRetry}
       />
