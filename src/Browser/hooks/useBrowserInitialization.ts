@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { BrowserInitError } from "../types";
+import { BrowserInitStatus } from "../types";
 import { buildBrowserInitError } from "../utils/errorMessages";
 
 /**
@@ -21,9 +21,9 @@ type BrowserInitializedEvent = {
 };
 
 export const useBrowserInitialization = (blockId: string) => {
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [initError, setInitError] = useState<BrowserInitError | null>(null);
-  const [initStatus, setInitStatus] = useState<string | null>(null);
+  const [initStatus, setInitStatus] = useState<BrowserInitStatus>({
+    state: "idle",
+  });
   const initAttemptRef = useRef(0);
 
   // Listen for initialization status updates from the main process
@@ -36,25 +36,43 @@ export const useBrowserInitialization = (blockId: string) => {
         if (data.blockId === blockId) {
           console.log(
             `[useBrowserInitialization] Received status for ${blockId}:`,
-            data
+            JSON.stringify(data, null, 2)
           );
-        setInitStatus(data.status || null);
 
-        if (data.success) {
-          if (data.status === "loaded" || !data.status) {
-            setIsInitialized(true);
-            setInitError(null);
+          if (data.success) {
+            if (data.status === "loaded" || !data.status) {
+              console.log(
+                `[useBrowserInitialization] Setting initialized=true for ${blockId}`
+              );
+              setInitStatus({ state: "initialized" });
+            } else {
+              console.log(
+                `[useBrowserInitialization] Success but status=${data.status}, setting initializing`
+              );
+              setInitStatus({
+                state: "initializing",
+                detail: data.status,
+              });
+            }
+          } else {
+            console.log(
+              `[useBrowserInitialization] Error received for ${blockId}:`,
+              data.error,
+              `code=${data.errorCode}, description=${data.errorDescription}`
+            );
+            const errorDetails = buildBrowserInitError({
+              code: data.errorCode,
+              description: data.errorDescription,
+              url: data.url,
+              rawMessage: data.error || null,
+            });
+            console.log(
+              `[useBrowserInitialization] Built error details for ${blockId}:`,
+              errorDetails
+            );
+            setInitStatus({ state: "error", error: errorDetails });
           }
-        } else {
-          const errorDetails = buildBrowserInitError({
-            code: data.errorCode,
-            description: data.errorDescription,
-            url: data.url,
-            rawMessage: data.error || null,
-          });
-          setInitError(errorDetails);
         }
-      }
       }
     );
 
@@ -68,31 +86,43 @@ export const useBrowserInitialization = (blockId: string) => {
 
   // Handle initialization timeouts
   useEffect(() => {
-    if (initAttemptRef.current > 0 && !isInitialized && !initError) {
+    if (
+      initAttemptRef.current > 0 &&
+      (initStatus.state === "idle" || initStatus.state === "initializing")
+    ) {
       const initTimeout = setTimeout(() => {
-        if (!isInitialized && !initError) {
-          console.warn(
-            `[useBrowserInitialization] Timeout for blockId: ${blockId}`
-          );
-          setInitError(
-            buildBrowserInitError({
-              rawMessage: "Initialization timed out. Please try again.",
-            })
-          );
-        }
+        // Check current state - if still initializing, set error
+        // Note: This uses the state from when timeout was set, but since the effect
+        // clears/recreates the timeout when state changes, this should be safe
+        setInitStatus((current) => {
+          if (current.state === "idle" || current.state === "initializing") {
+            console.warn(
+              `[useBrowserInitialization] Timeout for blockId: ${blockId}`
+            );
+            return {
+              state: "error",
+              error: buildBrowserInitError({
+                code: -118, // ERR_TIMED_OUT - use a timeout error code for better categorization
+                description: "ERR_TIMED_OUT",
+                url: "browser-initialization", // Placeholder for initialization timeout
+                rawMessage:
+                  "The browser view took too long to initialize (10 seconds). This may indicate a network issue or the page is slow to load.",
+              }),
+            };
+          }
+          return current; // State already changed, don't override
+        });
       }, 10000); // 10-second timeout
 
       return () => clearTimeout(initTimeout);
     }
-  }, [blockId, isInitialized, initError, initAttemptRef.current]);
+  }, [blockId, initStatus.state, initAttemptRef.current]);
 
   const retryInitialization = useCallback(() => {
     console.log(
       `[useBrowserInitialization] Retrying initialization for blockId: ${blockId}`
     );
-    setIsInitialized(false);
-    setInitError(null);
-    setInitStatus(null);
+    setInitStatus({ state: "idle" });
     initAttemptRef.current = 0; // Resetting allows re-triggering
     // The parent component will be responsible for re-sending the update that triggers initialization.
   }, [blockId]);
@@ -101,8 +131,6 @@ export const useBrowserInitialization = (blockId: string) => {
   const getInitAttemptRef = () => initAttemptRef;
 
   return {
-    isInitialized,
-    initError,
     initStatus,
     retryInitialization,
     getInitAttemptRef,

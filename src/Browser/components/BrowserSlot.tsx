@@ -5,8 +5,6 @@ import { BrowserSlotProps } from "../types";
 export function BrowserSlot({
   blockId,
   onBoundsChange,
-  isInitialized,
-  initError,
   initStatus,
   onRetry,
 }: BrowserSlotProps) {
@@ -53,7 +51,7 @@ export function BrowserSlot({
         position: "relative",
       }}
     >
-      {!isInitialized && (
+      {initStatus.state !== "initialized" && (
         <div
           style={{
             position: "absolute",
@@ -67,10 +65,13 @@ export function BrowserSlot({
             backgroundColor: "rgba(255, 255, 255, 0.95)",
             borderRadius: "12px",
             boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
-            border: initError ? "1px solid #ffa8a8" : "1px solid #e0e0e0",
+            border:
+              initStatus.state === "error"
+                ? "1px solid #ffa8a8"
+                : "1px solid #e0e0e0",
           }}
         >
-          {initError ? (
+          {initStatus.state === "error" ? (
             <>
               <div
                 style={{
@@ -79,20 +80,22 @@ export function BrowserSlot({
                   marginBottom: "8px",
                 }}
               >
-                {initError.friendlyTitle}
+                {initStatus.error.friendlyTitle}
               </div>
-              {initError.friendlySubtitle && (
+              {initStatus.error.friendlySubtitle && (
                 <div
                   style={{
                     fontSize: "0.9rem",
                     color: "#555",
-                    marginBottom: initError.technicalMessage ? "12px" : "16px",
+                    marginBottom: initStatus.error.technicalMessage
+                      ? "12px"
+                      : "16px",
                   }}
                 >
-                  {initError.friendlySubtitle}
+                  {initStatus.error.friendlySubtitle}
                 </div>
               )}
-              {initError.technicalMessage && (
+              {initStatus.error.technicalMessage && (
                 <details
                   style={{
                     textAlign: "left",
@@ -115,7 +118,7 @@ export function BrowserSlot({
                       fontFamily: "monospace",
                     }}
                   >
-                    {initError.technicalMessage}
+                    {initStatus.error.technicalMessage}
                   </pre>
                 </details>
               )}
@@ -139,11 +142,14 @@ export function BrowserSlot({
           ) : (
             <>
               <div style={{ fontWeight: 600, marginBottom: "6px" }}>
-                {initStatus === "created" ? "Loading page…" : "Initializing browser…"}
+                {initStatus.state === "initializing" &&
+                initStatus.detail === "created"
+                  ? "Loading page…"
+                  : "Initializing browser…"}
               </div>
               <div style={{ fontSize: "0.85rem", color: "#555" }}>
-                {initStatus
-                  ? `Status: ${initStatus}`
+                {initStatus.state === "initializing" && initStatus.detail
+                  ? `Status: ${initStatus.detail}`
                   : "Hang tight, we're getting things ready."}
               </div>
             </>

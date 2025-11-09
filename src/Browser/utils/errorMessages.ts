@@ -1,4 +1,5 @@
 import { BrowserInitError } from "../types";
+import { categorizeBrowserError } from "../../services/BrowserErrorHandler";
 
 type KnownErrorEntry = {
   friendlyTitle: string;
@@ -79,6 +80,36 @@ export function buildBrowserInitError(options: {
   url?: string;
   rawMessage?: string | null;
 }): BrowserInitError {
+  // If we have an error code, try using the comprehensive BrowserErrorHandler first
+  if (typeof options.code === "number" && options.description && options.url) {
+    try {
+      const categorized = categorizeBrowserError(
+        options.code,
+        options.description,
+        options.url
+      );
+      
+      // Use the categorized error for better user messages
+      // If rawMessage is provided, prepend it to technical details for additional context
+      const technicalMessage = options.rawMessage
+        ? `${options.rawMessage}\n\n${categorized.technicalDetails}`
+        : categorized.technicalDetails;
+      
+      return {
+        friendlyTitle: categorized.userMessage,
+        friendlySubtitle: undefined, // BrowserErrorHandler provides single userMessage
+        technicalMessage,
+        code: options.code,
+        description: options.description,
+        url: options.url,
+      };
+    } catch (error) {
+      // Fall through to legacy handling if categorization fails
+      console.warn("Failed to categorize browser error:", error);
+    }
+  }
+
+  // Fallback to legacy string-based error lookup
   const normalizedDescription = normalizeDescription(options.description);
 
   const friendlyEntry =
