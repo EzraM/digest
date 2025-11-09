@@ -258,40 +258,6 @@ export class ViewManager {
             `[${blockId}] DOM ready for ${newView.webContents.getURL()}`,
             "ViewManager"
           );
-
-          // Inject script to monitor for CSS loading issues
-          newView.webContents
-            .executeJavaScript(
-              `
-            console.log('[Digest Debug] DOM ready, checking for style issues...');
-            
-            // Count stylesheets
-            const stylesheets = document.querySelectorAll('link[rel="stylesheet"], style');
-            console.log(\`[Digest Debug] Found \${stylesheets.length} stylesheets\`);
-            
-            // Check for failed CSS loads
-            document.querySelectorAll('link[rel="stylesheet"]').forEach((link, index) => {
-              link.addEventListener('error', () => {
-                console.error(\`[Digest Debug] Failed to load stylesheet \${index}: \${link.href}\`);
-              });
-              link.addEventListener('load', () => {
-                console.log(\`[Digest Debug] Successfully loaded stylesheet \${index}: \${link.href}\`);
-              });
-            });
-            
-            // Log current computed styles on body
-            const bodyStyles = window.getComputedStyle(document.body);
-            console.log(\`[Digest Debug] Body background: \${bodyStyles.background || 'none'}\`);
-            console.log(\`[Digest Debug] Body color: \${bodyStyles.color || 'inherit'}\`);
-            console.log(\`[Digest Debug] Body font: \${bodyStyles.font || 'inherit'}\`);
-          `
-            )
-            .catch((error) => {
-              log.debug(
-                `[${blockId}] Failed to inject debugging script: ${error}`,
-                "ViewManager"
-              );
-            });
         });
 
         newView.webContents.on("did-finish-load", () => {
