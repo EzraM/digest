@@ -43,6 +43,7 @@ import {
   CustomPartialBlock,
 } from "./types/schema";
 import { useDocumentSync } from "./hooks/useDocumentSync";
+import { useBrowserScrollForward } from "./hooks/useBrowserScrollForward";
 import { DebugSidebar } from "./components/DebugSidebar";
 import { DebugToggle } from "./components/DebugToggle";
 import { AppShell, MantineProvider } from "@mantine/core";
@@ -118,6 +119,9 @@ function App() {
 
     return unsubscribe;
   }, []);
+
+  // Set up scroll forwarding from web views
+  useBrowserScrollForward();
 
   // Set up IPC listener for block insertion from slash command manager
   useEffect(() => {
@@ -249,7 +253,7 @@ function App() {
       if (!slashCommandActiveRef.current) {
         log.debug(
           "Slash menu triggered, starting custom slash command",
-          "renderer",
+          "renderer"
         );
         slashCommandActiveRef.current = true;
         window.electronAPI?.startSlashCommand();
@@ -258,7 +262,7 @@ function App() {
       const filtered = filterSlashCommandOptions(query, slashCommandOptions);
       return filtered;
     },
-    [editor],
+    [editor]
   );
 
   const SlashCommandSyncMenu = ({
@@ -271,8 +275,8 @@ function App() {
         typeof selectedIndex === "number"
           ? selectedIndex
           : items.length > 0
-            ? 0
-            : null;
+          ? 0
+          : null;
 
       window.electronAPI?.updateSlashCommandResults({
         query: slashQueryRef.current,
@@ -296,7 +300,7 @@ function App() {
     (item: SlashCommandOption) => {
       window.electronAPI?.selectSlashCommandBlock(item.key);
     },
-    [],
+    []
   );
 
   return (

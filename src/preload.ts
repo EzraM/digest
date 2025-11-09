@@ -108,6 +108,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },
+  onBrowserScrollForward: (
+    callback: (data: { blockId: string; direction: "up" | "down"; deltaY: number }) => void
+  ) => {
+    const channel = "browser:scroll-forward";
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
   onNewBrowserBlock: (callback: (data: { url: string }) => void) => {
     const subscription = (_: any, data: any) => {
       // Handle both string and object formats

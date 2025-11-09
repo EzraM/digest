@@ -13,6 +13,7 @@ import {
   allowsBoundsUpdate,
   allowsRetry,
 } from "./ViewState";
+import { injectScrollForwardingScript } from "./ScrollForwardingService";
 
 const EVENTS = {
   BROWSER: {
@@ -210,7 +211,10 @@ export class ViewManager {
 
         // Set up permissive CSP for browser blocks to allow external sites to load their resources
         newView.webContents.session.webRequest.onHeadersReceived(
-          (details: any, callback: any) => {
+          (
+            details: Electron.OnHeadersReceivedListenerDetails,
+            callback: (response: Electron.HeadersReceivedResponse) => void
+          ) => {
             callback({
               responseHeaders: {
                 ...details.responseHeaders,
@@ -302,6 +306,12 @@ export class ViewManager {
           log.debug(
             `[${blockId}] Sent success notification to renderer`,
             "ViewManager"
+          );
+
+          injectScrollForwardingScript(
+            newView,
+            blockId,
+            this.rendererWebContents
           );
         });
 

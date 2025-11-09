@@ -22,7 +22,7 @@ interface ElectronAPI {
   startSlashCommand: () => void;
   cancelSlashCommand: () => void;
   updateSlashCommandResults: (
-    payload: import("./slashCommand").SlashCommandResultsPayload,
+    payload: import("./slashCommand").SlashCommandResultsPayload
   ) => void;
   selectSlashCommandBlock: (blockKey: string) => void;
   onSelectBlockType: (callback: (blockKey: string) => void) => () => void;
@@ -39,7 +39,18 @@ interface ElectronAPI {
     }) => void
   ) => () => void;
   onBrowserNavigation: (
-    callback: (data: { blockId: string; url: string; canGoBack?: boolean }) => void
+    callback: (data: {
+      blockId: string;
+      url: string;
+      canGoBack?: boolean;
+    }) => void
+  ) => () => void;
+  onBrowserScrollForward: (
+    callback: (data: {
+      blockId: string;
+      direction: "up" | "down";
+      deltaY: number;
+    }) => void
   ) => () => void;
   onNewBrowserBlock: (callback: (data: { url: string }) => void) => () => void;
   applyBlockOperations: (
