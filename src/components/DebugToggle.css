@@ -5,8 +5,9 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 2px solid #ddd;
-  background: #fff;
+  border: 2px solid var(--mantine-color-gray-4);
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-text);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -14,12 +15,12 @@
   font-size: 18px;
   z-index: 999;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px var(--mantine-color-gray-2);
 }
 
 .debug-toggle:hover {
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px var(--mantine-color-gray-3);
 }
 
 .debug-toggle:active {
@@ -27,9 +28,9 @@
 }
 
 .debug-toggle.active {
-  background: #1a1a1a;
-  border-color: #666;
-  color: #fff;
+  background: var(--mantine-color-blue-6);
+  border-color: var(--mantine-color-blue-7);
+  color: var(--mantine-color-white);
 }
 
 .debug-toggle:disabled {

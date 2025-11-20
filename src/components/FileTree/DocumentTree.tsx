@@ -40,6 +40,7 @@ type DocumentTreeProps = {
   profiles: ProfileRecord[];
   pendingEditDocumentId: string | null;
   onPendingEditConsumed: () => void;
+  onPendingDocumentNamed?: (document: DocumentRecord) => void;
 };
 
 type TreeNodeMeta = {
@@ -137,6 +138,7 @@ const useDocumentTreeEditing = ({
   pendingEditDocumentId,
   onPendingEditConsumed,
   onRenameDocument,
+  onPendingDocumentNamed,
 }: {
   tree: DocumentTreeNodeType[];
   pendingEditDocumentId: string | null;
@@ -145,41 +147,76 @@ const useDocumentTreeEditing = ({
     documentId: string,
     title: string
   ) => Promise<DocumentRecord | null>;
+  onPendingDocumentNamed?: (document: DocumentRecord) => void;
 }) => {
   const [editingDocumentId, setEditingDocumentId] = useState<string | null>(
     null
   );
   const [editingValue, setEditingValue] = useState("");
+  const [editingContext, setEditingContext] = useState<"manual" | "pending" | null>(null);
 
-  const startEditing = useCallback((document: DocumentRecord) => {
-    setEditingDocumentId(document.id);
-    setEditingValue(document.title ?? "Untitled Document");
-  }, []);
+  const startEditing = useCallback(
+    (document: DocumentRecord, context: "manual" | "pending" = "manual") => {
+      setEditingDocumentId(document.id);
+      setEditingValue(document.title ?? "Untitled Document");
+      setEditingContext(context);
+    },
+    []
+  );
+
+  const finishEditing = useCallback(
+    (document?: DocumentRecord | null) => {
+      if (
+        document &&
+        editingContext === "pending" &&
+        typeof onPendingDocumentNamed === "function"
+      ) {
+        onPendingDocumentNamed(document);
+      }
+      setEditingDocumentId(null);
+      setEditingValue("");
+      setEditingContext(null);
+    },
+    [editingContext, onPendingDocumentNamed]
+  );
 
   const cancelEditing = useCallback(() => {
-    setEditingDocumentId(null);
-    setEditingValue("");
-  }, []);
+    const document = editingDocumentId
+      ? findDocumentById(tree, editingDocumentId)
+      : null;
+    finishEditing(document);
+  }, [editingDocumentId, tree, finishEditing]);
 
   const handleRenameSubmit = useCallback(async () => {
     if (!editingDocumentId) {
       return;
     }
 
-    const trimmed = editingValue.trim() || "Untitled Document";
     const current = findDocumentById(tree, editingDocumentId);
-    const currentTitle = current?.title ?? "Untitled Document";
+    if (!current) {
+      finishEditing(null);
+      return;
+    }
+
+    const trimmed = editingValue.trim() || "Untitled Document";
+    const currentTitle = current.title ?? "Untitled Document";
 
     if (trimmed === currentTitle) {
-      cancelEditing();
+      finishEditing(current);
       return;
     }
 
     const result = await onRenameDocument(editingDocumentId, trimmed);
     if (result) {
-      cancelEditing();
+      finishEditing(result);
     }
-  }, [editingDocumentId, editingValue, tree, onRenameDocument, cancelEditing]);
+  }, [
+    editingDocumentId,
+    editingValue,
+    tree,
+    onRenameDocument,
+    finishEditing,
+  ]);
 
   useEffect(() => {
     if (!pendingEditDocumentId) {
@@ -188,7 +225,7 @@ const useDocumentTreeEditing = ({
 
     const document = findDocumentById(tree, pendingEditDocumentId);
     if (document) {
-      startEditing(document);
+      startEditing(document, "pending");
       onPendingEditConsumed();
     }
   }, [pendingEditDocumentId, tree, startEditing, onPendingEditConsumed]);
@@ -278,6 +315,7 @@ export const DocumentTree = ({
   profiles,
   pendingEditDocumentId,
   onPendingEditConsumed,
+  onPendingDocumentNamed,
 }: DocumentTreeProps) => {
   const treeController = useDocumentTreeController(activeDocumentId);
   const treeData = useMemo(() => mapTreeToData(tree), [tree]);
@@ -293,6 +331,7 @@ export const DocumentTree = ({
     pendingEditDocumentId,
     onPendingEditConsumed,
     onRenameDocument,
+    onPendingDocumentNamed,
   });
   const hierarchyMeta = useMemo(() => buildHierarchyMetadata(tree), [tree]);
   const [draggingDocumentId, setDraggingDocumentId] = useState<string | null>(
