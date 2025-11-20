@@ -239,7 +239,7 @@ export class ViewManager {
                 // Remove or override restrictive CSP for browser blocks
                 "Content-Security-Policy": [
                   "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; " +
-                    "script-src * 'unsafe-inline' 'unsafe-eval'; " +
+                    "script-src * 'unsafe-inline' 'unsafe-eval' data:; " +
                     "style-src * 'unsafe-inline'; " +
                     "img-src * data: blob:; " +
                     "font-src * data:; " +
