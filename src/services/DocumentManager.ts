@@ -5,6 +5,7 @@ import { DocumentRecord, DocumentTreeNode } from "../types/documents";
 import { log } from "../utils/mainLogger";
 import { ProfileManager } from "./ProfileManager";
 import { BlockOperationService } from "./BlockOperationService";
+import { MAX_DOCUMENT_DEPTH } from "../config/documents";
 
 export interface CreateDocumentOptions {
   title?: string | null;
@@ -82,10 +83,22 @@ export class DocumentManager {
     options: CreateDocumentOptions = {}
   ): DocumentRecord {
     this.profileManager.getProfile(profileId);
+    const parentId = options.parentDocumentId ?? null;
+
+    if (parentId) {
+      const parent = this.getDocument(parentId);
+      if (parent.profileId !== profileId) {
+        throw new Error(
+          "Cannot create document under a parent in a different profile"
+        );
+      }
+      this.ensureDepthWithinLimit(parentId, 1);
+    } else {
+      this.ensureDepthWithinLimit(null, 1);
+    }
 
     const now = Date.now();
     const documentId = options.documentId ?? randomUUID();
-    const parentId = options.parentDocumentId ?? null;
     const position =
       options.position ?? this.getNextSiblingPosition(profileId, parentId);
     const resolvedTitle = title ?? "Untitled Document";
@@ -171,22 +184,77 @@ export class DocumentManager {
     position: number
   ): DocumentRecord {
     const document = this.getDocument(documentId);
-    const stmt = this.database.prepare(
+    const profileId = document.profileId;
+
+    if (newParentId === documentId) {
+      throw new Error("Cannot move a document into itself");
+    }
+
+    if (this.isDescendant(newParentId, documentId)) {
+      throw new Error("Cannot move a document into its own descendant");
+    }
+
+    if (newParentId) {
+      const parent = this.getDocument(newParentId);
+      if (parent.profileId !== profileId) {
+        throw new Error("Cannot move document to a parent in a different profile");
+      }
+    }
+
+    const subtreeHeight = this.getSubtreeHeight(documentId);
+    this.ensureDepthWithinLimit(newParentId, subtreeHeight);
+
+    const targetSiblings = this.getChildrenForParent(
+      newParentId,
+      profileId,
+      documentId
+    );
+    const clampedPosition = Math.max(
+      0,
+      Math.min(position, targetSiblings.length)
+    );
+    targetSiblings.splice(clampedPosition, 0, document);
+
+    const now = Date.now();
+    const updateStmt = this.database.prepare(
       `UPDATE documents SET parent_document_id = ?, position = ?, updated_at = ? WHERE id = ?`
     );
 
-    const now = Date.now();
-    stmt.run(newParentId, position, now, documentId);
+    const applyUpdates = () => {
+      targetSiblings.forEach((sibling, index) => {
+        const nextParentId =
+          sibling.id === documentId ? newParentId : sibling.parentDocumentId;
+        updateStmt.run(nextParentId, index, now, sibling.id);
+        const updatedRecord: DocumentRecord = {
+          ...sibling,
+          parentDocumentId: nextParentId,
+          position: index,
+          updatedAt: now,
+        };
+        this.documents.set(sibling.id, updatedRecord);
+      });
 
-    const updated: DocumentRecord = {
-      ...document,
-      parentDocumentId: newParentId,
-      position,
-      updatedAt: now,
+      if (document.parentDocumentId !== newParentId) {
+        const previousSiblings = this.getChildrenForParent(
+          document.parentDocumentId,
+          profileId,
+          documentId
+        );
+        previousSiblings.forEach((sibling, index) => {
+          updateStmt.run(sibling.parentDocumentId, index, now, sibling.id);
+          const updatedRecord: DocumentRecord = {
+            ...sibling,
+            position: index,
+            updatedAt: now,
+          };
+          this.documents.set(sibling.id, updatedRecord);
+        });
+      }
     };
 
-    this.documents.set(documentId, updated);
-    return updated;
+    this.database.transaction(applyUpdates)();
+
+    return this.getDocument(documentId);
   }
 
   moveDocumentToProfile(
@@ -299,5 +367,84 @@ export class DocumentManager {
 
     const [firstDocument] = this.listDocuments();
     this.activeDocumentId = firstDocument ? firstDocument.id : null;
+  }
+
+  private ensureDepthWithinLimit(
+    parentId: string | null,
+    subtreeHeight: number
+  ): void {
+    const baseDepth = parentId
+      ? this.getDocumentDepth(parentId) + 1
+      : 0;
+    const deepestDepth = baseDepth + subtreeHeight - 1;
+    if (deepestDepth >= MAX_DOCUMENT_DEPTH) {
+      throw new Error("Maximum document depth exceeded");
+    }
+  }
+
+  private getDocumentDepth(documentId: string): number {
+    let depth = 0;
+    let current: DocumentRecord | undefined = this.documents.get(documentId);
+    const safetyLimit = this.documents.size + 1;
+    let steps = 0;
+
+    while (current && current.parentDocumentId) {
+      depth++;
+      current = this.documents.get(current.parentDocumentId);
+      steps++;
+      if (steps > safetyLimit) {
+        throw new Error("Detected cyclic document hierarchy");
+      }
+    }
+    return depth;
+  }
+
+  private getChildrenForParent(
+    parentId: string | null,
+    profileId: string,
+    excludeId?: string
+  ): DocumentRecord[] {
+    return this.listDocuments(profileId)
+      .filter(
+        (doc) =>
+          doc.parentDocumentId === parentId && (!excludeId || doc.id !== excludeId)
+      )
+      .sort((a, b) => a.position - b.position);
+  }
+
+  private getSubtreeHeight(documentId: string): number {
+    const document = this.getDocument(documentId);
+    const children = this.getChildrenForParent(documentId, document.profileId);
+    if (children.length === 0) {
+      return 1;
+    }
+    return (
+      1 +
+      Math.max(
+        ...children.map((child) => this.getSubtreeHeight(child.id))
+      )
+    );
+  }
+
+  private isDescendant(
+    potentialDescendantId: string | null,
+    ancestorId: string
+  ): boolean {
+    let currentId = potentialDescendantId;
+    const safetyLimit = this.documents.size + 1;
+    let steps = 0;
+
+    while (currentId) {
+      if (currentId === ancestorId) {
+        return true;
+      }
+      const current = this.documents.get(currentId);
+      currentId = current?.parentDocumentId ?? null;
+      steps++;
+      if (steps > safetyLimit) {
+        throw new Error("Detected cyclic document hierarchy");
+      }
+    }
+    return false;
   }
 }

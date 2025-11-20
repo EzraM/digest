@@ -6,15 +6,14 @@ import {
   useRef,
   useState,
 } from "react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, DragEvent } from "react";
 import {
   DocumentRecord,
   DocumentTreeNode as DocumentTreeNodeType,
   ProfileRecord,
 } from "../../types/documents";
 import { DocumentTreeNode } from "./DocumentTreeNode";
-
-const MAX_DOCUMENT_DEPTH = 4;
+import { MAX_DOCUMENT_DEPTH } from "../../config/documents";
 
 type DocumentTreeProps = {
   tree: DocumentTreeNodeType[];
@@ -33,6 +32,11 @@ type DocumentTreeProps = {
     documentId: string,
     newProfileId: string
   ) => Promise<boolean>;
+  onMoveDocument: (params: {
+    documentId: string;
+    newParentId: string | null;
+    position: number;
+  }) => Promise<boolean>;
   profiles: ProfileRecord[];
   pendingEditDocumentId: string | null;
   onPendingEditConsumed: () => void;
@@ -41,6 +45,26 @@ type DocumentTreeProps = {
 type TreeNodeMeta = {
   document: DocumentRecord;
   depth: number;
+};
+
+type DropPosition = "before" | "after" | "inside";
+
+type DropTargetState = {
+  targetId: string;
+  position: DropPosition;
+};
+
+type HierarchyMetadata = {
+  byId: Map<
+    string,
+    {
+      document: DocumentRecord;
+      depth: number;
+      parentId: string | null;
+    }
+  >;
+  childrenByParent: Map<string | null, string[]>;
+  subtreeHeights: Map<string, number>;
 };
 
 const useDocumentTreeController = (activeDocumentId: string | null) => {
@@ -179,6 +203,69 @@ const useDocumentTreeEditing = ({
   };
 };
 
+const buildHierarchyMetadata = (
+  nodes: DocumentTreeNodeType[]
+): HierarchyMetadata => {
+  const byId = new Map<
+    string,
+    { document: DocumentRecord; depth: number; parentId: string | null }
+  >();
+  const childrenByParent = new Map<string | null, string[]>();
+  const subtreeHeights = new Map<string, number>();
+
+  const traverse = (
+    currentNodes: DocumentTreeNodeType[],
+    depth: number,
+    parentId: string | null
+  ): number => {
+    let maxDepth = 0;
+    currentNodes.forEach((node) => {
+      const childIds =
+        node.children?.map((child) => child.document.id) ?? [];
+      byId.set(node.document.id, {
+        document: node.document,
+        depth,
+        parentId,
+      });
+      childrenByParent.set(node.document.id, childIds);
+      const childDepth =
+        node.children && node.children.length
+          ? traverse(node.children, depth + 1, node.document.id)
+          : 0;
+      const nodeDepth = childDepth + 1;
+      subtreeHeights.set(node.document.id, nodeDepth);
+      if (nodeDepth > maxDepth) {
+        maxDepth = nodeDepth;
+      }
+    });
+    return maxDepth;
+  };
+
+  childrenByParent.set(
+    null,
+    nodes.map((node) => node.document.id)
+  );
+  traverse(nodes, 0, null);
+
+  return { byId, childrenByParent, subtreeHeights };
+};
+
+const determineDropPosition = (
+  element: HTMLElement,
+  clientY: number
+): DropPosition => {
+  const rect = element.getBoundingClientRect();
+  const offsetY = clientY - rect.top;
+  const threshold = Math.min(12, rect.height / 3 || 4);
+  if (offsetY < threshold) {
+    return "before";
+  }
+  if (offsetY > rect.height - threshold) {
+    return "after";
+  }
+  return "inside";
+};
+
 export const DocumentTree = ({
   tree,
   activeDocumentId,
@@ -187,6 +274,7 @@ export const DocumentTree = ({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocumentToProfile,
+  onMoveDocument,
   profiles,
   pendingEditDocumentId,
   onPendingEditConsumed,
@@ -206,6 +294,11 @@ export const DocumentTree = ({
     onPendingEditConsumed,
     onRenameDocument,
   });
+  const hierarchyMeta = useMemo(() => buildHierarchyMetadata(tree), [tree]);
+  const [draggingDocumentId, setDraggingDocumentId] = useState<string | null>(
+    null
+  );
+  const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
 
   const handleCreateChild = useCallback(
     async (document: DocumentRecord) => {
@@ -236,6 +329,188 @@ export const DocumentTree = ({
     },
     [onMoveDocumentToProfile]
   );
+
+  const isDescendant = useCallback(
+    (potentialDescendantId: string | null, ancestorId: string) => {
+      let currentId = potentialDescendantId;
+      const safetyLimit = hierarchyMeta.byId.size + 1;
+      let steps = 0;
+      while (currentId) {
+        if (currentId === ancestorId) {
+          return true;
+        }
+        const parentId =
+          hierarchyMeta.byId.get(currentId)?.parentId ?? null;
+        currentId = parentId;
+        steps += 1;
+        if (steps > safetyLimit) {
+          break;
+        }
+      }
+      return false;
+    },
+    [hierarchyMeta.byId]
+  );
+
+  const canDrop = useCallback(
+    (dragId: string, targetId: string, position: DropPosition) => {
+      if (dragId === targetId) {
+        return false;
+      }
+
+      const targetMeta = hierarchyMeta.byId.get(targetId);
+      const dragMeta = hierarchyMeta.byId.get(dragId);
+      if (!targetMeta || !dragMeta) {
+        return false;
+      }
+
+      if (isDescendant(targetId, dragId)) {
+        return false;
+      }
+
+      const newParentId =
+        position === "inside" ? targetMeta.document.id : targetMeta.parentId;
+      const parentDepth = newParentId
+        ? (hierarchyMeta.byId.get(newParentId)?.depth ?? -1)
+        : -1;
+      const newDepth =
+        position === "inside" ? targetMeta.depth + 1 : parentDepth + 1;
+
+      const subtreeHeight =
+        hierarchyMeta.subtreeHeights.get(dragId) ?? 1;
+      const deepestDepth = newDepth + subtreeHeight - 1;
+
+      if (deepestDepth >= MAX_DOCUMENT_DEPTH) {
+        return false;
+      }
+
+      return true;
+    },
+    [hierarchyMeta, isDescendant]
+  );
+
+  const computeDropParams = useCallback(
+    (dragId: string, targetId: string, position: DropPosition) => {
+      const targetMeta = hierarchyMeta.byId.get(targetId);
+      if (!targetMeta) {
+        return null;
+      }
+
+      if (position === "inside") {
+        const childIds =
+          hierarchyMeta.childrenByParent.get(targetId) ?? [];
+        const filteredChildren = childIds.filter((id) => id !== dragId);
+        return {
+          parentId: targetId,
+          index: filteredChildren.length,
+        };
+      }
+
+      const parentId = targetMeta.parentId ?? null;
+      const siblings =
+        hierarchyMeta.childrenByParent.get(parentId) ?? [];
+      const filteredSiblings = siblings.filter((id) => id !== dragId);
+      const targetIndex = filteredSiblings.indexOf(targetId);
+      if (targetIndex === -1) {
+        return null;
+      }
+      const index =
+        position === "before" ? targetIndex : targetIndex + 1;
+      return { parentId, index };
+    },
+    [hierarchyMeta]
+  );
+
+  const handleDragStart = useCallback(
+    (event: DragEvent<HTMLDivElement>, documentId: string) => {
+      event.stopPropagation();
+      setDraggingDocumentId(documentId);
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", documentId);
+      }
+      setDropTarget(null);
+    },
+    []
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setDraggingDocumentId(null);
+    setDropTarget(null);
+  }, []);
+
+  const handleDragOver = useCallback(
+    (
+      event: DragEvent<HTMLDivElement>,
+      documentId: string
+    ) => {
+      if (!draggingDocumentId) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const element = event.currentTarget as HTMLElement;
+      const position = determineDropPosition(element, event.clientY);
+      const valid = canDrop(draggingDocumentId, documentId, position);
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = valid ? "move" : "none";
+      }
+      if (valid) {
+        setDropTarget({ targetId: documentId, position });
+      } else if (dropTarget?.targetId === documentId) {
+        setDropTarget(null);
+      }
+    },
+    [draggingDocumentId, canDrop, dropTarget]
+  );
+
+  const handleDrop = useCallback(
+    async (
+      event: DragEvent<HTMLDivElement>,
+      documentId: string
+    ) => {
+      if (!draggingDocumentId) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const element = event.currentTarget as HTMLElement;
+      const position = determineDropPosition(element, event.clientY);
+      if (!canDrop(draggingDocumentId, documentId, position)) {
+        return;
+      }
+
+      const dropParams = computeDropParams(
+        draggingDocumentId,
+        documentId,
+        position
+      );
+
+      if (!dropParams) {
+        return;
+      }
+
+      const success = await onMoveDocument({
+        documentId: draggingDocumentId,
+        newParentId: dropParams.parentId,
+        position: dropParams.index,
+      });
+
+      if (!success) {
+        console.error("Failed to move document");
+      }
+
+      setDraggingDocumentId(null);
+      setDropTarget(null);
+    },
+    [draggingDocumentId, canDrop, computeDropParams, onMoveDocument]
+  );
+
+  const handleDragLeave = useCallback((documentId: string) => {
+    setDropTarget((current) =>
+      current?.targetId === documentId ? null : current
+    );
+  }, []);
 
   if (!tree.length) {
     return (
@@ -278,6 +553,8 @@ export const DocumentTree = ({
             onSelectDocument(document.id);
           },
         };
+        const dropPosition =
+          dropTarget?.targetId === document.id ? dropTarget.position : null;
 
         return (
           <DocumentTreeNode
@@ -297,6 +574,14 @@ export const DocumentTree = ({
             }
             canCreateChild={canCreateChild}
             profiles={profiles}
+            draggable={!isEditing}
+            isDragging={draggingDocumentId === document.id}
+            dropPosition={dropPosition}
+            onDragStart={(event) => handleDragStart(event, document.id)}
+            onDragEnd={handleDragEnd}
+            onDragOver={(event) => handleDragOver(event, document.id)}
+            onDrop={(event) => handleDrop(event, document.id)}
+            onDragLeave={() => handleDragLeave(document.id)}
             elementProps={enhancedElementProps}
           />
         );

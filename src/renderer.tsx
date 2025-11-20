@@ -653,6 +653,35 @@ function App() {
     []
   );
 
+  const handleMoveDocumentWithinTree = React.useCallback(
+    async ({
+      documentId,
+      newParentId,
+      position,
+    }: {
+      documentId: string;
+      newParentId: string | null;
+      position: number;
+    }) => {
+      if (!window.electronAPI?.documents) {
+        return false;
+      }
+
+      try {
+        await window.electronAPI.documents.move({
+          documentId,
+          newParentId,
+          position,
+        });
+        return true;
+      } catch (error) {
+        log.debug(`Failed to move document within tree: ${error}`, "renderer");
+        return false;
+      }
+    },
+    []
+  );
+
   return (
     <MantineProvider defaultColorScheme="auto">
       <AppShell
@@ -680,6 +709,7 @@ function App() {
             onRenameDocument={handleRenameDocument}
             onDeleteDocument={handleDeleteDocument}
             onMoveDocumentToProfile={handleMoveDocumentToProfile}
+            onMoveDocument={handleMoveDocumentWithinTree}
             pendingEditDocumentId={pendingRenameDocumentId}
             onPendingEditConsumed={handlePendingRenameConsumed}
           />

@@ -28,6 +28,11 @@ type FileTreeProps = {
     documentId: string,
     newProfileId: string
   ) => Promise<boolean>;
+  onMoveDocument: (params: {
+    documentId: string;
+    newParentId: string | null;
+    position: number;
+  }) => Promise<boolean>;
   pendingEditDocumentId: string | null;
   onPendingEditConsumed: () => void;
 };
@@ -44,6 +49,7 @@ export const FileTree = ({
   onRenameDocument,
   onDeleteDocument,
   onMoveDocumentToProfile,
+  onMoveDocument,
   pendingEditDocumentId,
   onPendingEditConsumed,
 }: FileTreeProps) => {
@@ -88,11 +94,12 @@ export const FileTree = ({
             onSelectDocument={onSelectDocument}
             onCreateDocument={onCreateDocument}
             onRenameDocument={onRenameDocument}
-            onDeleteDocument={onDeleteDocument}
-            onMoveDocumentToProfile={onMoveDocumentToProfile}
-            pendingEditDocumentId={pendingEditDocumentId}
-            onPendingEditConsumed={onPendingEditConsumed}
-          />
+          onDeleteDocument={onDeleteDocument}
+          onMoveDocumentToProfile={onMoveDocumentToProfile}
+          onMoveDocument={onMoveDocument}
+          pendingEditDocumentId={pendingEditDocumentId}
+          onPendingEditConsumed={onPendingEditConsumed}
+        />
         </ScrollArea>
       )}
     </Stack>
