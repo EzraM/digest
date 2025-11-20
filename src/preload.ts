@@ -50,14 +50,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updateSlashCommandResults: (payload: SlashCommandResultsPayload) => {
     log.debug(
       `Updating slash command results (items: ${payload.items.length}, selected: ${payload.selectedIndex})`,
-      "preload",
+      "preload"
     );
     ipcRenderer.send("slash-command:update-results", payload);
   },
   selectSlashCommandBlock: (blockKey: string) => {
     log.debug(
       `Selecting slash command block from renderer: ${blockKey}`,
-      "preload",
+      "preload"
     );
     ipcRenderer.send("block-menu:select", blockKey);
   },
@@ -101,7 +101,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener(channel, handler);
   },
   onBrowserNavigation: (
-    callback: (data: { blockId: string; url: string; canGoBack?: boolean }) => void
+    callback: (data: {
+      blockId: string;
+      url: string;
+      canGoBack?: boolean;
+    }) => void
   ) => {
     const channel = EVENTS.BROWSER.NAVIGATION;
     const handler = (_: any, data: any) => callback(data);
@@ -109,7 +113,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener(channel, handler);
   },
   onBrowserScrollForward: (
-    callback: (data: { blockId: string; direction: "up" | "down"; deltaY: number }) => void
+    callback: (data: {
+      blockId: string;
+      direction: "up" | "down";
+      deltaY: number;
+    }) => void
   ) => {
     const channel = "browser:scroll-forward";
     const handler = (_: any, data: any) => callback(data);
@@ -194,7 +202,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     getEvents: (filter?: any) => ipcRenderer.invoke("debug:get-events", filter),
     getSessionEvents: () => ipcRenderer.invoke("debug:get-session-events"),
     clearEvents: () => ipcRenderer.invoke("debug:clear-events"),
-    
+
     onModeChanged: (callback: (enabled: boolean) => void) => {
       const subscription = (_: any, enabled: boolean) => {
         log.debug(`Debug mode changed: ${enabled}`, "preload");

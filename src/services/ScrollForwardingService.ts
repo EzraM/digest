@@ -20,8 +20,6 @@ export function injectScrollForwardingScript(
       let isAtTop = false;
       let isAtBottom = false;
       let lastWheelDelta = 0;
-      let wheelTimeout = null;
-      let scrollCheckTimeout = null;
 
       function checkScrollPosition() {
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -40,41 +38,32 @@ export function injectScrollForwardingScript(
         // Store wheel delta for direction detection
         lastWheelDelta = event.deltaY;
 
-        // Clear any pending timeout
-        if (wheelTimeout) {
-          clearTimeout(wheelTimeout);
-        }
-
-        // Check scroll position immediately and after a short delay
+        // Check scroll position immediately so we know if we've hit the boundary
         checkScrollPosition();
         
-        wheelTimeout = setTimeout(() => {
-          checkScrollPosition();
-          
-          // If at top and scrolling up, forward scroll
-          if (isAtTop && lastWheelDelta < 0) {
-            // Send message via console that main process will capture
-            // Pass the actual deltaY so the renderer can use it for natural scrolling
-            console.log('__SCROLL_FORWARD__' + JSON.stringify({
-              type: 'scroll-forward',
-              direction: 'up',
-              blockId: '${blockId}',
-              deltaY: lastWheelDelta
-            }));
-          }
-          
-          // If at bottom and scrolling down, forward scroll
-          if (isAtBottom && lastWheelDelta > 0) {
-            // Send message via console that main process will capture
-            // Pass the actual deltaY so the renderer can use it for natural scrolling
-            console.log('__SCROLL_FORWARD__' + JSON.stringify({
-              type: 'scroll-forward',
-              direction: 'down',
-              blockId: '${blockId}',
-              deltaY: lastWheelDelta
-            }));
-          }
-        }, 100);
+        // If at top and scrolling up, forward scroll immediately
+        if (isAtTop && lastWheelDelta < 0) {
+          // Send message via console that main process will capture
+          // Pass the actual deltaY so the renderer can use it for natural scrolling
+          console.log('__SCROLL_FORWARD__' + JSON.stringify({
+            type: 'scroll-forward',
+            direction: 'up',
+            blockId: '${blockId}',
+            deltaY: lastWheelDelta
+          }));
+        }
+        
+        // If at bottom and scrolling down, forward scroll immediately
+        if (isAtBottom && lastWheelDelta > 0) {
+          // Send message via console that main process will capture
+          // Pass the actual deltaY so the renderer can use it for natural scrolling
+          console.log('__SCROLL_FORWARD__' + JSON.stringify({
+            type: 'scroll-forward',
+            direction: 'down',
+            blockId: '${blockId}',
+            deltaY: lastWheelDelta
+          }));
+        }
       }
 
       // Initial check
@@ -82,10 +71,7 @@ export function injectScrollForwardingScript(
 
       // Listen for scroll events to update position
       window.addEventListener('scroll', () => {
-        if (scrollCheckTimeout) {
-          clearTimeout(scrollCheckTimeout);
-        }
-        scrollCheckTimeout = setTimeout(checkScrollPosition, 50);
+        checkScrollPosition();
       }, { passive: true });
       
       // Listen for wheel events
@@ -109,11 +95,6 @@ export function injectScrollForwardingScript(
         );
       });
 
-    // Listen for console messages from the injected script
-    // Use a throttling mechanism to prevent too many events
-    let lastScrollForwardTime = 0;
-    const SCROLL_THROTTLE_MS = 50; // Minimum time between scroll forward events
-
     view.webContents.on("console-message", (event, level, message) => {
       try {
         // Check if message is from our scroll forwarding script
@@ -121,13 +102,6 @@ export function injectScrollForwardingScript(
           typeof message === "string" &&
           message.startsWith("__SCROLL_FORWARD__")
         ) {
-          const now = Date.now();
-          // Throttle scroll forward events
-          if (now - lastScrollForwardTime < SCROLL_THROTTLE_MS) {
-            return;
-          }
-          lastScrollForwardTime = now;
-
           const jsonStr = message.replace("__SCROLL_FORWARD__", "");
           const parsed = JSON.parse(jsonStr);
           if (parsed.type === "scroll-forward" && parsed.blockId === blockId) {
@@ -154,4 +128,3 @@ export function injectScrollForwardingScript(
     );
   }
 }
-
