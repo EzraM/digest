@@ -292,7 +292,46 @@ const setupIpcHandlers = (
   services: ReturnType<typeof getServices>,
   rendererView: WebContentsView
 ) => {
-  const { documentManager } = services;
+  const { documentManager, profileManager } = services;
+
+  const sendToRenderer = (channel: string, payload: any) => {
+    if (
+      rendererView.webContents.isDestroyed() ||
+      rendererView.webContents === null
+    ) {
+      return;
+    }
+    rendererView.webContents.send(channel, payload);
+  };
+
+  const broadcastDocumentTree = (profileId: string | null) => {
+    if (!profileId) return;
+    const tree = documentManager.getDocumentTree(profileId);
+    sendToRenderer("document-tree:updated", { profileId, tree });
+  };
+
+  const broadcastProfiles = () => {
+    const profiles = profileManager.listProfiles();
+    sendToRenderer("profiles:updated", { profiles });
+  };
+
+  const broadcastActiveDocument = () => {
+    const activeDocument = documentManager.activeDocument;
+    sendToRenderer("document:switched", { document: activeDocument });
+  };
+
+  const loadDocumentIntoRenderer = async (
+    documentId: string,
+    { seedIfEmpty = false }: { seedIfEmpty?: boolean } = {}
+  ) => {
+    const blockService = documentManager.getBlockService(documentId);
+    blockService.setRendererWebContents(rendererView);
+
+    const blocks = await blockService.loadDocument();
+    if (seedIfEmpty && blocks.length === 0) {
+      await blockService.seedInitialContent(welcomeContent);
+    }
+  };
   // Handle renderer ready signal - load/seed document only after renderer is ready
   ipcMain.on("renderer-ready", async () => {
     log.debug("Renderer ready signal received - loading document", "main");
@@ -305,27 +344,16 @@ const setupIpcHandlers = (
       return;
     }
 
-    const blockService = documentManager.getBlockService(activeDocument.id);
-    blockService.setRendererWebContents(rendererView);
-
     try {
-      const blocks = await blockService.loadDocument();
-      log.debug(`Loaded ${blocks.length} blocks from persistence`, "main");
-
-      // If no blocks exist, seed with welcome content
-      if (blocks.length === 0) {
-        log.debug("No blocks found, seeding with welcome content", "main");
-        await blockService.seedInitialContent(welcomeContent);
-        log.debug(
-          "Welcome content seeded - Y.js will sync to renderer",
-          "main"
-        );
-      } else {
-        log.debug("Document loaded - Y.js will sync to renderer", "main");
-      }
+      await loadDocumentIntoRenderer(activeDocument.id, { seedIfEmpty: true });
+      log.debug("Document loaded - Y.js will sync to renderer", "main");
     } catch (error) {
       log.debug(`Error loading document: ${error}`, "main");
     }
+
+    broadcastProfiles();
+    broadcastDocumentTree(activeDocument.profileId);
+    broadcastActiveDocument();
   });
 
   // Handle browser updates
@@ -492,6 +520,143 @@ const setupIpcHandlers = (
     );
     viewManager.handleBlockViewUpdate(data);
   });
+
+  ipcMain.handle("profiles:list", () => {
+    return profileManager.listProfiles();
+  });
+
+  ipcMain.handle(
+    "profiles:create",
+    (
+      _event,
+      payload: { name: string; icon?: string | null; color?: string | null }
+    ) => {
+      const profile = profileManager.createProfile(payload.name, {
+        icon: payload.icon ?? null,
+        color: payload.color ?? null,
+      });
+      broadcastProfiles();
+      broadcastDocumentTree(profile.id);
+      return profile;
+    }
+  );
+
+  ipcMain.handle("profiles:delete", (_event, profileId: string) => {
+    profileManager.deleteProfile(profileId);
+    broadcastProfiles();
+    return { success: true };
+  });
+
+  ipcMain.handle("documents:get-active", () => {
+    return documentManager.activeDocument;
+  });
+
+  ipcMain.handle(
+    "documents:get-tree",
+    (_event, profileId?: string | null) => {
+      const resolvedProfileId =
+        profileId ??
+        documentManager.activeDocument?.profileId ??
+        profileManager.listProfiles()[0]?.id ??
+        null;
+
+      if (!resolvedProfileId) return [];
+      return documentManager.getDocumentTree(resolvedProfileId);
+    }
+  );
+
+  ipcMain.handle(
+    "documents:create",
+    (
+      _event,
+      payload: {
+        profileId: string;
+        title?: string | null;
+        parentDocumentId?: string | null;
+        position?: number;
+      }
+    ) => {
+      const document = documentManager.createDocument(
+        payload.profileId,
+        payload.title,
+        {
+          parentDocumentId: payload.parentDocumentId ?? null,
+          position: payload.position,
+        }
+      );
+
+      broadcastDocumentTree(payload.profileId);
+      return document;
+    }
+  );
+
+  ipcMain.handle(
+    "documents:rename",
+    (_event, payload: { documentId: string; title: string }) => {
+      const updated = documentManager.renameDocument(
+        payload.documentId,
+        payload.title
+      );
+      broadcastDocumentTree(updated.profileId);
+      broadcastActiveDocument();
+      return updated;
+    }
+  );
+
+  ipcMain.handle(
+    "documents:delete",
+    async (_event, documentId: string) => {
+      const document = documentManager.getDocument(documentId);
+      await documentManager.deleteDocument(documentId);
+      broadcastDocumentTree(document.profileId);
+      broadcastActiveDocument();
+      return { success: true };
+    }
+  );
+
+  ipcMain.handle(
+    "documents:move",
+    (
+      _event,
+      payload: { documentId: string; newParentId: string | null; position: number }
+    ) => {
+      const updated = documentManager.moveDocument(
+        payload.documentId,
+        payload.newParentId,
+        payload.position
+      );
+      broadcastDocumentTree(updated.profileId);
+      return updated;
+    }
+  );
+
+  ipcMain.handle(
+    "documents:move-to-profile",
+    (_event, payload: { documentId: string; newProfileId: string }) => {
+      const current = documentManager.getDocument(payload.documentId);
+      const updated = documentManager.moveDocumentToProfile(
+        payload.documentId,
+        payload.newProfileId
+      );
+      broadcastDocumentTree(current.profileId);
+      broadcastDocumentTree(updated.profileId);
+      broadcastActiveDocument();
+      return updated;
+    }
+  );
+
+  ipcMain.handle(
+    "documents:switch",
+    async (_event, documentId: string) => {
+      const document = documentManager.switchDocument(documentId);
+
+      await loadDocumentIntoRenderer(documentId);
+      broadcastDocumentTree(document.profileId);
+      broadcastActiveDocument();
+
+      return document;
+    }
+  );
 };
 
 app.on("ready", async () => {

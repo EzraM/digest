@@ -236,4 +236,62 @@ contextBridge.exposeInMainWorld("electronAPI", {
       };
     },
   },
+  profiles: {
+    list: () => ipcRenderer.invoke("profiles:list"),
+    create: (payload: { name: string; icon?: string | null; color?: string | null }) =>
+      ipcRenderer.invoke("profiles:create", payload),
+    delete: (profileId: string) => ipcRenderer.invoke("profiles:delete", profileId),
+    onUpdated: (
+      callback: (event: { profiles: import("./types/documents").ProfileRecord[] }) => void
+    ) => {
+      const channel = "profiles:updated";
+      const handler = (_: unknown, data: any) => callback(data);
+      ipcRenderer.on(channel, handler);
+      return () => {
+        ipcRenderer.removeListener(channel, handler);
+      };
+    },
+  },
+  documents: {
+    getActive: () => ipcRenderer.invoke("documents:get-active"),
+    getTree: (profileId?: string | null) =>
+      ipcRenderer.invoke("documents:get-tree", profileId ?? null),
+    create: (payload: {
+      profileId: string;
+      title?: string | null;
+      parentDocumentId?: string | null;
+      position?: number;
+    }) => ipcRenderer.invoke("documents:create", payload),
+    rename: (payload: { documentId: string; title: string }) =>
+      ipcRenderer.invoke("documents:rename", payload),
+    delete: (documentId: string) => ipcRenderer.invoke("documents:delete", documentId),
+    move: (payload: { documentId: string; newParentId: string | null; position: number }) =>
+      ipcRenderer.invoke("documents:move", payload),
+    moveToProfile: (payload: { documentId: string; newProfileId: string }) =>
+      ipcRenderer.invoke("documents:move-to-profile", payload),
+    switch: (documentId: string) => ipcRenderer.invoke("documents:switch", documentId),
+    onTreeUpdated: (
+      callback: (data: {
+        profileId: string;
+        tree: import("./types/documents").DocumentTreeNode[];
+      }) => void
+    ) => {
+      const channel = "document-tree:updated";
+      const handler = (_: unknown, data: any) => callback(data);
+      ipcRenderer.on(channel, handler);
+      return () => {
+        ipcRenderer.removeListener(channel, handler);
+      };
+    },
+    onDocumentSwitched: (
+      callback: (data: { document: import("./types/documents").DocumentRecord | null }) => void
+    ) => {
+      const channel = "document:switched";
+      const handler = (_: unknown, data: any) => callback(data);
+      ipcRenderer.on(channel, handler);
+      return () => {
+        ipcRenderer.removeListener(channel, handler);
+      };
+    },
+  },
 });

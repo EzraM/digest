@@ -406,6 +406,17 @@ export class BlockOperationService {
 
       await this.evaluateSnapshotCreation(0, { forceIfNoSnapshot: true });
 
+      // Ensure renderer receives the current state even if Y.js didn't emit an update
+      this.handleYDocUpdate(new Uint8Array(), {
+        source: "system",
+        batchId: `document-load-${this.documentId}`,
+        timestamp: Date.now(),
+        metadata: {
+          reason: "document-load",
+          documentId: this.documentId,
+        },
+      });
+
       return this.yBlocks.toArray();
     } catch (error) {
       log.debug(`Error loading document: ${error}`, "BlockOperationService");

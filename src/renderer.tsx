@@ -25,7 +25,7 @@
  *  });
  * ```
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
@@ -46,7 +46,15 @@ import { useDocumentSync } from "./hooks/useDocumentSync";
 import { useBrowserScrollForward } from "./hooks/useBrowserScrollForward";
 import { DebugSidebar } from "./components/DebugSidebar";
 import { DebugToggle } from "./components/DebugToggle";
-import { AppShell, MantineProvider } from "@mantine/core";
+import {
+  AppShell,
+  Button,
+  Group,
+  MantineProvider,
+  Modal,
+  Stack,
+  TextInput,
+} from "@mantine/core";
 import { GoogleSearchExtensionName } from "./Search/GoogleSearchBlock";
 import { ChatGPTExtensionName } from "./Search/ChatGPTBlock";
 import { URLExtensionName } from "./Search/URLBlock";
@@ -58,6 +66,12 @@ import {
   SlashCommandLoadingState,
   SlashCommandOption,
 } from "./types/slashCommand";
+import {
+  DocumentRecord,
+  DocumentTreeNode,
+  ProfileRecord,
+} from "./types/documents";
+import { FileTree } from "./components/FileTree/FileTree";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
@@ -90,6 +104,24 @@ type SlashCommandMenuProps = {
 function App() {
   // Debug sidebar state
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
+  const [profiles, setProfiles] = useState<ProfileRecord[]>([]);
+  const [documentTrees, setDocumentTrees] = useState<
+    Record<string, DocumentTreeNode[]>
+  >({});
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [activeDocument, setActiveDocument] = useState<DocumentRecord | null>(
+    null
+  );
+  const [pendingRenameDocumentId, setPendingRenameDocumentId] = useState<
+    string | null
+  >(null);
+  const [isCreateProfileModalOpen, setIsCreateProfileModalOpen] =
+    useState(false);
+  const [profileModalName, setProfileModalName] = useState("");
+  const [profileModalError, setProfileModalError] = useState<string | null>(
+    null
+  );
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
 
   // Create editor immediately with no initial content - Y.js sync will populate it
   const editor = useCreateBlockNote({
@@ -226,6 +258,164 @@ function App() {
     return unsubscribe;
   }, []);
 
+  // Load profiles/documents on startup
+  useEffect(() => {
+    let isCancelled = false;
+
+    const bootstrap = async () => {
+      if (!window.electronAPI?.profiles || !window.electronAPI.documents) {
+        return;
+      }
+
+      try {
+        const [profileList, activeDoc] = await Promise.all([
+          window.electronAPI.profiles.list(),
+          window.electronAPI.documents.getActive(),
+        ]);
+
+        if (isCancelled) return;
+
+        setProfiles(profileList);
+
+        if (activeDoc) {
+          setActiveDocument(activeDoc);
+          setActiveProfileId(activeDoc.profileId);
+
+          const tree = await window.electronAPI.documents.getTree(
+            activeDoc.profileId
+          );
+          if (isCancelled) return;
+          setDocumentTrees((prev) => ({
+            ...prev,
+            [activeDoc.profileId]: tree,
+          }));
+        } else if (profileList.length > 0) {
+          const fallbackProfileId = profileList[0].id;
+          setActiveProfileId(fallbackProfileId);
+          const tree = await window.electronAPI.documents.getTree(
+            fallbackProfileId
+          );
+          if (isCancelled) return;
+          setDocumentTrees((prev) => ({
+            ...prev,
+            [fallbackProfileId]: tree,
+          }));
+        }
+      } catch (error) {
+        log.debug(`Failed to bootstrap profiles/documents: ${error}`, "renderer");
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  // Listen for profile updates pushed from main
+  useEffect(() => {
+    if (!window.electronAPI?.profiles?.onUpdated) {
+      return;
+    }
+
+    const unsubscribe = window.electronAPI.profiles.onUpdated(
+      ({ profiles: nextProfiles }) => {
+        setProfiles(nextProfiles);
+        setActiveProfileId((current) => {
+          if (current && nextProfiles.some((profile) => profile.id === current)) {
+            return current;
+          }
+
+          const activeDocProfile = activeDocument?.profileId;
+          if (
+            activeDocProfile &&
+            nextProfiles.some((profile) => profile.id === activeDocProfile)
+          ) {
+            return activeDocProfile;
+          }
+
+          return nextProfiles[0]?.id ?? null;
+        });
+      }
+    );
+
+    return unsubscribe;
+  }, [activeDocument]);
+
+  // Listen for tree updates
+  useEffect(() => {
+    if (!window.electronAPI?.documents?.onTreeUpdated) {
+      return;
+    }
+
+    const unsubscribe = window.electronAPI.documents.onTreeUpdated(
+      ({ profileId, tree }) => {
+        setDocumentTrees((prev) => ({
+          ...prev,
+          [profileId]: tree,
+        }));
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
+  // Listen for active document changes from main
+  useEffect(() => {
+    if (!window.electronAPI?.documents?.onDocumentSwitched) {
+      return;
+    }
+
+    const unsubscribe = window.electronAPI.documents.onDocumentSwitched(
+      ({ document }) => {
+        setActiveDocument(document ?? null);
+        if (document) {
+          setActiveProfileId(document.profileId);
+        }
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
+  // Fetch tree when active profile changes (e.g., manual selection)
+  useEffect(() => {
+    if (!activeProfileId || !window.electronAPI?.documents?.getTree) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const fetchTree = async () => {
+      try {
+        const tree = await window.electronAPI.documents.getTree(
+          activeProfileId
+        );
+        if (isCancelled) return;
+        setDocumentTrees((prev) => ({
+          ...prev,
+          [activeProfileId]: tree,
+        }));
+      } catch (error) {
+        log.debug(`Failed to load tree for profile ${activeProfileId}`, "renderer");
+      }
+    };
+
+    fetchTree();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeProfileId]);
+
+  const activeDocumentId = activeDocument?.id ?? null;
+
+  const activeProfileTree = useMemo(() => {
+    if (!activeProfileId) return [];
+    return documentTrees[activeProfileId] ?? [];
+  }, [documentTrees, activeProfileId]);
+
   // Set up continuous document state synchronization
   useDocumentSync(editor);
 
@@ -265,11 +455,11 @@ function App() {
     [editor]
   );
 
-  const SlashCommandSyncMenu = ({
+  const SlashCommandSyncMenu: React.FC<SlashCommandMenuProps> = ({
     items,
     selectedIndex,
     loadingState,
-  }: SlashCommandMenuProps) => {
+  }) => {
     React.useEffect(() => {
       const normalizedIndex =
         typeof selectedIndex === "number"
@@ -303,9 +493,173 @@ function App() {
     []
   );
 
+  const handleProfileSelect = React.useCallback((profileId: string) => {
+    setActiveProfileId(profileId);
+  }, []);
+
+  const handleCreateProfile = React.useCallback(async (name: string) => {
+    if (!window.electronAPI?.profiles) {
+      return null;
+    }
+
+    try {
+      const profile = await window.electronAPI.profiles.create({
+        name,
+      });
+      setActiveProfileId(profile.id);
+      return profile;
+    } catch (error) {
+      log.debug(`Failed to create profile: ${error}`, "renderer");
+      return null;
+    }
+  }, []);
+
+  const handleOpenCreateProfileModal = React.useCallback(() => {
+    setProfileModalName(`Profile ${profiles.length + 1}`);
+    setProfileModalError(null);
+    setIsCreateProfileModalOpen(true);
+  }, [profiles.length]);
+
+  const handleCloseCreateProfileModal = React.useCallback(() => {
+    setIsCreateProfileModalOpen(false);
+    setProfileModalError(null);
+    setProfileModalName("");
+  }, []);
+
+  const handleConfirmCreateProfile = React.useCallback(async () => {
+    const trimmed = profileModalName.trim();
+    if (!trimmed) {
+      setProfileModalError("Profile name is required");
+      return;
+    }
+
+    setIsCreatingProfile(true);
+    try {
+      const profile = await handleCreateProfile(trimmed);
+      if (profile) {
+        setIsCreateProfileModalOpen(false);
+        setProfileModalError(null);
+        setProfileModalName("");
+      }
+    } finally {
+      setIsCreatingProfile(false);
+    }
+  }, [profileModalName, handleCreateProfile]);
+
+  const handleDocumentSelect = React.useCallback(
+    async (documentId: string) => {
+      if (!window.electronAPI?.documents) {
+        return;
+      }
+
+      if (documentId === activeDocumentId) {
+        return;
+      }
+
+      try {
+        await window.electronAPI.documents.switch(documentId);
+      } catch (error) {
+        log.debug(`Failed to switch document: ${error}`, "renderer");
+      }
+    },
+    [activeDocumentId]
+  );
+
+  const handlePendingRenameConsumed = React.useCallback(() => {
+    setPendingRenameDocumentId(null);
+  }, []);
+
+  const handleCreateDocument = React.useCallback(
+    async ({
+      profileId,
+      parentDocumentId = null,
+    }: {
+      profileId: string;
+      parentDocumentId?: string | null;
+    }) => {
+      if (!window.electronAPI?.documents) {
+        return null;
+      }
+
+      try {
+        const document = await window.electronAPI.documents.create({
+          profileId,
+          parentDocumentId,
+        });
+        setPendingRenameDocumentId(document.id);
+        setActiveProfileId(document.profileId);
+        return document;
+      } catch (error) {
+        log.debug(`Failed to create document: ${error}`, "renderer");
+        return null;
+      }
+    },
+    []
+  );
+
+  const handleRenameDocument = React.useCallback(
+    async (documentId: string, title: string) => {
+      if (!window.electronAPI?.documents) {
+        return null;
+      }
+
+      try {
+        return await window.electronAPI.documents.rename({
+          documentId,
+          title,
+        });
+      } catch (error) {
+        log.debug(`Failed to rename document: ${error}`, "renderer");
+        return null;
+      }
+    },
+    []
+  );
+
+  const handleDeleteDocument = React.useCallback(async (documentId: string) => {
+    if (!window.electronAPI?.documents) {
+      return false;
+    }
+
+    try {
+      await window.electronAPI.documents.delete(documentId);
+      if (documentId === pendingRenameDocumentId) {
+        setPendingRenameDocumentId(null);
+      }
+      return true;
+    } catch (error) {
+      log.debug(`Failed to delete document: ${error}`, "renderer");
+      return false;
+    }
+  }, [pendingRenameDocumentId]);
+
+  const handleMoveDocumentToProfile = React.useCallback(
+    async (documentId: string, newProfileId: string) => {
+      if (!window.electronAPI?.documents) {
+        return false;
+      }
+
+      try {
+        await window.electronAPI.documents.moveToProfile({
+          documentId,
+          newProfileId,
+        });
+        return true;
+      } catch (error) {
+        log.debug(`Failed to move document to profile: ${error}`, "renderer");
+        return false;
+      }
+    },
+    []
+  );
+
   return (
     <MantineProvider defaultColorScheme="auto">
       <AppShell
+        navbar={{
+          width: 320,
+          breakpoint: "sm",
+        }}
         aside={{
           width: 400,
           breakpoint: "sm",
@@ -313,6 +667,24 @@ function App() {
         }}
         padding="md"
       >
+        <AppShell.Navbar p="md">
+          <FileTree
+            profiles={profiles}
+            activeProfileId={activeProfileId}
+            onSelectProfile={handleProfileSelect}
+            onCreateProfile={handleOpenCreateProfileModal}
+            documentTree={activeProfileTree}
+            activeDocumentId={activeDocumentId}
+            onSelectDocument={handleDocumentSelect}
+            onCreateDocument={handleCreateDocument}
+            onRenameDocument={handleRenameDocument}
+            onDeleteDocument={handleDeleteDocument}
+            onMoveDocumentToProfile={handleMoveDocumentToProfile}
+            pendingEditDocumentId={pendingRenameDocumentId}
+            onPendingEditConsumed={handlePendingRenameConsumed}
+          />
+        </AppShell.Navbar>
+
         <AppShell.Main>
           <div className="App">
             <BlockNoteView editor={editor} slashMenu={false}>
@@ -337,6 +709,39 @@ function App() {
           />
         </AppShell.Aside>
       </AppShell>
+      <Modal
+        opened={isCreateProfileModalOpen}
+        onClose={handleCloseCreateProfileModal}
+        title="Create profile"
+        centered
+      >
+        <Stack gap="sm">
+          <TextInput
+            label="Profile name"
+            placeholder="Work"
+            value={profileModalName}
+            onChange={(event) => {
+              setProfileModalName(event.currentTarget.value);
+              if (profileModalError) {
+                setProfileModalError(null);
+              }
+            }}
+            error={profileModalError}
+            data-autofocus
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={handleCloseCreateProfileModal}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmCreateProfile}
+              loading={isCreatingProfile}
+            >
+              Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </MantineProvider>
   );
 }

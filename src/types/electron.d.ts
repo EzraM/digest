@@ -1,4 +1,9 @@
 import { BlockOperation, OperationResult } from "./operations";
+import {
+  DocumentRecord,
+  DocumentTreeNode,
+  ProfileRecord,
+} from "./documents";
 
 interface ElectronAPI {
   updateBrowser: (data: {
@@ -79,6 +84,33 @@ interface ElectronAPI {
     onModeChanged: (callback: (enabled: boolean) => void) => () => void;
     onNewEvent: (callback: (event: any) => void) => () => void;
     onInitialEvents: (callback: (events: any[]) => void) => () => void;
+  };
+  profiles: {
+    list: () => Promise<ProfileRecord[]>;
+    create: (payload: { name: string; icon?: string | null; color?: string | null }) => Promise<ProfileRecord>;
+    delete: (profileId: string) => Promise<{ success: boolean }>;
+    onUpdated: (callback: (event: { profiles: ProfileRecord[] }) => void) => () => void;
+  };
+  documents: {
+    getActive: () => Promise<DocumentRecord | null>;
+    getTree: (profileId?: string | null) => Promise<DocumentTreeNode[]>;
+    create: (payload: {
+      profileId: string;
+      title?: string | null;
+      parentDocumentId?: string | null;
+      position?: number;
+    }) => Promise<DocumentRecord>;
+    rename: (payload: { documentId: string; title: string }) => Promise<DocumentRecord>;
+    delete: (documentId: string) => Promise<{ success: boolean }>;
+    move: (payload: { documentId: string; newParentId: string | null; position: number }) => Promise<DocumentRecord>;
+    moveToProfile: (payload: { documentId: string; newProfileId: string }) => Promise<DocumentRecord>;
+    switch: (documentId: string) => Promise<DocumentRecord>;
+    onTreeUpdated: (
+      callback: (data: { profileId: string; tree: DocumentTreeNode[] }) => void
+    ) => () => void;
+    onDocumentSwitched: (
+      callback: (data: { document: DocumentRecord | null }) => void
+    ) => () => void;
   };
 }
 
