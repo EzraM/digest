@@ -5,6 +5,7 @@ import fs from 'fs';
 import { MigrationRunner } from './MigrationRunner';
 import { Migration } from './Migration.interface';
 import { log } from '../utils/mainLogger';
+import { isDevelopment } from '../config/development';
 
 // Import all migrations
 import migration001 from './migrations/001_initial_operations_schema';
@@ -50,8 +51,16 @@ export class DatabaseManager {
     }
 
     try {
-      const userDataPath = app.getPath('userData');
-      const dbPath = path.join(userDataPath, 'digest.db');
+      let dbPath: string;
+      if (isDevelopment()) {
+        const devDbDir = path.join(process.cwd(), 'db');
+        fs.mkdirSync(devDbDir, { recursive: true });
+        dbPath = path.join(devDbDir, 'digest.db');
+        log.debug(`Using development database path at: ${dbPath}`, 'DatabaseManager');
+      } else {
+        const userDataPath = app.getPath('userData');
+        dbPath = path.join(userDataPath, 'digest.db');
+      }
 
       // Ensure directory exists
       fs.mkdirSync(path.dirname(dbPath), { recursive: true });
