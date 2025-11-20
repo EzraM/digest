@@ -5,6 +5,8 @@ import { BlockOperationService } from './BlockOperationService';
 import { getDebugEventService, DebugEventService } from './DebugEventService';
 import { BlockEventManager } from './BlockEventManager';
 import { log } from '../utils/mainLogger';
+import { ProfileManager } from './ProfileManager';
+import { DocumentManager } from './DocumentManager';
 
 /**
  * Service registry that defines all application services and their dependencies
@@ -38,9 +40,29 @@ export function registerServices(container: Container): void {
     factory: async (c) => {
       log.debug('Initializing BlockOperationService', 'ServiceRegistry');
       const database = await c.resolve('database');
-      const service = BlockOperationService.getInstance();
-      service.setDatabase(database);
-      return service;
+      BlockOperationService.setDatabase(database);
+      return BlockOperationService.getInstance('default', database);
+    }
+  });
+
+  // ProfileManager - depends on database
+  container.register('profileManager', {
+    dependencies: ['database'],
+    factory: async (c) => {
+      log.debug('Initializing ProfileManager service', 'ServiceRegistry');
+      const database = await c.resolve('database');
+      return new ProfileManager(database);
+    }
+  });
+
+  // DocumentManager - depends on database and profileManager
+  container.register('documentManager', {
+    dependencies: ['database', 'profileManager'],
+    factory: async (c) => {
+      log.debug('Initializing DocumentManager service', 'ServiceRegistry');
+      const database = await c.resolve('database');
+      const profileManager = await c.resolve('profileManager') as ProfileManager;
+      return new DocumentManager(database, profileManager);
     }
   });
 
@@ -78,6 +100,8 @@ export async function initializeAllServices(container: Container): Promise<void>
   await container.resolve('database');
   await container.resolve('eventLogger');
   await container.resolve('blockOperationService');
+  await container.resolve('profileManager');
+  await container.resolve('documentManager');
   await container.resolve('debugEventService');
   await container.resolve('blockEventManager');
   
@@ -93,6 +117,8 @@ export function getServices(container: Container) {
     eventLogger: container.get('eventLogger'),
     blockOperationService: container.get('blockOperationService') as BlockOperationService,
     debugEventService: container.get('debugEventService') as DebugEventService,
-    blockEventManager: container.get('blockEventManager') as BlockEventManager
+    blockEventManager: container.get('blockEventManager') as BlockEventManager,
+    profileManager: container.get('profileManager') as ProfileManager,
+    documentManager: container.get('documentManager') as DocumentManager,
   };
 }

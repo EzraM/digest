@@ -11,6 +11,7 @@ import { isDevelopment } from '../config/development';
 import migration001 from './migrations/001_initial_operations_schema';
 import migration002 from './migrations/002_add_events_table';
 import migration003 from './migrations/003_add_batch_tracking_columns';
+import migration004 from './migrations/004_profiles_and_document_hierarchy';
 
 /**
  * Singleton database manager that handles initialization and migrations
@@ -26,6 +27,7 @@ export class DatabaseManager {
     migration001,
     migration002,
     migration003,
+    migration004,
   ];
 
   private constructor() {

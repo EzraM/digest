@@ -24,10 +24,11 @@ type StoredSnapshot = {
  * Manages Y.js document state and SQLite persistence
  */
 export class BlockOperationService {
-  private static instance: BlockOperationService;
+  private static instances: Map<string, BlockOperationService> = new Map();
+  private static database: Database.Database | null = null;
   private yDoc: Y.Doc;
   private yBlocks: Y.Array<any>;
-  private database: Database.Database | null = null;
+  private database: Database.Database;
   private documentId: string;
   private rendererWebContents: Electron.WebContentsView | null = null;
   private _eventLogger: ReturnType<typeof getEventLogger> | null = null;
@@ -53,10 +54,22 @@ export class BlockOperationService {
   private readonly SNAPSHOT_MIN_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
   private readonly MAX_STORED_SNAPSHOTS = 5;
 
-  private constructor(documentId = "default") {
+  private constructor(documentId = "default", database?: Database.Database) {
+    const resolvedDatabase = database ?? BlockOperationService.database;
+    if (!resolvedDatabase) {
+      throw new Error(
+        "BlockOperationService database not configured. Call setDatabase first or provide a database handle."
+      );
+    }
+
+    if (!BlockOperationService.database) {
+      BlockOperationService.database = resolvedDatabase;
+    }
+
     this.documentId = documentId;
     this.yDoc = new Y.Doc();
     this.yBlocks = this.yDoc.getArray("blocks");
+    this.database = resolvedDatabase;
 
     // Set up Y.js change listener
     this.yDoc.on("update", this.handleYDocUpdate.bind(this));
@@ -69,19 +82,29 @@ export class BlockOperationService {
     );
   }
 
-  public static getInstance(documentId?: string): BlockOperationService {
-    if (!BlockOperationService.instance) {
-      BlockOperationService.instance = new BlockOperationService(documentId);
+  public static getInstance(
+    documentId = "default",
+    database?: Database.Database
+  ): BlockOperationService {
+    const targetId = documentId || "default";
+    if (!BlockOperationService.instances.has(targetId)) {
+      BlockOperationService.instances.set(
+        targetId,
+        new BlockOperationService(targetId, database)
+      );
     }
-    return BlockOperationService.instance;
+    return BlockOperationService.instances.get(targetId)!;
   }
 
   /**
    * Set the database instance (called after migration system initialization)
    */
-  public setDatabase(database: Database.Database): void {
-    this.database = database;
-    log.debug("Database instance set for BlockOperationService", "BlockOperationService");
+  public static setDatabase(database: Database.Database): void {
+    BlockOperationService.database = database;
+    log.debug(
+      "Database instance configured for BlockOperationService",
+      "BlockOperationService"
+    );
   }
 
 
@@ -659,11 +682,9 @@ export class BlockOperationService {
       clearTimeout(this.batchTimeout);
     }
 
-    if (this.database) {
-      this.database.close();
-    }
-
     this.yDoc.destroy();
+
+    this.rendererWebContents = null;
 
     log.debug("BlockOperationService destroyed", "BlockOperationService");
   }

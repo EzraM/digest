@@ -14,6 +14,7 @@ import {
   allowsRetry,
 } from "./ViewState";
 import { injectScrollForwardingScript } from "./ScrollForwardingService";
+import { getProfilePartition } from "../config/profiles";
 
 const EVENTS = {
   BROWSER: {
@@ -110,6 +111,12 @@ export class ViewManager {
         );
         set(this.views, [blockId, "url"], ev.url);
         set(this.views, [blockId, "bounds"], ev.bounds);
+        if (ev.profileId) {
+          set(this.views, [blockId, "profileId"], ev.profileId);
+        }
+        if (ev.partition) {
+          set(this.views, [blockId, "partition"], ev.partition);
+        }
 
         // Only trigger view creation if state allows it
         // Bounds updates should not change state when in ERROR or LOADED
@@ -189,12 +196,24 @@ export class ViewManager {
       }
 
       try {
+        const partition =
+          view?.partition ||
+          (view?.profileId
+            ? getProfilePartition(view.profileId)
+            : "persist:shared-browser-session");
+
+        if (view) {
+          view.partition = partition;
+        }
+
         log.debug(
           `Creating new WebContentsView for blockId: ${blockId}`,
           "ViewManager"
         );
         log.debug(
-          `URL: ${view.url}, Bounds: ${JSON.stringify(view.bounds)}`,
+          `URL: ${view.url}, Bounds: ${JSON.stringify(
+            view.bounds
+          )}, profile: ${view.profileId}, partition: ${partition}`,
           "ViewManager"
         );
 
@@ -204,8 +223,7 @@ export class ViewManager {
             contextIsolation: true,
             webSecurity: true,
             allowRunningInsecureContent: false,
-            // Use a shared session partition for cookie sharing across all browser blocks
-            partition: "persist:shared-browser-session",
+            partition,
           },
         });
 
@@ -906,6 +924,8 @@ export class ViewManager {
     blockId: string;
     url: string;
     bounds: { x: number; y: number; width: number; height: number };
+    profileId?: string;
+    partition?: string;
   }) {
     log.debug(
       `Handling unified block view update: ${JSON.stringify(update)}`,
@@ -913,7 +933,11 @@ export class ViewManager {
     );
     const event: BlockViewUpdateEvent = {
       type: "update-block-view",
-      ...update,
+      blockId: update.blockId,
+      url: update.url,
+      bounds: update.bounds,
+      profileId: update.profileId,
+      partition: update.partition,
     };
     this.events$.next(event);
   }

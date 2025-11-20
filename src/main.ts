@@ -62,7 +62,7 @@ const createWindow = async () => {
 
   // Get service instances
   const services = getServices(serviceContainer);
-  const { blockEventManager } = services;
+  const { blockEventManager, documentManager } = services;
   const baseWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -201,8 +201,23 @@ const createWindow = async () => {
   // Set up console log forwarding from renderer
   setupConsoleLogForwarding(appViewInstance);
 
-  // Set up service web contents references
-  services.blockOperationService.setRendererWebContents(appViewInstance);
+  // Attach renderer web contents to the active document's block service
+  const attachRendererToActiveDocument = () => {
+    const activeDocument = documentManager.activeDocument;
+    if (!activeDocument) {
+      log.debug(
+        "No active document available to attach renderer",
+        "main"
+      );
+      return;
+    }
+
+    const blockService = documentManager.getBlockService(activeDocument.id);
+    blockService.setRendererWebContents(appViewInstance);
+  };
+
+  attachRendererToActiveDocument();
+
   services.debugEventService.setMainRendererWebContents(appViewInstance);
   blockEventManager.setRendererWebContents(appViewInstance);
 
@@ -210,7 +225,7 @@ const createWindow = async () => {
   // This prevents race condition where Y.js updates are broadcast before renderer can receive them
 
   // Set up IPC handlers (including renderer-ready handler)
-  setupIpcHandlers(viewManager, slashCommandManager, services);
+  setupIpcHandlers(viewManager, slashCommandManager, services, appViewInstance);
 
   // Update view bounds when window is resized
   baseWindow.on("resize", updateViewBounds);
@@ -274,21 +289,33 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 const setupIpcHandlers = (
   viewManager: ViewManager,
   slashCommandManager: SlashCommandManager,
-  services: ReturnType<typeof getServices>
+  services: ReturnType<typeof getServices>,
+  rendererView: WebContentsView
 ) => {
-  const { blockOperationService } = services;
+  const { documentManager } = services;
   // Handle renderer ready signal - load/seed document only after renderer is ready
   ipcMain.on("renderer-ready", async () => {
     log.debug("Renderer ready signal received - loading document", "main");
 
+    const activeDocument =
+      documentManager.activeDocument ?? documentManager.listDocuments()[0];
+
+    if (!activeDocument) {
+      log.debug("No document available to load", "main");
+      return;
+    }
+
+    const blockService = documentManager.getBlockService(activeDocument.id);
+    blockService.setRendererWebContents(rendererView);
+
     try {
-      const blocks = await blockOperationService.loadDocument();
+      const blocks = await blockService.loadDocument();
       log.debug(`Loaded ${blocks.length} blocks from persistence`, "main");
 
       // If no blocks exist, seed with welcome content
       if (blocks.length === 0) {
         log.debug("No blocks found, seeding with welcome content", "main");
-        await blockOperationService.seedInitialContent(welcomeContent);
+        await blockService.seedInitialContent(welcomeContent);
         log.debug(
           "Welcome content seeded - Y.js will sync to renderer",
           "main"
@@ -415,9 +442,15 @@ const setupIpcHandlers = (
         );
 
         // Get the BlockOperationService instance
-        const blockOperationService = (
-          await import("./services/BlockOperationService")
-        ).BlockOperationService.getInstance();
+        const activeDocument =
+          documentManager.activeDocument ??
+          documentManager.listDocuments()[0];
+        if (!activeDocument) {
+          throw new Error("No active document available for operations");
+        }
+
+        const blockOperationService =
+          documentManager.getBlockService(activeDocument.id);
 
         // Set renderer web contents for updates
         if (globalAppView) {
