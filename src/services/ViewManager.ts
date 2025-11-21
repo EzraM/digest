@@ -111,9 +111,7 @@ export class ViewManager {
         );
         set(this.views, [blockId, "url"], ev.url);
         set(this.views, [blockId, "bounds"], ev.bounds);
-        if (ev.profileId) {
-          set(this.views, [blockId, "profileId"], ev.profileId);
-        }
+        set(this.views, [blockId, "profileId"], ev.profileId);
         if (ev.partition) {
           set(this.views, [blockId, "partition"], ev.partition);
         }
@@ -197,10 +195,7 @@ export class ViewManager {
 
       try {
         const partition =
-          view?.partition ||
-          (view?.profileId
-            ? getProfilePartition(view.profileId)
-            : "persist:shared-browser-session");
+          view?.partition || getProfilePartition(view.profileId);
 
         if (view) {
           view.partition = partition;
@@ -896,7 +891,7 @@ export class ViewManager {
     blockId: string;
     url: string;
     bounds: { x: number; y: number; width: number; height: number };
-    profileId?: string;
+    profileId: string;
     partition?: string;
   }) {
     log.debug(

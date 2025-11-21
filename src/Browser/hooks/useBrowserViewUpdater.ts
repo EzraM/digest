@@ -1,4 +1,5 @@
 import { useRef, useCallback } from "react";
+import { useDocumentContext } from "../../context/DocumentContext";
 
 type Bounds = { x: number; y: number; width: number; height: number };
 
@@ -11,6 +12,7 @@ type Bounds = { x: number; y: number; width: number; height: number };
  * @returns An object with stable `handleUrlChange` and `handleBoundsChange` callbacks.
  */
 export const useBrowserViewUpdater = (blockId: string) => {
+  const { profileId } = useDocumentContext();
   const urlRef = useRef<string | null>(null);
   const boundsRef = useRef<Bounds | null>(null);
 
@@ -21,9 +23,10 @@ export const useBrowserViewUpdater = (blockId: string) => {
         blockId,
         url: urlRef.current,
         bounds: boundsRef.current,
+        profileId,
       });
     }
-  }, [blockId]);
+  }, [blockId, profileId]);
 
   const handleUrlChange = useCallback(
     (url: string | null) => {

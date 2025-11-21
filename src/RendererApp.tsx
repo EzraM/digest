@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { MantineProvider } from "@mantine/core";
 import { useRendererDocuments } from "./hooks/useRendererDocuments";
 import { useDocumentCreationFlow } from "./hooks/useDocumentCreationFlow";
@@ -11,6 +11,8 @@ import { FileTreePane } from "./components/renderer/FileTreePane";
 import { EditorPane } from "./components/renderer/EditorPane";
 import { DebugPane } from "./components/renderer/DebugPane";
 import { ProfileModal } from "./components/renderer/ProfileModal";
+import { DocumentProvider } from "./context/DocumentContext";
+import { DEFAULT_PROFILE_ID } from "./config/profiles";
 
 export const RendererApp = () => {
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
@@ -118,13 +120,18 @@ export const RendererApp = () => {
           />
         }
         main={
-          <EditorPane
-            editor={editor}
-            SlashCommandSyncMenu={SlashCommandSyncMenu}
-            onSlashMenuItems={handleSlashMenuItems}
-            onSlashMenuItemClick={handleSlashMenuItemClick}
-            onDebugToggle={handleDebugToggle}
-          />
+          <DocumentProvider
+            profileId={activeDocument?.profileId ?? DEFAULT_PROFILE_ID}
+            documentId={activeDocumentId}
+          >
+            <EditorPane
+              editor={editor}
+              SlashCommandSyncMenu={SlashCommandSyncMenu}
+              onSlashMenuItems={handleSlashMenuItems}
+              onSlashMenuItemClick={handleSlashMenuItemClick}
+              onDebugToggle={handleDebugToggle}
+            />
+          </DocumentProvider>
         }
         aside={
           <DebugPane

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     blockId: string;
     url: string;
     bounds: { x: number; y: number; width: number; height: number };
+    profileId: string;
   }) => ipcRenderer.send("update-browser-view", data),
   removeBrowser: (blockId: string) => {
     ipcRenderer.send("remove-browser", blockId);

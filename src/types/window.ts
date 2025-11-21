@@ -11,7 +11,7 @@ export interface BlockView {
   url?: string;
   bounds?: ViewBounds;
   contents?: WebContentsView;
-  profileId?: string;
+  profileId: string;
   partition?: string;
 }
 
@@ -47,6 +47,6 @@ export type BlockViewUpdateEvent = {
   blockId: string;
   url: string;
   bounds: { x: number; y: number; width: number; height: number };
-  profileId?: string;
+  profileId: string;
   partition?: string;
 };

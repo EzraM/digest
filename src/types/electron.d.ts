@@ -10,6 +10,7 @@ interface ElectronAPI {
     blockId: string;
     url: string;
     bounds: { x: number; y: number; width: number; height: number };
+    profileId: string;
   }) => void;
   removeBrowser: (blockId: string) => void;
   browser: {
