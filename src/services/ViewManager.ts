@@ -227,34 +227,6 @@ export class ViewManager {
           },
         });
 
-        // Set up permissive CSP for browser blocks to allow external sites to load their resources
-        newView.webContents.session.webRequest.onHeadersReceived(
-          (
-            details: Electron.OnHeadersReceivedListenerDetails,
-            callback: (response: Electron.HeadersReceivedResponse) => void
-          ) => {
-            callback({
-              responseHeaders: {
-                ...details.responseHeaders,
-                // Remove or override restrictive CSP for browser blocks
-                "Content-Security-Policy": [
-                  "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; " +
-                    "script-src * 'unsafe-inline' 'unsafe-eval' data:; " +
-                    "style-src * 'unsafe-inline'; " +
-                    "img-src * data: blob:; " +
-                    "font-src * data:; " +
-                    "connect-src *; " +
-                    "media-src * blob:; " +
-                    "object-src *; " +
-                    "child-src * blob:; " +
-                    "worker-src * blob: data:; " +
-                    "frame-src *;",
-                ],
-              },
-            });
-          }
-        );
-
         // Add comprehensive event listeners for debugging
         newView.webContents.on("did-start-loading", () => {
           log.debug(

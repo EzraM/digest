@@ -77,8 +77,8 @@ const createWindow = async () => {
       sandbox: false, // Need to disable sandbox to use contextBridge
       webSecurity: true,
       allowRunningInsecureContent: false,
-      // Use a shared session partition for cookie sharing across all browser blocks
-      partition: "persist:shared-browser-session",
+      // Use a separate session for the main app UI (not shared with browser blocks)
+      partition: "persist:main-app",
     },
   });
 
@@ -91,7 +91,8 @@ const createWindow = async () => {
   // Set initial bounds to match window size
   updateViewBounds();
 
-  // Set Content-Security-Policy
+  // Set Content-Security-Policy for the main app
+  // Since the main app uses a separate session, this won't affect browser blocks
   appViewInstance.webContents.session.webRequest.onHeadersReceived(
     (
       details: { responseHeaders?: Record<string, string[]> },
