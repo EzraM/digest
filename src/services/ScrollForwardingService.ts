@@ -1,6 +1,12 @@
 import { WebContentsView, WebContents } from "electron";
 import { log } from "../utils/mainLogger";
 
+// Maintain console listeners per view/block to avoid duplicate handlers
+const consoleListeners = new Map<
+  string,
+  (event: any, level: number, message: string) => void
+>();
+
 /**
  * Injects a script into the web view to detect scroll boundaries and forward scroll events
  */
@@ -9,6 +15,13 @@ export function injectScrollForwardingScript(
   blockId: string,
   rendererWebContents: WebContents
 ): void {
+  // Track console listeners per block to avoid duplicates on reinjection
+  const listenerKey = `${view.webContents.id}-${blockId}`;
+  const existingListener = consoleListeners.get(listenerKey);
+  if (existingListener) {
+    view.webContents.removeListener("console-message", existingListener);
+  }
+
   const scrollForwardingScript = `
     (function() {
       // Prevent multiple injections
@@ -25,10 +38,7 @@ export function injectScrollForwardingScript(
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const scrollHeight = document.documentElement.scrollHeight;
         const clientHeight = window.innerHeight || document.documentElement.clientHeight;
-        
-        const wasAtTop = isAtTop;
-        const wasAtBottom = isAtBottom;
-        
+
         // Use small threshold for better detection
         isAtTop = scrollTop <= 5;
         isAtBottom = scrollTop + clientHeight >= scrollHeight - 5;
@@ -70,9 +80,8 @@ export function injectScrollForwardingScript(
       checkScrollPosition();
 
       // Listen for scroll events to update position
-      window.addEventListener('scroll', () => {
-        checkScrollPosition();
-      }, { passive: true });
+      const scrollHandler = () => checkScrollPosition();
+      window.addEventListener('scroll', scrollHandler, { passive: true });
       
       // Listen for wheel events
       window.addEventListener('wheel', handleWheel, { passive: true });
@@ -81,7 +90,15 @@ export function injectScrollForwardingScript(
       window.addEventListener('resize', checkScrollPosition, { passive: true });
 
       // Check periodically in case content loads dynamically
-      setInterval(checkScrollPosition, 1000);
+      const intervalId = setInterval(checkScrollPosition, 1000);
+
+      // Cleanup on unload to avoid leaking listeners across navigations
+      window.addEventListener('beforeunload', () => {
+        window.removeEventListener('scroll', scrollHandler);
+        window.removeEventListener('wheel', handleWheel);
+        window.removeEventListener('resize', checkScrollPosition);
+        clearInterval(intervalId);
+      });
     })();
   `;
 
@@ -95,7 +112,7 @@ export function injectScrollForwardingScript(
         );
       });
 
-    view.webContents.on("console-message", (event, level, message) => {
+    const consoleListener = (event: any, level: number, message: string) => {
       try {
         // Check if message is from our scroll forwarding script
         if (
@@ -120,7 +137,10 @@ export function injectScrollForwardingScript(
       } catch (e) {
         // Not a JSON message from our script, ignore
       }
-    });
+    };
+
+    view.webContents.on("console-message", consoleListener);
+    consoleListeners.set(listenerKey, consoleListener);
   } catch (error) {
     log.debug(
       `[${blockId}] Error setting up scroll forwarding: ${error}`,
@@ -128,4 +148,3 @@ export function injectScrollForwardingScript(
     );
   }
 }
-
