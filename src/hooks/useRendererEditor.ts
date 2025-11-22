@@ -8,6 +8,7 @@ import {
 } from "../types/schema";
 import { useBrowserScrollForward } from "./useBrowserScrollForward";
 import { useDocumentSync } from "./useDocumentSync";
+import { handleElectronPaste } from "../clipboard/handleElectronPaste";
 
 let currentEditor: CustomBlockNoteEditor | null = null;
 
@@ -26,6 +27,7 @@ export const useRendererEditor = (): CustomBlockNoteEditor => {
   const editor = useCreateBlockNote({
     schema,
     initialContent: undefined,
+    pasteHandler: (context) => handleElectronPaste(context),
   }) as CustomBlockNoteEditor;
 
   useEffect(() => {

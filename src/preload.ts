@@ -1,6 +1,6 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
-import { contextBridge, ipcRenderer } from "electron";
+import { clipboard, contextBridge, ipcRenderer } from "electron";
 import { log } from "./utils/mainLogger";
 import { SlashCommandResultsPayload } from "./types/slashCommand";
 
@@ -20,6 +20,11 @@ const EVENTS = {
 } as const;
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  clipboard: {
+    readText: () => clipboard.readText(),
+    readHTML: () => clipboard.readHTML(),
+    availableFormats: () => clipboard.availableFormats(),
+  },
   updateBrowser: (data: {
     blockId: string;
     url: string;

@@ -9,7 +9,7 @@ import type {
 } from "../types/schema";
 import { SearchBlockShell } from "./SearchBlockShell";
 
-export const ChatGPTExtensionName = "Digest/ChatGPT";
+export const ChatGPTExtensionName = "digest-chatgpt";
 const ChatGPTBlockTypes = new Set([ChatGPTExtensionName, "chatGPT"]);
 
 // Type for inline content items
@@ -53,7 +53,7 @@ function executeChatGPTQuery(
 
 // Extension for handling Enter key in ChatGPTBlock
 const chatGPTExtension = createBlockNoteExtension({
-  key: "Digest/ChatGPT/Enter",
+  key: "digest-chatgpt-enter",
   keyboardShortcuts: {
     Enter: ({ editor }: { editor: CustomBlockNoteEditor }) => {
       const { block } = editor.getTextCursorPosition();

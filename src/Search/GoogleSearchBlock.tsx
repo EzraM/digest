@@ -9,7 +9,7 @@ import type {
 } from "../types/schema";
 import { SearchBlockShell } from "./SearchBlockShell";
 
-export const GoogleSearchExtensionName = "Digest/GoogleSearch";
+export const GoogleSearchExtensionName = "digest-google-search";
 
 // Type for inline content items
 interface InlineContentItem {
@@ -52,7 +52,7 @@ function executeGoogleSearch(
 
 // Extension for handling Enter key in GoogleSearchBlock
 const googleSearchExtension = createBlockNoteExtension({
-  key: "Digest/GoogleSearch/Enter",
+  key: "digest-google-search-enter",
   keyboardShortcuts: {
     Enter: ({ editor }: { editor: CustomBlockNoteEditor }) => {
       const { block } = editor.getTextCursorPosition();

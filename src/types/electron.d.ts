@@ -6,6 +6,11 @@ import {
 } from "./documents";
 
 interface ElectronAPI {
+  clipboard: {
+    readText: () => string;
+    readHTML: () => string;
+    availableFormats: () => string[];
+  };
   updateBrowser: (data: {
     blockId: string;
     url: string;

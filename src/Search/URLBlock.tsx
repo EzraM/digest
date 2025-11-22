@@ -9,7 +9,7 @@ import type {
 } from "../types/schema";
 import { SearchBlockShell } from "./SearchBlockShell";
 
-export const URLExtensionName = "Digest/URL";
+export const URLExtensionName = "digest-url";
 const URLBlockTypes = new Set([URLExtensionName, "url"]);
 
 // Type for inline content items
@@ -57,7 +57,7 @@ function executeURLLoad(
 
 // Extension for handling Enter key in URLBlock
 const urlExtension = createBlockNoteExtension({
-  key: "Digest/URL/Enter",
+  key: "digest-url-enter",
   keyboardShortcuts: {
     Enter: ({ editor }: { editor: CustomBlockNoteEditor }) => {
       const { block } = editor.getTextCursorPosition();
