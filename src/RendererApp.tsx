@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { MantineProvider } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import { useRendererDocuments } from "./hooks/useRendererDocuments";
 import { useDocumentCreationFlow } from "./hooks/useDocumentCreationFlow";
 import { useSlashCommandBridge } from "./hooks/useSlashCommandBridge";
@@ -13,8 +14,10 @@ import { DebugPane } from "./components/renderer/DebugPane";
 import { ProfileModal } from "./components/renderer/ProfileModal";
 import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
+import { useActiveProfileData } from "./hooks/useActiveProfileData";
 
 export const RendererApp = () => {
+  const [isNavbarOpened, { toggle: toggleNavbar }] = useDisclosure(true);
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
   const {
     profiles,
@@ -72,10 +75,13 @@ export const RendererApp = () => {
     onProfileCreated: (profile) => setActiveProfileId(profile.id),
   });
 
-  const activeProfileTree = useMemo(() => {
-    if (!activeProfileId) return [];
-    return documentTrees[activeProfileId] ?? [];
-  }, [documentTrees, activeProfileId]);
+  const { activeProfileName, activeProfileTree } = useActiveProfileData({
+    profiles,
+    activeProfileId,
+    documentTrees,
+  });
+
+  const activeDocumentTitle = activeDocument?.title ?? null;
 
   const handleDebugToggle = useCallback((enabled: boolean) => {
     setIsDebugSidebarVisible(enabled);
@@ -99,7 +105,11 @@ export const RendererApp = () => {
   return (
     <MantineProvider defaultColorScheme="auto">
       <RendererLayout
+        isNavbarOpened={isNavbarOpened}
+        onNavbarToggle={toggleNavbar}
         isDebugSidebarVisible={isDebugSidebarVisible}
+        profileName={activeProfileName}
+        documentTitle={activeDocumentTitle}
         navbar={
           <FileTreePane
             profiles={profiles}

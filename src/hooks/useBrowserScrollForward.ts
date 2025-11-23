@@ -31,14 +31,22 @@ export const useBrowserScrollForward = () => {
           return;
         }
 
-        // Use window.scrollBy with the actual deltaY
-        // This uses the exact scroll amount from the original gesture, maintaining natural feel
-        // Note: We use instant scrolling (no behavior option) to match the immediate nature
-        // of the forwarded scroll, but the magnitude matches the original gesture
-        window.scrollBy({
-          top: deltaY,
-          left: 0,
-        });
+        const scrollContainer = document.getElementById(
+          "renderer-main-scroll-container"
+        );
+
+        // Prefer scrolling the main content container; fall back to window if not found
+        if (scrollContainer?.scrollBy) {
+          scrollContainer.scrollBy({
+            top: deltaY,
+            left: 0,
+          });
+        } else {
+          window.scrollBy({
+            top: deltaY,
+            left: 0,
+          });
+        }
       }
     );
 

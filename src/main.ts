@@ -82,10 +82,10 @@ const createWindow = async () => {
     },
   });
 
-  // Helper function to update view bounds to match window size
+  // Helper function to update view bounds to match the window's content area (not the frame)
   const updateViewBounds = () => {
-    const bounds = baseWindow.getBounds();
-    appViewInstance.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+    const { width, height } = baseWindow.getContentBounds();
+    appViewInstance.setBounds({ x: 0, y: 0, width, height });
   };
 
   // Set initial bounds to match window size

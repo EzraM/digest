@@ -1,33 +1,131 @@
-import { ReactNode } from "react";
-import { AppShell } from "@mantine/core";
+import { ReactNode, useMemo } from "react";
+import { Box } from "@mantine/core";
+import { StatusBar } from "./StatusBar";
+import { useStatusBar } from "../../hooks/useStatusBar";
+import { SidebarToggleButton } from "./SidebarToggleButton";
+
+const NAVBAR_WIDTH = 320;
+const ASIDE_WIDTH = 400;
+const FOOTER_HEIGHT = 28;
+const TOGGLE_SAFE_SPACE = 56;
 
 type RendererLayoutProps = {
   navbar: ReactNode;
   main: ReactNode;
   aside: ReactNode;
+  isNavbarOpened: boolean;
+  onNavbarToggle: () => void;
   isDebugSidebarVisible: boolean;
+  profileName: string | null;
+  documentTitle: string | null;
 };
 
 export const RendererLayout = ({
   navbar,
   main,
   aside,
+  isNavbarOpened,
+  onNavbarToggle,
   isDebugSidebarVisible,
-}: RendererLayoutProps) => (
-  <AppShell
-    navbar={{
-      width: 320,
-      breakpoint: "sm",
-    }}
-    aside={{
-      width: 400,
-      breakpoint: "sm",
-      collapsed: { desktop: !isDebugSidebarVisible },
-    }}
-    padding="md"
-  >
-    <AppShell.Navbar p="md">{navbar}</AppShell.Navbar>
-    <AppShell.Main>{main}</AppShell.Main>
-    <AppShell.Aside p="md">{aside}</AppShell.Aside>
-  </AppShell>
-);
+  profileName,
+  documentTitle,
+}: RendererLayoutProps) => {
+  const { breadcrumbText, handleClick } = useStatusBar({
+    profileName,
+    documentTitle,
+    onToggleSidebar: onNavbarToggle,
+  });
+
+  const { navWidth, asideWidth } = useMemo(
+    () => ({
+      navWidth: isNavbarOpened ? NAVBAR_WIDTH : 0,
+      asideWidth: isDebugSidebarVisible ? ASIDE_WIDTH : 0,
+    }),
+    [isNavbarOpened, isDebugSidebarVisible]
+  );
+
+  return (
+    <Box
+      style={{
+        display: "grid",
+        gridTemplateColumns: `${navWidth}px 1fr ${asideWidth}px`,
+        gridTemplateRows: `minmax(0, 1fr) ${FOOTER_HEIGHT}px`,
+        gridTemplateAreas: `"nav main aside" "footer footer footer"`,
+        height: "100vh",
+        position: "relative",
+        backgroundColor: "var(--mantine-color-body)",
+      }}
+    >
+      <Box
+        component="nav"
+        style={{
+          gridArea: "nav",
+          display: navWidth ? "block" : "none",
+          minWidth: navWidth,
+          maxWidth: navWidth,
+          borderRight: navWidth
+            ? "1px solid var(--mantine-color-default-border)"
+            : "none",
+          overflow: "hidden",
+        }}
+        p="md"
+      >
+        {navbar}
+      </Box>
+
+      <Box
+        component="main"
+        id="renderer-main-scroll-container"
+        style={{
+          gridArea: "main",
+          position: "relative",
+          zIndex: 0,
+          paddingBottom: FOOTER_HEIGHT + 8,
+          paddingLeft: isNavbarOpened ? 0 : TOGGLE_SAFE_SPACE,
+          overflow: "auto",
+        }}
+      >
+        {main}
+      </Box>
+
+      <Box
+        component="aside"
+        style={{
+          gridArea: "aside",
+          display: asideWidth ? "block" : "none",
+          minWidth: asideWidth,
+          maxWidth: asideWidth,
+          borderLeft: asideWidth
+            ? "1px solid var(--mantine-color-default-border)"
+            : "none",
+          overflow: "hidden",
+        }}
+        p="md"
+      >
+        {aside}
+      </Box>
+
+      <Box
+        component="footer"
+        style={{
+          gridArea: "footer",
+          height: FOOTER_HEIGHT,
+          backgroundColor: "var(--mantine-color-body)",
+          borderTop: "1px solid var(--mantine-color-default-border)",
+          display: "flex",
+          alignItems: "center",
+          zIndex: 1,
+        }}
+        p={0}
+      >
+        <StatusBar breadcrumbText={breadcrumbText} onClick={handleClick} />
+      </Box>
+
+      <SidebarToggleButton
+        isOpen={isNavbarOpened}
+        navWidth={navWidth || NAVBAR_WIDTH}
+        onToggle={onNavbarToggle}
+      />
+    </Box>
+  );
+};
