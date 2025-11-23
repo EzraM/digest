@@ -3,6 +3,7 @@ import { createReactBlockSpec } from "@blocknote/react";
 import { Page } from "./Page";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
 import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
+import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import type { CustomBlockNoteEditor } from "../../types/schema";
 
 // Define the prop schema with proper typing
@@ -25,6 +26,7 @@ export const site = createReactBlockSpec(
         editor: CustomBlockNoteEditor;
       };
       const { url } = block.props;
+      const { copied, copy: handleCopy } = useCopyToClipboard(url);
       const {
         isAvailable: devToolsAvailable,
         isOpen: devToolsOpen,
@@ -103,18 +105,28 @@ export const site = createReactBlockSpec(
               {isNavigatingBack ? "⏳" : "←"}
             </button>
             <span aria-hidden="true">🌐</span>
-            <span
+            <button
+              type="button"
+              onClick={handleCopy}
               style={{
                 flex: 1,
                 fontFamily: "monospace",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
+                userSelect: "text",
+                background: "none",
+                border: "none",
+                padding: 0,
+                textAlign: "left",
+                cursor: "pointer",
+                color: "#333",
               }}
-              title={url}
+              title={copied ? "Copied!" : "Copy link"}
+              aria-label={copied ? "Copied link" : "Copy link"}
             >
               {url}
-            </span>
+            </button>
             {devToolsAvailable && (
               <button
                 type="button"
