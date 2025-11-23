@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MantineProvider } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useRendererDocuments } from "./hooks/useRendererDocuments";
@@ -83,9 +83,31 @@ export const RendererApp = () => {
 
   const activeDocumentTitle = activeDocument?.title ?? null;
 
-  const handleDebugToggle = useCallback((enabled: boolean) => {
-    setIsDebugSidebarVisible(enabled);
+  const showDebug = useCallback(async () => {
+    setIsDebugSidebarVisible(true);
+
+    if (!window.electronAPI?.debug) return;
+
+    try {
+      const isEnabled = await window.electronAPI.debug.isEnabled();
+      if (!isEnabled) {
+        await window.electronAPI.debug.toggle();
+      }
+    } catch (error) {
+      console.error("Failed to enable debug mode:", error);
+    }
   }, []);
+
+  useEffect(() => {
+    // Expose a global helper for showing the debug sidebar.
+    window.showDebug = showDebug;
+
+    return () => {
+      if (window.showDebug === showDebug) {
+        delete window.showDebug;
+      }
+    };
+  }, [showDebug]);
 
   const handleProfileSelect = useCallback(
     (profileId: string) => {
@@ -135,16 +157,15 @@ export const RendererApp = () => {
             documentId={activeDocumentId}
           >
             <EditorPane
-              editor={editor}
-              SlashCommandSyncMenu={SlashCommandSyncMenu}
-              onSlashMenuItems={handleSlashMenuItems}
-              onSlashMenuItemClick={handleSlashMenuItemClick}
-              onDebugToggle={handleDebugToggle}
-            />
-          </DocumentProvider>
-        }
-        aside={
-          <DebugPane
+            editor={editor}
+            SlashCommandSyncMenu={SlashCommandSyncMenu}
+            onSlashMenuItems={handleSlashMenuItems}
+            onSlashMenuItemClick={handleSlashMenuItemClick}
+          />
+        </DocumentProvider>
+      }
+      aside={
+        <DebugPane
             isVisible={isDebugSidebarVisible}
             onClose={() => setIsDebugSidebarVisible(false)}
           />
