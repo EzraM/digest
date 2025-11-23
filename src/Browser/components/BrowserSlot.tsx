@@ -2,6 +2,29 @@ import React, { useRef, useEffect } from "react";
 import { useSize } from "../hooks/useSize";
 import { BrowserSlotProps } from "../types";
 
+const getVisibleBounds = (rect: DOMRectReadOnly) => {
+  const scrollContainer = document.getElementById(
+    "renderer-main-scroll-container"
+  );
+  const viewportRect = scrollContainer?.getBoundingClientRect();
+
+  const viewportTop = viewportRect?.top ?? 0;
+  const viewportLeft = viewportRect?.left ?? 0;
+  const viewportRight =
+    viewportRect?.right ??
+    (typeof window !== "undefined" ? window.innerWidth : rect.right);
+  const viewportBottom =
+    viewportRect?.bottom ??
+    (typeof window !== "undefined" ? window.innerHeight : rect.bottom);
+
+  const x = Math.max(rect.left, viewportLeft);
+  const y = Math.max(rect.top, viewportTop);
+  const width = Math.max(0, Math.min(rect.right, viewportRight) - x);
+  const height = Math.max(0, Math.min(rect.bottom, viewportBottom) - y);
+
+  return { x, y, width, height };
+};
+
 export function BrowserSlot({
   blockId,
   onBoundsChange,
@@ -14,12 +37,7 @@ export function BrowserSlot({
   // Send size updates when the size changes
   useEffect(() => {
     if (size && onBoundsChange) {
-      const { width = 0, height = 0 } = size;
-      const x = typeof size.x === "number" ? size.x : 0;
-      const y = typeof size.y === "number" ? size.y : 0;
-
-      const update = { x, y, width, height };
-      onBoundsChange(update);
+      onBoundsChange(getVisibleBounds(size));
     }
   }, [size, onBoundsChange]);
 
@@ -28,13 +46,7 @@ export function BrowserSlot({
     const timeoutId = setTimeout(() => {
       if (ref.current && onBoundsChange) {
         const rect = ref.current.getBoundingClientRect();
-        const update = {
-          x: typeof rect.x === "number" ? rect.x : 0,
-          y: typeof rect.y === "number" ? rect.y : 0,
-          width: rect.width || 0,
-          height: rect.height || 0,
-        };
-        onBoundsChange(update);
+        onBoundsChange(getVisibleBounds(rect));
       }
     }, 100);
 
