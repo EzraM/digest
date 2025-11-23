@@ -30,26 +30,63 @@ export function injectScrollForwardingScript(
       }
       window.__scrollForwardingInjected = true;
 
-      let isAtTop = false;
-      let isAtBottom = false;
       let lastWheelDelta = 0;
 
-      function checkScrollPosition() {
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const scrollHeight = document.documentElement.scrollHeight;
-        const clientHeight = window.innerHeight || document.documentElement.clientHeight;
+      function isScrollable(element) {
+        if (!element || element === window) return false;
+        const style = window.getComputedStyle(element);
+        const canScrollY = ["auto", "scroll"].includes(style.overflowY);
+        return (
+          canScrollY &&
+          element.scrollHeight - element.clientHeight > 1 // >1 accounts for subpixel diffs
+        );
+      }
 
-        // Use small threshold for better detection
-        isAtTop = scrollTop <= 5;
-        isAtBottom = scrollTop + clientHeight >= scrollHeight - 5;
+      function getScrollTarget(event) {
+        const path = event.composedPath ? event.composedPath() : [];
+        if (path.length) {
+          for (const el of path) {
+            if (el instanceof Element && isScrollable(el)) {
+              return el;
+            }
+          }
+        }
+
+        // Fallback: climb the DOM from target
+        let node = event.target;
+        while (node && node !== document) {
+          if (node instanceof Element && isScrollable(node)) {
+            return node;
+          }
+          node = node.parentNode;
+        }
+
+        // Final fallback: document scrolling element
+        return document.scrollingElement || document.documentElement;
+      }
+
+      function getScrollState(element) {
+        if (!element) {
+          return { isAtTop: true, isAtBottom: true };
+        }
+
+        const scrollTop = element.scrollTop;
+        const scrollHeight = element.scrollHeight;
+        const clientHeight = element.clientHeight;
+        const threshold = 5;
+
+        return {
+          isAtTop: scrollTop <= threshold,
+          isAtBottom: scrollTop + clientHeight >= scrollHeight - threshold,
+        };
       }
 
       function handleWheel(event) {
         // Store wheel delta for direction detection
         lastWheelDelta = event.deltaY;
 
-        // Check scroll position immediately so we know if we've hit the boundary
-        checkScrollPosition();
+        const target = getScrollTarget(event);
+        const { isAtTop, isAtBottom } = getScrollState(target);
         
         // If at top and scrolling up, forward scroll immediately
         if (isAtTop && lastWheelDelta < 0) {
@@ -76,28 +113,12 @@ export function injectScrollForwardingScript(
         }
       }
 
-      // Initial check
-      checkScrollPosition();
-
-      // Listen for scroll events to update position
-      const scrollHandler = () => checkScrollPosition();
-      window.addEventListener('scroll', scrollHandler, { passive: true });
-      
       // Listen for wheel events
       window.addEventListener('wheel', handleWheel, { passive: true });
-      
-      // Also check on resize
-      window.addEventListener('resize', checkScrollPosition, { passive: true });
-
-      // Check periodically in case content loads dynamically
-      const intervalId = setInterval(checkScrollPosition, 1000);
 
       // Cleanup on unload to avoid leaking listeners across navigations
       window.addEventListener('beforeunload', () => {
-        window.removeEventListener('scroll', scrollHandler);
         window.removeEventListener('wheel', handleWheel);
-        window.removeEventListener('resize', checkScrollPosition);
-        clearInterval(intervalId);
       });
     })();
   `;
