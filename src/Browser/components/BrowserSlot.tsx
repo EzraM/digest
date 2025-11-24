@@ -2,25 +2,24 @@ import React, { useRef, useEffect } from "react";
 import { useSize } from "../hooks/useSize";
 import { BrowserSlotProps } from "../types";
 
+const STATUS_BAR_HEIGHT = 28; // Matches RendererLayout FOOTER_HEIGHT
+
 const getVisibleBounds = (rect: DOMRectReadOnly) => {
-  const scrollContainer = document.getElementById(
-    "renderer-main-scroll-container"
-  );
-  const viewportRect = scrollContainer?.getBoundingClientRect();
+  const viewportWidth =
+    typeof window !== "undefined" ? window.innerWidth : rect.right;
+  const viewportHeight =
+    typeof window !== "undefined" ? window.innerHeight : rect.bottom;
 
-  const viewportTop = viewportRect?.top ?? 0;
-  const viewportLeft = viewportRect?.left ?? 0;
-  const viewportRight =
-    viewportRect?.right ??
-    (typeof window !== "undefined" ? window.innerWidth : rect.right);
-  const viewportBottom =
-    viewportRect?.bottom ??
-    (typeof window !== "undefined" ? window.innerHeight : rect.bottom);
+  // Preserve the full rendered size of the webview while clipping it to the
+  // visible viewport and keeping it clear of the bottom status bar.
+  const x = Math.max(rect.left, 0);
+  const maxRight = Math.min(rect.right, viewportWidth);
+  const width = Math.max(0, maxRight - x);
 
-  const x = Math.max(rect.left, viewportLeft);
-  const y = Math.max(rect.top, viewportTop);
-  const width = Math.max(0, Math.min(rect.right, viewportRight) - x);
-  const height = Math.max(0, Math.min(rect.bottom, viewportBottom) - y);
+  const y = Math.max(rect.top, 0);
+  const safeBottom = viewportHeight - STATUS_BAR_HEIGHT;
+  const visibleBottom = Math.min(rect.bottom, safeBottom);
+  const height = Math.max(0, visibleBottom - y);
 
   return { x, y, width, height };
 };
