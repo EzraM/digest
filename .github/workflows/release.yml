@@ -1,0 +1,42 @@
+name: Release builds
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    strategy:
+      matrix:
+        # macOS runners are required to produce signed/notarizable .dmg installers for
+        # mac builds; Linux/Windows cannot cross-compile these artifacts reliably.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build distributables
+        run: yarn make
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/make/**/*
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
