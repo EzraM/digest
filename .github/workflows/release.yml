@@ -3,13 +3,13 @@ name: Release builds
 on:
   push:
     tags:
-      - '*.*.*'
+      - "*.*.*"
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  release:
     strategy:
       matrix:
         # macOS runners are required to produce signed/notarizable .dmg installers for
@@ -30,13 +30,7 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Build distributables
-        run: yarn make
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          files: out/make/**/*
-          tag_name: ${{ github.ref_name }}
+      - name: Publish artifacts to GitHub Releases
+        run: yarn publish -- --ci
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
