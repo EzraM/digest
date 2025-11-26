@@ -68,11 +68,13 @@
     "yjs": "^13.6.10"
   },
   "resolutions": {
-    "prosemirror-model": "1.25.1",
-    "prosemirror-view": "1.40.0",
-    "prosemirror-transform": "1.10.4",
-    "prosemirror-state": "1.4.3",
-    "node-abi": "^4.24.0"
+    "prosemirror-model": "^1.25.4",
+    "prosemirror-view": "^1.41.3",
+    "prosemirror-transform": "^1.10.5",
+    "prosemirror-state": "^1.4.4",
+    "node-abi": "^4.24.0",
+    "esbuild": ">=0.25.0",
+    "tmp": ">=0.2.4"
   },
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"
 }
