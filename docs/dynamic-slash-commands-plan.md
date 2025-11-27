@@ -7,6 +7,8 @@ Goal: externalize slash command configuration, allow runtime updates, and keep t
 - Command palette consumes a baked-in registry in renderer code.
 - Communication between renderer and main uses Electron RPC; there is no HTTP API surface.
 - Local DB is single-writer (main), so renderer must go through IPC for mutations.
+- Existing app services are wired through the DI container; new slash-command services should follow the same pattern so
+  the palette/store code can request them without ad-hoc imports.
 
 ## Outcomes for Phase 1
 - Commands are loaded from SQLite (or a cached JSON seed) instead of static imports.
@@ -25,6 +27,8 @@ Goal: externalize slash command configuration, allow runtime updates, and keep t
 - Seed defaults once on first migration run (GitHub, Google, Jira, 1Password, etc.).
 - Add lightweight versioning (`schema_version` row in a `kv_store` table or similar) to avoid reseeding on every launch.
 - Keep all writes centralized in main; renderer never writes SQLite directly.
+- Implement the slash-command store as a main-process service registered in the existing DI container so migrations, IPC
+  handlers, and future sync hooks reuse shared DB/logging dependencies rather than introducing a separate wiring path.
 
 ## IPC Surface (Main ↔ Renderer)
 Expose a focused IPC contract from main to renderer (typed where possible):
