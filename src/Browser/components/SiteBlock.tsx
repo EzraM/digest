@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { Page } from "./Page";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
@@ -10,6 +10,10 @@ import type { CustomBlockNoteEditor } from "../../types/schema";
 const sitePropSchema = {
   url: {
     default: "" as const,
+  },
+  heightMode: {
+    default: "normal" as const,
+    values: ["normal", "expanded"] as const,
   },
 } as const;
 
@@ -25,7 +29,7 @@ export const site = createReactBlockSpec(
       const { block, editor } = props as typeof props & {
         editor: CustomBlockNoteEditor;
       };
-      const { url } = block.props;
+      const { url, heightMode } = block.props;
       const { copied, copy: handleCopy } = useCopyToClipboard(url);
       const {
         isAvailable: devToolsAvailable,
@@ -35,6 +39,30 @@ export const site = createReactBlockSpec(
       } = useDevToolsState(block.id);
       const { canGoBack, isNavigatingBack, goBack } =
         useBrowserNavigationState(block.id, editor, url);
+
+      const containerRef = useRef<HTMLDivElement>(null);
+
+      const toggleHeightMode = () => {
+        editor.updateBlock(block, {
+          type: "site",
+          props: {
+            ...block.props,
+            heightMode: heightMode === "normal" ? "expanded" : "normal",
+          },
+        });
+      };
+
+      // Scroll into view when expanded
+      useEffect(() => {
+        if (heightMode === "expanded" && containerRef.current) {
+          setTimeout(() => {
+            containerRef.current?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }, 100); // Small delay to let height change take effect
+        }
+      }, [heightMode]);
 
       // Site blocks must always have a URL - if not, show an error
       if (!url) {
@@ -57,6 +85,7 @@ export const site = createReactBlockSpec(
 
       return (
         <div
+          ref={containerRef}
           style={{
             border: "1px solid #e0e0e0",
             borderRadius: "8px",
@@ -103,6 +132,27 @@ export const site = createReactBlockSpec(
               aria-disabled={!canGoBack}
             >
               {isNavigatingBack ? "⏳" : "←"}
+            </button>
+            <button
+              type="button"
+              onClick={toggleHeightMode}
+              style={{
+                border: "1px solid #d0d0d0",
+                backgroundColor: heightMode === "expanded" ? "#e7f5ff" : "#fff",
+                color: heightMode === "expanded" ? "#1c7ed6" : "#333",
+                borderRadius: "4px",
+                padding: "2px 8px",
+                cursor: "pointer",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: "36px",
+              }}
+              title={heightMode === "expanded" ? "Collapse" : "Expand"}
+              aria-label={heightMode === "expanded" ? "Collapse block" : "Expand block"}
+            >
+              {heightMode === "expanded" ? "⊟" : "⊞"}
             </button>
             <span aria-hidden="true">🌐</span>
             <button
@@ -156,7 +206,7 @@ export const site = createReactBlockSpec(
           </div>
 
           {/* Browser content */}
-          <Page blockId={block.id} url={url} />
+          <Page blockId={block.id} url={url} heightMode={heightMode} />
         </div>
       );
     },

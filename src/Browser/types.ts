@@ -2,6 +2,7 @@
 export interface PageProps {
   blockId: string;
   url: string;
+  heightMode?: "normal" | "expanded";
 }
 
 export type BrowserInitStatus =

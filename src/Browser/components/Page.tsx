@@ -1,10 +1,13 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { PageProps } from "../types";
 import { BrowserSlot } from "./BrowserSlot";
 import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
 import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
 
-export function Page({ blockId, url }: PageProps) {
+const FOOTER_HEIGHT = 28;
+const NORMAL_HEIGHT = 800;
+
+export function Page({ blockId, url, heightMode = "normal" }: PageProps) {
   const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
     useBrowserViewUpdater(blockId);
   const {
@@ -12,6 +15,20 @@ export function Page({ blockId, url }: PageProps) {
     retryInitialization,
     getInitAttemptRef,
   } = useBrowserInitialization(blockId);
+
+  // Calculate height based on mode
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+
+  useEffect(() => {
+    const handleResize = () => setViewportHeight(window.innerHeight);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const height =
+    heightMode === "expanded"
+      ? viewportHeight - FOOTER_HEIGHT - 100 // Extra padding for toolbar and margins
+      : NORMAL_HEIGHT;
 
   const handleBoundsChange = useCallback(
     (bounds: { x: number; y: number; width: number; height: number }) => {
@@ -58,7 +75,7 @@ export function Page({ blockId, url }: PageProps) {
       key="browserContainer"
       style={{
         width: "100%",
-        height: 800,
+        height,
       }}
     >
       <BrowserSlot
