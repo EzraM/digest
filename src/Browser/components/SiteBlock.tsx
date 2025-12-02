@@ -5,6 +5,8 @@ import { useDevToolsState } from "../../hooks/useDevToolsState";
 import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import type { CustomBlockNoteEditor } from "../../types/schema";
+import { useDocumentContext } from "../../context/DocumentContext";
+import { useRendererRoute } from "../../context/RendererRouteContext";
 
 // Define the prop schema with proper typing
 const sitePropSchema = {
@@ -41,20 +43,35 @@ export const site = createReactBlockSpec(
         useBrowserNavigationState(block.id, editor, url);
 
       const containerRef = useRef<HTMLDivElement>(null);
+      const { documentId } = useDocumentContext();
+      const { route, navigateToBlock, navigateToDoc } = useRendererRoute();
+
+      const isRouteExpanded =
+        route.kind === "block" && route.blockId === block.id;
+      const effectiveHeightMode =
+        isRouteExpanded || heightMode === "expanded" ? "expanded" : "normal";
 
       const toggleHeightMode = () => {
         editor.updateBlock(block, {
           type: "site",
           props: {
             ...block.props,
-            heightMode: heightMode === "normal" ? "expanded" : "normal",
+            heightMode: effectiveHeightMode === "normal" ? "expanded" : "normal",
           },
         });
       };
 
+      const openDedicatedView = () => {
+        if (documentId) {
+          navigateToBlock(block.id, documentId);
+        } else {
+          navigateToBlock(block.id);
+        }
+      };
+
       // Scroll into view when expanded
       useEffect(() => {
-        if (heightMode === "expanded" && containerRef.current) {
+        if (effectiveHeightMode === "expanded" && containerRef.current) {
           setTimeout(() => {
             containerRef.current?.scrollIntoView({
               behavior: "smooth",
@@ -62,7 +79,7 @@ export const site = createReactBlockSpec(
             });
           }, 100); // Small delay to let height change take effect
         }
-      }, [heightMode]);
+      }, [effectiveHeightMode]);
 
       // Site blocks must always have a URL - if not, show an error
       if (!url) {
@@ -86,6 +103,7 @@ export const site = createReactBlockSpec(
       return (
         <div
           ref={containerRef}
+          id={`site-block-${block.id}`}
           style={{
             border: "1px solid #e0e0e0",
             borderRadius: "8px",
@@ -138,8 +156,9 @@ export const site = createReactBlockSpec(
               onClick={toggleHeightMode}
               style={{
                 border: "1px solid #d0d0d0",
-                backgroundColor: heightMode === "expanded" ? "#e7f5ff" : "#fff",
-                color: heightMode === "expanded" ? "#1c7ed6" : "#333",
+                backgroundColor:
+                  effectiveHeightMode === "expanded" ? "#e7f5ff" : "#fff",
+                color: effectiveHeightMode === "expanded" ? "#1c7ed6" : "#333",
                 borderRadius: "4px",
                 padding: "2px 8px",
                 cursor: "pointer",
@@ -149,10 +168,37 @@ export const site = createReactBlockSpec(
                 justifyContent: "center",
                 minWidth: "36px",
               }}
-              title={heightMode === "expanded" ? "Collapse" : "Expand"}
-              aria-label={heightMode === "expanded" ? "Collapse block" : "Expand block"}
+              title={
+                effectiveHeightMode === "expanded" ? "Collapse" : "Expand"
+              }
+              aria-label={
+                effectiveHeightMode === "expanded"
+                  ? "Collapse block"
+                  : "Expand block"
+              }
             >
-              {heightMode === "expanded" ? "⊟" : "⊞"}
+              {effectiveHeightMode === "expanded" ? "⊟" : "⊞"}
+            </button>
+            <button
+              type="button"
+              onClick={openDedicatedView}
+              style={{
+                border: "1px solid #d0d0d0",
+                backgroundColor: "#fff",
+                color: "#333",
+                borderRadius: "4px",
+                padding: "2px 8px",
+                cursor: "pointer",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: "36px",
+              }}
+              title="Open in dedicated view"
+              aria-label="Open block in dedicated view"
+            >
+              ↗
             </button>
             <span aria-hidden="true">🌐</span>
             <button
@@ -206,7 +252,7 @@ export const site = createReactBlockSpec(
           </div>
 
           {/* Browser content */}
-          <Page blockId={block.id} url={url} heightMode={heightMode} />
+          <Page blockId={block.id} url={url} heightMode={effectiveHeightMode} />
         </div>
       );
     },

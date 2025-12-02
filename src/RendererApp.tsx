@@ -7,7 +7,9 @@ import { useSlashCommandBridge } from "./hooks/useSlashCommandBridge";
 import { useProfileCreationModal } from "./hooks/useProfileCreationModal";
 import { useRendererEditor } from "./hooks/useRendererEditor";
 import { useDocumentActions } from "./hooks/useDocumentActions";
+import { useRendererRouter } from "./hooks/useRendererRouter";
 import { RendererLayout } from "./components/renderer/RendererLayout";
+import { BlockRouteView } from "./components/renderer/BlockRouteView";
 import { FileTreePane } from "./components/renderer/FileTreePane";
 import { EditorPane } from "./components/renderer/EditorPane";
 import { DebugPane } from "./components/renderer/DebugPane";
@@ -15,6 +17,7 @@ import { ProfileModal } from "./components/renderer/ProfileModal";
 import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
+import { RendererRouteProvider } from "./context/RendererRouteContext";
 
 export const RendererApp = () => {
   const [isNavbarOpened, { toggle: toggleNavbar }] = useDisclosure(true);
@@ -50,6 +53,10 @@ export const RendererApp = () => {
   });
 
   const activeDocumentId = activeDocument?.id ?? null;
+  const { route, navigateToDoc, navigateToBlock } = useRendererRouter(
+    activeDocumentId,
+    activeDocumentId
+  );
 
   const {
     handleDocumentSelect,
@@ -126,60 +133,74 @@ export const RendererApp = () => {
 
   return (
     <MantineProvider defaultColorScheme="auto">
-      <RendererLayout
-        isNavbarOpened={isNavbarOpened}
-        onNavbarToggle={toggleNavbar}
-        isDebugSidebarVisible={isDebugSidebarVisible}
-        profileName={activeProfileName}
-        documentTitle={activeDocumentTitle}
-        navbar={
-          <FileTreePane
-            profiles={profiles}
-            activeProfileId={activeProfileId}
-            onSelectProfile={handleProfileSelect}
-            onCreateProfile={handleOpenCreateProfileModal}
-            documentTree={activeProfileTree}
-            activeDocumentId={activeDocumentId}
-            onSelectDocument={handleDocumentSelect}
-            onCreateDocument={handleCreateDocument}
-            onRenameDocument={handleRenameDocument}
-            onDeleteDocument={handleDeleteDocument}
-            onMoveDocumentToProfile={handleMoveDocumentToProfile}
-            onMoveDocument={handleMoveDocumentWithinTree}
-            pendingEditDocumentId={pendingRenameDocumentId}
-            onPendingEditConsumed={handlePendingRenameConsumed}
-            onPendingDocumentNamed={handlePendingDocumentNamed}
-          />
-        }
-        main={
-          <DocumentProvider
-            profileId={activeDocument?.profileId ?? DEFAULT_PROFILE_ID}
-            documentId={activeDocumentId}
-          >
-            <EditorPane
+      <RendererRouteProvider
+        value={{ route, navigateToDoc, navigateToBlock }}
+      >
+        {route.kind === "block" ? (
+          <BlockRouteView
+            blockId={route.blockId}
+            docId={route.docId ?? activeDocumentId}
+            profileId={activeDocument?.profileId ?? null}
             editor={editor}
-            SlashCommandSyncMenu={SlashCommandSyncMenu}
-            onSlashMenuItems={handleSlashMenuItems}
-            onSlashMenuItemClick={handleSlashMenuItemClick}
           />
-        </DocumentProvider>
-      }
-      aside={
-        <DebugPane
-            isVisible={isDebugSidebarVisible}
-            onClose={() => setIsDebugSidebarVisible(false)}
+        ) : (
+          <RendererLayout
+            isNavbarOpened={isNavbarOpened}
+            onNavbarToggle={toggleNavbar}
+            isDebugSidebarVisible={isDebugSidebarVisible}
+            profileName={activeProfileName}
+            documentTitle={activeDocumentTitle}
+            navbar={
+              <FileTreePane
+                profiles={profiles}
+                activeProfileId={activeProfileId}
+                onSelectProfile={handleProfileSelect}
+                onCreateProfile={handleOpenCreateProfileModal}
+                documentTree={activeProfileTree}
+                activeDocumentId={activeDocumentId}
+                onSelectDocument={handleDocumentSelect}
+                onCreateDocument={handleCreateDocument}
+                onRenameDocument={handleRenameDocument}
+                onDeleteDocument={handleDeleteDocument}
+                onMoveDocumentToProfile={handleMoveDocumentToProfile}
+                onMoveDocument={handleMoveDocumentWithinTree}
+                pendingEditDocumentId={pendingRenameDocumentId}
+                onPendingEditConsumed={handlePendingRenameConsumed}
+                onPendingDocumentNamed={handlePendingDocumentNamed}
+              />
+            }
+            main={
+              <DocumentProvider
+                profileId={activeDocument?.profileId ?? DEFAULT_PROFILE_ID}
+                documentId={activeDocumentId}
+              >
+                <EditorPane
+                  editor={editor}
+                  SlashCommandSyncMenu={SlashCommandSyncMenu}
+                  onSlashMenuItems={handleSlashMenuItems}
+                  onSlashMenuItemClick={handleSlashMenuItemClick}
+                  focusBlockId={route.kind === "doc" ? route.focusBlockId ?? null : null}
+                />
+              </DocumentProvider>
+            }
+            aside={
+              <DebugPane
+                isVisible={isDebugSidebarVisible}
+                onClose={() => setIsDebugSidebarVisible(false)}
+              />
+            }
           />
-        }
-      />
-      <ProfileModal
-        opened={isCreateProfileModalOpen}
-        profileName={profileModalName}
-        error={profileModalError}
-        isCreating={isCreatingProfile}
-        onNameChange={handleProfileModalNameChange}
-        onClose={handleCloseCreateProfileModal}
-        onConfirm={handleConfirmCreateProfile}
-      />
+        )}
+        <ProfileModal
+          opened={isCreateProfileModalOpen}
+          profileName={profileModalName}
+          error={profileModalError}
+          isCreating={isCreatingProfile}
+          onNameChange={handleProfileModalNameChange}
+          onClose={handleCloseCreateProfileModal}
+          onConfirm={handleConfirmCreateProfile}
+        />
+      </RendererRouteProvider>
     </MantineProvider>
   );
 };

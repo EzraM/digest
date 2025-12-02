@@ -7,7 +7,12 @@ import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
 const FOOTER_HEIGHT = 28;
 const NORMAL_HEIGHT = 800;
 
-export function Page({ blockId, url, heightMode = "normal" }: PageProps) {
+export function Page({
+  blockId,
+  url,
+  heightMode = "normal",
+  layout = "inline",
+}: PageProps & { layout?: "inline" | "full" }) {
   const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
     useBrowserViewUpdater(blockId);
   const {
@@ -26,9 +31,11 @@ export function Page({ blockId, url, heightMode = "normal" }: PageProps) {
   }, []);
 
   const height =
-    heightMode === "expanded"
-      ? viewportHeight - FOOTER_HEIGHT - 100 // Extra padding for toolbar and margins
-      : NORMAL_HEIGHT;
+    layout === "full"
+      ? viewportHeight
+      : heightMode === "expanded"
+        ? viewportHeight - FOOTER_HEIGHT - 100 // Extra padding for toolbar and margins
+        : NORMAL_HEIGHT;
 
   const handleBoundsChange = useCallback(
     (bounds: { x: number; y: number; width: number; height: number }) => {
