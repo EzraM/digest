@@ -3,6 +3,8 @@
  * Uses explicit dependency declarations and topological sorting
  */
 
+import semver from "semver";
+
 export type ServiceFactory<T = any> = (container: Container) => T | Promise<T>;
 
 export interface ServiceDefinition<T = any> {
@@ -12,6 +14,8 @@ export interface ServiceDefinition<T = any> {
   dependencies?: string[];
   /** Whether to cache the instance (default: true) */
   singleton?: boolean;
+  /** Optional semantic version for the service API */
+  version?: string;
 }
 
 export class Container {
@@ -23,6 +27,11 @@ export class Container {
    * Register a service with explicit dependencies
    */
   register<T>(name: string, definition: ServiceDefinition<T>): void {
+    if (definition.version && !semver.valid(definition.version)) {
+      throw new Error(
+        `Invalid version "${definition.version}" for service ${name}`
+      );
+    }
     this.definitions.set(name, definition);
   }
 
@@ -30,7 +39,7 @@ export class Container {
    * Resolve a service and all its dependencies
    * Uses topological sorting to ensure dependencies are resolved first
    */
-  async resolve<T>(name: string): Promise<T> {
+  async resolve<T>(name: string, versionRange?: string): Promise<T> {
     // Prevent circular dependencies
     if (this.initializing.has(name)) {
       const chain = Array.from(this.initializing).join(' -> ');
@@ -45,6 +54,20 @@ export class Container {
     const definition = this.definitions.get(name);
     if (!definition) {
       throw new Error(`Service not registered: ${name}`);
+    }
+
+    if (versionRange) {
+      if (!definition.version) {
+        throw new Error(
+          `Service ${name} does not declare a version but version range ${versionRange} was requested`
+        );
+      }
+
+      if (!semver.satisfies(definition.version, versionRange)) {
+        throw new Error(
+          `Service ${name} version ${definition.version} does not satisfy requested range ${versionRange}`
+        );
+      }
     }
 
     this.initializing.add(name);

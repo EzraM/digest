@@ -1,0 +1,61 @@
+import { IPCHandlerMap } from "../IPCRouter";
+import { ViewManager } from "../../services/ViewManager";
+import { log } from "../../utils/mainLogger";
+
+export function createBrowserHandlers(viewManager: ViewManager): IPCHandlerMap {
+  return {
+    "update-browser": {
+      type: "on",
+      fn: (_event, _browserLayout) => {
+        log.debug(`Received update-browser event`, "main");
+      },
+    },
+    "remove-browser": {
+      type: "on",
+      fn: (_event, blockId: string) => {
+        log.debug(`Received remove-browser event for block ${blockId}`, "main");
+        viewManager.handleRemoveView(blockId);
+      },
+    },
+    "browser:get-devtools-state": {
+      type: "invoke",
+      fn: (_event, blockId: string) => {
+        log.debug(
+          `Received browser:get-devtools-state request for block ${blockId}`,
+          "main"
+        );
+        return viewManager.getDevToolsState(blockId);
+      },
+    },
+    "browser:toggle-devtools": {
+      type: "invoke",
+      fn: (_event, blockId: string) => {
+        log.debug(
+          `Received browser:toggle-devtools request for block ${blockId}`,
+          "main"
+        );
+        return viewManager.toggleDevTools(blockId);
+      },
+    },
+    "browser:go-back": {
+      type: "invoke",
+      fn: async (_event, blockId: string) => {
+        log.debug(
+          `Received browser:go-back request for block ${blockId}`,
+          "main"
+        );
+        return viewManager.goBack(blockId);
+      },
+    },
+    "update-browser-view": {
+      type: "on",
+      fn: (_event, data) => {
+        log.debug(
+          `Received update-browser-view event for block ${data.blockId}`,
+          "main"
+        );
+        viewManager.handleBlockViewUpdate(data);
+      },
+    },
+  };
+}
