@@ -1,12 +1,4 @@
-import {
-  app,
-  BrowserWindow,
-  WebContentsView,
-  ipcMain,
-  globalShortcut,
-  IpcMainEvent,
-  IpcMainInvokeEvent,
-} from "electron";
+import { app, BrowserWindow, WebContentsView, globalShortcut } from "electron";
 import path from "path";
 import { ViewManager } from "./services/ViewManager";
 import { viteConfig } from "./config/vite";
@@ -24,6 +16,14 @@ import {
   initializeAllServices,
   getServices,
 } from "./services/ServiceRegistry";
+import { IPCRouter, IPCHandlerMap } from "./ipc/IPCRouter";
+import { createProfileHandlers } from "./ipc/handlers/profileHandlers";
+import { createDocumentHandlers } from "./ipc/handlers/documentHandlers";
+import { createSlashCommandHandlers } from "./ipc/handlers/slashCommandHandlers";
+import { createRendererHandlers } from "./ipc/handlers/rendererHandlers";
+import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
+import { createBlockHandlers } from "./ipc/handlers/blockHandlers";
+import { IPCServiceBridge } from "./services/IPCServiceBridge";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -63,6 +63,8 @@ const createWindow = async () => {
   // Get service instances
   const services = getServices(serviceContainer);
   const { blockEventManager, documentManager } = services;
+  const ipcRouter = new IPCRouter();
+  const ipcServiceBridge = new IPCServiceBridge(ipcRouter, serviceContainer);
   const baseWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -222,11 +224,23 @@ const createWindow = async () => {
   services.debugEventService.setMainRendererWebContents(appViewInstance);
   blockEventManager.setRendererWebContents(appViewInstance);
 
+  ipcServiceBridge.exposeService(
+    "profileManager",
+    [{ method: "listProfiles", alias: "list" }],
+    "profiles"
+  );
+
   // Document loading/seeding will happen when renderer signals it's ready
   // This prevents race condition where Y.js updates are broadcast before renderer can receive them
 
   // Set up IPC handlers (including renderer-ready handler)
-  setupIpcHandlers(viewManager, slashCommandManager, services, appViewInstance);
+  setupIpcHandlers(
+    ipcRouter,
+    viewManager,
+    slashCommandManager,
+    services,
+    appViewInstance
+  );
 
   // Update view bounds when window is resized
   baseWindow.on("resize", updateViewBounds);
@@ -288,6 +302,7 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 };
 
 const setupIpcHandlers = (
+  router: IPCRouter,
   viewManager: ViewManager,
   slashCommandManager: SlashCommandManager,
   services: ReturnType<typeof getServices>,
@@ -333,10 +348,9 @@ const setupIpcHandlers = (
       await blockService.seedInitialContent(welcomeContent);
     }
   };
-  // Handle renderer ready signal - load/seed document only after renderer is ready
-  ipcMain.on("renderer-ready", async () => {
-    log.debug("Renderer ready signal received - loading document", "main");
 
+  const loadInitialDocument = async () => {
+    log.debug("Renderer ready signal received - loading document", "main");
     const activeDocument =
       documentManager.activeDocument ?? documentManager.listDocuments()[0];
 
@@ -351,312 +365,40 @@ const setupIpcHandlers = (
     } catch (error) {
       log.debug(`Error loading document: ${error}`, "main");
     }
+  };
 
-    broadcastProfiles();
-    broadcastDocumentTree(activeDocument.profileId);
-    broadcastActiveDocument();
-  });
+  const resolveProfileId = () => profileManager.listProfiles()[0]?.id ?? null;
 
-  // Handle browser updates
-  ipcMain.on("update-browser", (_, _browserLayout) => {
-    log.debug(`Received update-browser event`, "main");
-    // Migrate to unified event: you must provide both url and bounds here
-    // Example: viewManager.handleBlockViewUpdate({ blockId, url, bounds })
-    // If browserLayout does not have url, you need to refactor the caller to provide it
-  });
-
-  // Handle browser removal
-  ipcMain.on("remove-browser", (_, blockId) => {
-    log.debug(`Received remove-browser event for block ${blockId}`, "main");
-    viewManager.handleRemoveView(blockId);
-  });
-
-  ipcMain.handle("browser:get-devtools-state", (_, blockId: string) => {
-    log.debug(
-      `Received browser:get-devtools-state request for block ${blockId}`,
-      "main"
+  const registerMap = (handlers: IPCHandlerMap) => {
+    Object.entries(handlers).forEach(([channel, handler]) =>
+      router.register(channel, handler)
     );
-    return viewManager.getDevToolsState(blockId);
-  });
+  };
 
-  ipcMain.handle("browser:toggle-devtools", (_, blockId: string) => {
-    log.debug(
-      `Received browser:toggle-devtools request for block ${blockId}`,
-      "main"
-    );
-    return viewManager.toggleDevTools(blockId);
-  });
-
-  ipcMain.handle("browser:go-back", async (_, blockId: string) => {
-    log.debug(
-      `Received browser:go-back request for block ${blockId}`,
-      "main"
-    );
-    return viewManager.goBack(blockId);
-  });
-
-  // Handle slash command events through the new state manager
-  ipcMain.on("slash-command:start", () => {
-    log.debug("Slash command start event received", "main");
-    slashCommandManager.startSlashCommand();
-  });
-
-  ipcMain.on("slash-command:cancel", () => {
-    log.debug("Slash command cancel event received", "main");
-    slashCommandManager.cancelSlashCommand();
-  });
-
-  ipcMain.on(
-    "slash-command:update-results",
-    (_event, payload: import("./types/slashCommand").SlashCommandResultsPayload) => {
-      log.debug(
-        `Slash command results update received (items: ${payload.items.length}, selected: ${payload.selectedIndex})`,
-        "main",
-      );
-      slashCommandManager.updateResults(payload);
-    },
+  registerMap(
+    createRendererHandlers({
+      loadInitialDocument,
+      broadcastProfiles,
+      broadcastDocumentTree,
+      broadcastActiveDocument,
+      getActiveProfileId: () => documentManager.activeDocument?.profileId ?? null,
+    })
   );
 
-  ipcMain.on("slash-command:overlay-ready", () => {
-    log.debug("Slash command overlay ready event received", "main");
-    slashCommandManager.handleOverlayReady();
-  });
-
-  // Handle block selection from HUD through the state manager
-  ipcMain.on("block-menu:select", (_, blockKey) => {
-    log.debug(`Block selected from HUD: ${blockKey}`, "main");
-    slashCommandManager.selectBlock(blockKey);
-  });
-
-  // Handle renderer log forwarding
-  ipcMain.on(
-    "renderer-log",
-    (
-      _event: IpcMainEvent,
-      logData: {
-        level: string;
-        message: string;
-        timestamp: string;
-        source: string;
-      }
-    ) => {
-      const { level, message, source } = logData;
-      const safeLevel = (level || "debug").toUpperCase();
-      const safeMessage = message || "No message";
-      const safeSource = source || "unknown";
-
-      log.debug(
-        `[RENDERER-${safeLevel}] ${safeSource} - ${safeMessage}`,
-        "renderer-console"
-      );
-    }
+  registerMap(createBrowserHandlers(viewManager));
+  registerMap(createSlashCommandHandlers(slashCommandManager));
+  registerMap(createBlockHandlers(documentManager, rendererView));
+  registerMap(
+    createProfileHandlers(profileManager, broadcastProfiles, broadcastDocumentTree)
   );
-
-  // Handle block operations for unified processing with transaction metadata
-  ipcMain.handle(
-    "block-operations:apply",
-    async (
-      _event: IpcMainInvokeEvent,
-      operations: unknown[],
-      origin?: unknown
-    ): Promise<unknown> => {
-      try {
-        log.debug(
-          `IPC: Applying ${operations.length} block operations ${
-            (origin as any)?.batchId
-              ? `(batch: ${(origin as any).batchId})`
-              : ""
-          }`,
-          "main"
-        );
-
-        // Get the BlockOperationService instance
-        const activeDocument =
-          documentManager.activeDocument ??
-          documentManager.listDocuments()[0];
-        if (!activeDocument) {
-          throw new Error("No active document available for operations");
-        }
-
-        const blockOperationService =
-          documentManager.getBlockService(activeDocument.id);
-
-        // Set renderer web contents for updates
-        if (globalAppView) {
-          blockOperationService.setRendererWebContents(globalAppView);
-        }
-
-        // Apply operations with transaction metadata
-        const result = await blockOperationService.applyOperations(
-          operations as any,
-          origin as any
-        );
-
-        log.debug(
-          `IPC: Block operations result: ${
-            result.operationsApplied
-          } applied, success: ${result.success}${
-            result.batchId ? `, batch: ${result.batchId}` : ""
-          }`,
-          "main"
-        );
-
-        return result;
-      } catch (error) {
-        log.debug(`IPC: Error applying block operations: ${error}`, "main");
-        return {
-          success: false,
-          operationsApplied: 0,
-          errors: [error instanceof Error ? error.message : "Unknown error"],
-        };
-      }
-    }
-  );
-
-  // Unified handler for update-block-view
-  ipcMain.on("update-browser-view", (_, data) => {
-    log.debug(
-      `Received update-browser-view event for block ${data.blockId}`,
-      "main"
-    );
-    viewManager.handleBlockViewUpdate(data);
-  });
-
-  ipcMain.handle("profiles:list", () => {
-    return profileManager.listProfiles();
-  });
-
-  ipcMain.handle(
-    "profiles:create",
-    (
-      _event,
-      payload: { name: string; icon?: string | null; color?: string | null }
-    ) => {
-      const profile = profileManager.createProfile(payload.name, {
-        icon: payload.icon ?? null,
-        color: payload.color ?? null,
-      });
-      broadcastProfiles();
-      broadcastDocumentTree(profile.id);
-      return profile;
-    }
-  );
-
-  ipcMain.handle("profiles:delete", (_event, profileId: string) => {
-    profileManager.deleteProfile(profileId);
-    broadcastProfiles();
-    return { success: true };
-  });
-
-  ipcMain.handle("documents:get-active", () => {
-    return documentManager.activeDocument;
-  });
-
-  ipcMain.handle(
-    "documents:get-tree",
-    (_event, profileId?: string | null) => {
-      const resolvedProfileId =
-        profileId ??
-        documentManager.activeDocument?.profileId ??
-        profileManager.listProfiles()[0]?.id ??
-        null;
-
-      if (!resolvedProfileId) return [];
-      return documentManager.getDocumentTree(resolvedProfileId);
-    }
-  );
-
-  ipcMain.handle(
-    "documents:create",
-    (
-      _event,
-      payload: {
-        profileId: string;
-        title?: string | null;
-        parentDocumentId?: string | null;
-        position?: number;
-      }
-    ) => {
-      const document = documentManager.createDocument(
-        payload.profileId,
-        payload.title,
-        {
-          parentDocumentId: payload.parentDocumentId ?? null,
-          position: payload.position,
-        }
-      );
-
-      broadcastDocumentTree(payload.profileId);
-      return document;
-    }
-  );
-
-  ipcMain.handle(
-    "documents:rename",
-    (_event, payload: { documentId: string; title: string }) => {
-      const updated = documentManager.renameDocument(
-        payload.documentId,
-        payload.title
-      );
-      broadcastDocumentTree(updated.profileId);
-      broadcastActiveDocument();
-      return updated;
-    }
-  );
-
-  ipcMain.handle(
-    "documents:delete",
-    async (_event, documentId: string) => {
-      const document = documentManager.getDocument(documentId);
-      await documentManager.deleteDocument(documentId);
-      broadcastDocumentTree(document.profileId);
-      broadcastActiveDocument();
-      return { success: true };
-    }
-  );
-
-  ipcMain.handle(
-    "documents:move",
-    (
-      _event,
-      payload: { documentId: string; newParentId: string | null; position: number }
-    ) => {
-      const updated = documentManager.moveDocument(
-        payload.documentId,
-        payload.newParentId,
-        payload.position
-      );
-      broadcastDocumentTree(updated.profileId);
-      return updated;
-    }
-  );
-
-  ipcMain.handle(
-    "documents:move-to-profile",
-    (_event, payload: { documentId: string; newProfileId: string }) => {
-      const current = documentManager.getDocument(payload.documentId);
-      const updated = documentManager.moveDocumentToProfile(
-        payload.documentId,
-        payload.newProfileId
-      );
-      broadcastDocumentTree(current.profileId);
-      broadcastDocumentTree(updated.profileId);
-      broadcastActiveDocument();
-      return updated;
-    }
-  );
-
-  ipcMain.handle(
-    "documents:switch",
-    async (_event, documentId: string) => {
-      const document = documentManager.switchDocument(documentId);
-
-      await loadDocumentIntoRenderer(documentId);
-      broadcastDocumentTree(document.profileId);
-      broadcastActiveDocument();
-
-      return document;
-    }
+  registerMap(
+    createDocumentHandlers(
+      documentManager,
+      resolveProfileId,
+      broadcastDocumentTree,
+      broadcastActiveDocument,
+      loadDocumentIntoRenderer
+    )
   );
 };
 
