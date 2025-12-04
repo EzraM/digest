@@ -1,10 +1,12 @@
-import React from "react";
+import { useRef } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { Page } from "./Page";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
 import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import type { CustomBlockNoteEditor } from "../../types/schema";
+import { useDocumentContext } from "../../context/DocumentContext";
+import { useRendererRoute } from "../../context/RendererRouteContext";
 
 // Define the prop schema with proper typing
 const sitePropSchema = {
@@ -33,8 +35,23 @@ export const site = createReactBlockSpec(
         isBusy: isTogglingDevTools,
         toggleDevTools,
       } = useDevToolsState(block.id);
-      const { canGoBack, isNavigatingBack, goBack } =
-        useBrowserNavigationState(block.id, editor, url);
+      const { canGoBack, isNavigatingBack, goBack } = useBrowserNavigationState(
+        block.id,
+        editor,
+        url
+      );
+
+      const containerRef = useRef<HTMLDivElement>(null);
+      const { documentId } = useDocumentContext();
+      const { navigateToBlock } = useRendererRoute();
+
+      const openDedicatedView = () => {
+        if (documentId) {
+          navigateToBlock(block.id, documentId);
+        } else {
+          navigateToBlock(block.id);
+        }
+      };
 
       // Site blocks must always have a URL - if not, show an error
       if (!url) {
@@ -57,6 +74,8 @@ export const site = createReactBlockSpec(
 
       return (
         <div
+          ref={containerRef}
+          id={`site-block-${block.id}`}
           style={{
             border: "1px solid #e0e0e0",
             borderRadius: "8px",
@@ -97,12 +116,31 @@ export const site = createReactBlockSpec(
                 justifyContent: "center",
                 minWidth: "36px",
               }}
-              title={
-                canGoBack ? "Go back" : "No previous page available"
-              }
+              title={canGoBack ? "Go back" : "No previous page available"}
               aria-disabled={!canGoBack}
             >
               {isNavigatingBack ? "⏳" : "←"}
+            </button>
+            <button
+              type="button"
+              onClick={openDedicatedView}
+              style={{
+                border: "1px solid #d0d0d0",
+                backgroundColor: "#fff",
+                color: "#333",
+                borderRadius: "4px",
+                padding: "2px 8px",
+                cursor: "pointer",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: "36px",
+              }}
+              title="Open in dedicated view"
+              aria-label="Open block in dedicated view"
+            >
+              ↗
             </button>
             <span aria-hidden="true">🌐</span>
             <button
@@ -143,14 +181,16 @@ export const site = createReactBlockSpec(
                   fontSize: "12px",
                 }}
                 title={
-                  devToolsOpen ? "Close developer tools" : "Open developer tools"
+                  devToolsOpen
+                    ? "Close developer tools"
+                    : "Open developer tools"
                 }
               >
                 {isTogglingDevTools
                   ? "…"
                   : devToolsOpen
-                  ? "Close DevTools"
-                  : "Open DevTools"}
+                    ? "Close DevTools"
+                    : "Open DevTools"}
               </button>
             )}
           </div>
