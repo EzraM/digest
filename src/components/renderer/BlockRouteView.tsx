@@ -140,7 +140,8 @@ export const BlockRouteView = ({
               color: canGoBack ? "#111" : "#bbb",
               borderRadius: "6px",
               padding: "6px 10px",
-              cursor: !canGoBack || isNavigatingBack ? "not-allowed" : "pointer",
+              cursor:
+                !canGoBack || isNavigatingBack ? "not-allowed" : "pointer",
               fontSize: "14px",
               minWidth: "40px",
             }}
@@ -205,9 +206,15 @@ export const BlockRouteView = ({
                 cursor: isTogglingDevTools ? "wait" : "pointer",
                 fontSize: "14px",
               }}
-              title={devToolsOpen ? "Close developer tools" : "Open developer tools"}
+              title={
+                devToolsOpen ? "Close developer tools" : "Open developer tools"
+              }
             >
-              {isTogglingDevTools ? "…" : devToolsOpen ? "Close DevTools" : "Open DevTools"}
+              {isTogglingDevTools
+                ? "…"
+                : devToolsOpen
+                  ? "Close DevTools"
+                  : "Open DevTools"}
             </button>
           )}
         </div>
@@ -223,7 +230,7 @@ export const BlockRouteView = ({
             boxShadow: "0 12px 32px rgba(0,0,0,0.08)",
           }}
         >
-          <Page blockId={blockId} url={url} heightMode="expanded" layout="full" />
+          <Page blockId={blockId} url={url} layout="full" />
         </div>
       </div>
     </DocumentProvider>

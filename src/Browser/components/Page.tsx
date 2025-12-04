@@ -15,11 +15,8 @@ export function Page({
 }: PageProps & { layout?: "inline" | "full" }) {
   const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
     useBrowserViewUpdater(blockId);
-  const {
-    initStatus,
-    retryInitialization,
-    getInitAttemptRef,
-  } = useBrowserInitialization(blockId);
+  const { initStatus, retryInitialization, getInitAttemptRef } =
+    useBrowserInitialization(blockId);
 
   // Calculate height based on mode
   const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
@@ -30,12 +27,7 @@ export function Page({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const height =
-    layout === "full"
-      ? viewportHeight
-      : heightMode === "expanded"
-        ? viewportHeight - FOOTER_HEIGHT - 100 // Extra padding for toolbar and margins
-        : NORMAL_HEIGHT;
+  const height = layout === "full" ? viewportHeight : NORMAL_HEIGHT;
 
   const handleBoundsChange = useCallback(
     (bounds: { x: number; y: number; width: number; height: number }) => {
