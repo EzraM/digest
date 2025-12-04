@@ -2,14 +2,14 @@ import { WebContentsView } from "electron";
 import { log } from "../utils/mainLogger";
 
 export class LinkInterceptionService {
-  private onLinkClickCallback?: (url: string) => void;
+  private onLinkClickCallback?: (url: string, sourceBlockId?: string) => void;
 
   constructor(private appView: WebContentsView) {
     this.setupLinkInterception();
   }
 
   // Method to set the link click callback
-  public setLinkClickCallback(callback: (url: string) => void) {
+  public setLinkClickCallback(callback: (url: string, sourceBlockId?: string) => void) {
     this.onLinkClickCallback = callback;
   }
 
@@ -31,7 +31,7 @@ export class LinkInterceptionService {
           `Creating new block for disposition: ${disposition}`,
           "LinkInterceptionService"
         );
-        this.handleLinkClick(url);
+        this.handleLinkClick(url, undefined);
         return { action: "deny" };
       }
 
@@ -61,7 +61,7 @@ export class LinkInterceptionService {
   }
 
   // Handle link clicks by creating a new site block
-  private handleLinkClick(url: string) {
+  private handleLinkClick(url: string, sourceBlockId?: string) {
     log.debug(`Handling link click to URL: ${url}`, "LinkInterceptionService");
 
     try {
@@ -81,7 +81,7 @@ export class LinkInterceptionService {
 
       // Call the callback function to create a new site block
       if (this.onLinkClickCallback) {
-        this.onLinkClickCallback(url);
+        this.onLinkClickCallback(url, sourceBlockId);
         log.debug(
           `Successfully sent new site block event`,
           "LinkInterceptionService"

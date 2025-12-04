@@ -29,7 +29,7 @@ export class ViewManager {
   private events$ = new Subject<
     BlockViewUpdateEvent | { type: "remove-view"; blockId: string }
   >();
-  private onLinkClickCallback?: (url: string) => void;
+  private onLinkClickCallback?: (url: string, sourceBlockId?: string) => void;
   private rendererWebContents: Electron.WebContents;
   // Track errors per blockId to prevent success messages from overriding them
   private blockErrors: Map<
@@ -53,7 +53,7 @@ export class ViewManager {
   }
 
   // Method to set the link click callback
-  public setLinkClickCallback(callback: (url: string) => void) {
+  public setLinkClickCallback(callback: (url: string, sourceBlockId?: string) => void) {
     this.onLinkClickCallback = callback;
   }
 
@@ -414,7 +414,7 @@ export class ViewManager {
               `Creating new block for disposition: ${disposition}`,
               "ViewManager"
             );
-            this.handleLinkClick(url);
+            this.handleLinkClick(url, blockId);
             return { action: "deny" };
           }
 
@@ -921,8 +921,8 @@ export class ViewManager {
   }
 
   // Handle link clicks by creating a new browser block
-  private handleLinkClick(url: string) {
-    log.debug(`Handling link click to URL: ${url}`, "ViewManager");
+  private handleLinkClick(url: string, sourceBlockId?: string) {
+    log.debug(`Handling link click to URL: ${url}, sourceBlockId: ${sourceBlockId}`, "ViewManager");
 
     try {
       // Ensure the URL is valid before sending
@@ -935,14 +935,14 @@ export class ViewManager {
       }
 
       log.debug(
-        `Sending new browser block event for URL: ${url}`,
+        `Sending new browser block event for URL: ${url}, sourceBlockId: ${sourceBlockId}`,
         "ViewManager"
       );
 
       // Call the callback function to create a new browser block
       // This will be set by main.ts to properly target the correct WebContents
       if (this.onLinkClickCallback) {
-        this.onLinkClickCallback(url);
+        this.onLinkClickCallback(url, sourceBlockId);
         log.debug(`Successfully sent new browser block event`, "ViewManager");
       } else {
         log.debug(
