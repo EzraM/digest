@@ -21,7 +21,10 @@ export class IPCRouter {
 
   register(channel: string, handler: IPCHandler): void {
     if (this.handlers.has(channel)) {
-      log.debug(`Replacing existing IPC handler for channel ${channel}`, "IPCRouter");
+      log.debug(
+        `Replacing existing IPC handler for channel ${channel}`,
+        "IPCRouter"
+      );
     }
 
     this.handlers.set(channel, handler);
@@ -30,15 +33,6 @@ export class IPCRouter {
       ipcMain.handle(channel, handler.fn);
     } else {
       ipcMain.on(channel, handler.fn);
-    }
-  }
-
-  registerNamespace(namespace: string, handlers: IPCHandlerMap): void {
-    for (const [channel, handler] of Object.entries(handlers)) {
-      const resolvedChannel = channel.startsWith(`${namespace}:`)
-        ? channel
-        : `${namespace}:${channel}`;
-      this.register(resolvedChannel, handler);
     }
   }
 
