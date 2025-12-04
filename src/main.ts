@@ -161,43 +161,28 @@ const createWindow = async () => {
     globalAppView
   );
 
-  // Set up the link click callback for ViewManager to properly target the correct WebContents
-  viewManager.setLinkClickCallback((url: string, sourceBlockId?: string) => {
-    log.debug(`Link click callback called with URL: ${url}, sourceBlockId: ${sourceBlockId}`, "main");
-
-    // Forward the new block event to the main renderer (appView, not mainWindow)
-    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-      log.debug(`Forwarding new block event to appView: ${url}, sourceBlockId: ${sourceBlockId}`, "main");
-      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url, sourceBlockId });
-    } else {
-      log.debug(
-        "Cannot forward new block event - appView not available",
-        "main"
-      );
-    }
-  });
-
-  // Set up the link click callback for LinkInterceptionService
-  linkInterceptionService.setLinkClickCallback((url: string, sourceBlockId?: string) => {
+  // Shared helper to create a new browser block
+  const createBrowserBlock = (url: string, sourceBlockId?: string) => {
     log.debug(
-      `Main renderer link click callback called with URL: ${url}, sourceBlockId: ${sourceBlockId}`,
+      `Creating new browser block: ${url}, sourceBlockId: ${sourceBlockId}`,
       "main"
     );
 
-    // Forward the new block event to the main renderer
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-      log.debug(
-        `Forwarding new block event from main renderer to appView: ${url}, sourceBlockId: ${sourceBlockId}`,
-        "main"
-      );
-      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url, sourceBlockId });
+      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, {
+        url,
+        sourceBlockId,
+      });
     } else {
-      log.debug(
-        "Cannot forward new block event from main renderer - appView not available",
-        "main"
-      );
+      log.debug("Cannot create browser block - appView not available", "main");
     }
-  });
+  };
+
+  // Set up the link click callback for ViewManager to properly target the correct WebContents
+  viewManager.setLinkClickCallback(createBrowserBlock);
+
+  // Set up the link click callback for LinkInterceptionService
+  linkInterceptionService.setLinkClickCallback(createBrowserBlock);
 
   // Store global references (baseWindow and viewManager are kept alive by their usage)
 
@@ -208,10 +193,7 @@ const createWindow = async () => {
   const attachRendererToActiveDocument = () => {
     const activeDocument = documentManager.activeDocument;
     if (!activeDocument) {
-      log.debug(
-        "No active document available to attach renderer",
-        "main"
-      );
+      log.debug("No active document available to attach renderer", "main");
       return;
     }
 
@@ -239,7 +221,8 @@ const createWindow = async () => {
     viewManager,
     slashCommandManager,
     services,
-    appViewInstance
+    appViewInstance,
+    createBrowserBlock
   );
 
   // Update view bounds when window is resized
@@ -265,10 +248,10 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
         level === 1
           ? "info"
           : level === 2
-          ? "warn"
-          : level === 3
-          ? "error"
-          : "debug";
+            ? "warn"
+            : level === 3
+              ? "error"
+              : "debug";
       const source = sourceId ? path.basename(sourceId) : "renderer";
 
       log.debug(
@@ -306,7 +289,8 @@ const setupIpcHandlers = (
   viewManager: ViewManager,
   slashCommandManager: SlashCommandManager,
   services: ReturnType<typeof getServices>,
-  rendererView: WebContentsView
+  rendererView: WebContentsView,
+  createBrowserBlock: (url: string, sourceBlockId?: string) => void
 ) => {
   const { documentManager, profileManager } = services;
 
@@ -381,15 +365,20 @@ const setupIpcHandlers = (
       broadcastProfiles,
       broadcastDocumentTree,
       broadcastActiveDocument,
-      getActiveProfileId: () => documentManager.activeDocument?.profileId ?? null,
+      getActiveProfileId: () =>
+        documentManager.activeDocument?.profileId ?? null,
     })
   );
 
-  registerMap(createBrowserHandlers(viewManager));
+  registerMap(createBrowserHandlers(viewManager, createBrowserBlock));
   registerMap(createSlashCommandHandlers(slashCommandManager));
   registerMap(createBlockHandlers(documentManager, rendererView));
   registerMap(
-    createProfileHandlers(profileManager, broadcastProfiles, broadcastDocumentTree)
+    createProfileHandlers(
+      profileManager,
+      broadcastProfiles,
+      broadcastDocumentTree
+    )
   );
   registerMap(
     createDocumentHandlers(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useContext } from "react";
 import { MantineProvider } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useRendererDocuments } from "./hooks/useRendererDocuments";
@@ -18,8 +18,12 @@ import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
 import { RendererRouteProvider } from "./context/RendererRouteContext";
+import {
+  BlockNotificationProvider,
+  BlockNotificationContext,
+} from "./context/BlockNotificationContext";
 
-export const RendererApp = () => {
+const RendererAppContent = () => {
   const [isNavbarOpened, { toggle: toggleNavbar }] = useDisclosure(true);
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
   const {
@@ -30,7 +34,10 @@ export const RendererApp = () => {
     setActiveProfileId,
   } = useRendererDocuments();
 
-  const editor = useRendererEditor();
+  // Use useContext directly to avoid throwing if context isn't available during initial render
+  const notificationContext = useContext(BlockNotificationContext);
+  const triggerNotification = notificationContext?.triggerNotification;
+  const editor = useRendererEditor(triggerNotification);
   const {
     SlashCommandSyncMenu,
     handleSlashMenuItems,
@@ -133,9 +140,7 @@ export const RendererApp = () => {
 
   return (
     <MantineProvider defaultColorScheme="auto">
-      <RendererRouteProvider
-        value={{ route, navigateToDoc, navigateToBlock }}
-      >
+      <RendererRouteProvider value={{ route, navigateToDoc, navigateToBlock }}>
         {route.kind === "block" ? (
           <BlockRouteView
             blockId={route.blockId}
@@ -179,7 +184,9 @@ export const RendererApp = () => {
                   SlashCommandSyncMenu={SlashCommandSyncMenu}
                   onSlashMenuItems={handleSlashMenuItems}
                   onSlashMenuItemClick={handleSlashMenuItemClick}
-                  focusBlockId={route.kind === "doc" ? route.focusBlockId ?? null : null}
+                  focusBlockId={
+                    route.kind === "doc" ? (route.focusBlockId ?? null) : null
+                  }
                 />
               </DocumentProvider>
             }
@@ -202,5 +209,13 @@ export const RendererApp = () => {
         />
       </RendererRouteProvider>
     </MantineProvider>
+  );
+};
+
+export const RendererApp = () => {
+  return (
+    <BlockNotificationProvider>
+      <RendererAppContent />
+    </BlockNotificationProvider>
   );
 };

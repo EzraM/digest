@@ -2,7 +2,10 @@ import { IPCHandlerMap } from "../IPCRouter";
 import { ViewManager } from "../../services/ViewManager";
 import { log } from "../../utils/mainLogger";
 
-export function createBrowserHandlers(viewManager: ViewManager): IPCHandlerMap {
+export function createBrowserHandlers(
+  viewManager: ViewManager,
+  createBrowserBlockCallback?: (url: string, sourceBlockId?: string) => void
+): IPCHandlerMap {
   return {
     "update-browser": {
       type: "on",
@@ -55,6 +58,20 @@ export function createBrowserHandlers(viewManager: ViewManager): IPCHandlerMap {
           "main"
         );
         viewManager.handleBlockViewUpdate(data);
+      },
+    },
+    "browser:create-block": {
+      type: "on",
+      fn: (_event, data: { url: string; sourceBlockId?: string }) => {
+        log.debug(
+          `Received browser:create-block request: ${data.url}, sourceBlockId: ${data.sourceBlockId}`,
+          "main"
+        );
+        if (createBrowserBlockCallback) {
+          createBrowserBlockCallback(data.url, data.sourceBlockId);
+        } else {
+          log.debug("No createBrowserBlock callback available", "main");
+        }
       },
     },
   };

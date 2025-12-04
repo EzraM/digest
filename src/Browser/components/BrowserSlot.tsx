@@ -158,10 +158,58 @@ export function BrowserSlot({
                   ? "Loading page…"
                   : "Initializing browser…"}
               </div>
-              <div style={{ fontSize: "0.85rem", color: "#555" }}>
+              <div
+                style={{
+                  fontSize: "0.85rem",
+                  color: "#555",
+                  marginBottom: "16px",
+                }}
+              >
                 {initStatus.state === "initializing" && initStatus.detail
                   ? `Status: ${initStatus.detail}`
                   : "Hang tight, we're getting things ready."}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  alignItems: "center",
+                }}
+              >
+                <button
+                  onClick={() => {
+                    // Use direct IPC call to create browser block with sourceBlockId
+                    // This ensures the block is inserted after the source block, even when WebViews are disabled
+                    // Using a button instead of a link avoids triggering window.open() and LinkInterceptionService
+                    window.electronAPI?.browser?.createBlock?.(
+                      "https://google.com",
+                      blockId
+                    );
+                  }}
+                  style={{
+                    padding: "8px 16px",
+                    cursor: "pointer",
+                    borderRadius: "20px",
+                    border: "1px solid #1c7ed6",
+                    backgroundColor: "#fff",
+                    color: "#1c7ed6",
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    display: "inline-block",
+                  }}
+                >
+                  Open Google
+                </button>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#888",
+                    marginTop: "4px",
+                  }}
+                >
+                  (Ctrl+Click for background tab)
+                </div>
               </div>
             </>
           )}
