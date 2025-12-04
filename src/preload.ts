@@ -130,10 +130,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },
-  onNewBrowserBlock: (callback: (data: { url: string }) => void) => {
+  onNewBrowserBlock: (callback: (data: { url: string; sourceBlockId?: string }) => void) => {
     const subscription = (_: any, data: any) => {
       // Handle both string and object formats
       const url = typeof data === "string" ? data : data?.url;
+      const sourceBlockId = data?.sourceBlockId;
 
       if (!url) {
         console.error("Invalid data format for browser:new-block event:", data);
@@ -141,10 +142,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
       }
 
       log.debug(
-        `Received request to create new browser block with URL: ${url}`,
+        `Received request to create new browser block with URL: ${url}, sourceBlockId: ${sourceBlockId}`,
         "preload"
       );
-      callback({ url });
+      callback({ url, sourceBlockId });
     };
 
     ipcRenderer.on(EVENTS.BROWSER.NEW_BLOCK, subscription);

@@ -162,13 +162,13 @@ const createWindow = async () => {
   );
 
   // Set up the link click callback for ViewManager to properly target the correct WebContents
-  viewManager.setLinkClickCallback((url: string) => {
-    log.debug(`Link click callback called with URL: ${url}`, "main");
+  viewManager.setLinkClickCallback((url: string, sourceBlockId?: string) => {
+    log.debug(`Link click callback called with URL: ${url}, sourceBlockId: ${sourceBlockId}`, "main");
 
     // Forward the new block event to the main renderer (appView, not mainWindow)
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-      log.debug(`Forwarding new block event to appView: ${url}`, "main");
-      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url });
+      log.debug(`Forwarding new block event to appView: ${url}, sourceBlockId: ${sourceBlockId}`, "main");
+      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url, sourceBlockId });
     } else {
       log.debug(
         "Cannot forward new block event - appView not available",
@@ -178,19 +178,19 @@ const createWindow = async () => {
   });
 
   // Set up the link click callback for LinkInterceptionService
-  linkInterceptionService.setLinkClickCallback((url: string) => {
+  linkInterceptionService.setLinkClickCallback((url: string, sourceBlockId?: string) => {
     log.debug(
-      `Main renderer link click callback called with URL: ${url}`,
+      `Main renderer link click callback called with URL: ${url}, sourceBlockId: ${sourceBlockId}`,
       "main"
     );
 
     // Forward the new block event to the main renderer
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {
       log.debug(
-        `Forwarding new block event from main renderer to appView: ${url}`,
+        `Forwarding new block event from main renderer to appView: ${url}, sourceBlockId: ${sourceBlockId}`,
         "main"
       );
-      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url });
+      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, { url, sourceBlockId });
     } else {
       log.debug(
         "Cannot forward new block event from main renderer - appView not available",

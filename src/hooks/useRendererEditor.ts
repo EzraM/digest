@@ -12,11 +12,31 @@ import { handleElectronPaste } from "../clipboard/handleElectronPaste";
 
 let currentEditor: CustomBlockNoteEditor | null = null;
 
-const createNewBrowserBlock = (url: string): void => {
+const createNewBrowserBlock = (url: string, sourceBlockId?: string): void => {
   if (!currentEditor) {
     return;
   }
 
+  // If sourceBlockId is provided, insert after that block
+  if (sourceBlockId) {
+    const sourceBlock = currentEditor.getBlock(sourceBlockId);
+    if (sourceBlock) {
+      // Insert the new block after the source block
+      currentEditor.insertBlocks(
+        [
+          {
+            type: "site",
+            props: { url },
+          } as unknown as CustomPartialBlock,
+        ],
+        sourceBlock,
+        "after"
+      );
+      return;
+    }
+  }
+
+  // Fallback to default insertion if no source block or source block not found
   insertOrUpdateBlock(currentEditor, {
     type: "site",
     props: { url },
@@ -44,7 +64,7 @@ export const useRendererEditor = (): CustomBlockNoteEditor => {
 
     const unsubscribe = window.electronAPI.onNewBrowserBlock((data) => {
       if (data?.url) {
-        createNewBrowserBlock(data.url);
+        createNewBrowserBlock(data.url, data.sourceBlockId);
       }
     });
 

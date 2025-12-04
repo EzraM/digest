@@ -1,9 +1,5 @@
 import { BlockOperation, OperationResult } from "./operations";
-import {
-  DocumentRecord,
-  DocumentTreeNode,
-  ProfileRecord,
-} from "./documents";
+import { DocumentRecord, DocumentTreeNode, ProfileRecord } from "./documents";
 
 interface ElectronAPI {
   clipboard: {
@@ -63,7 +59,9 @@ interface ElectronAPI {
       deltaY: number;
     }) => void
   ) => () => void;
-  onNewBrowserBlock: (callback: (data: { url: string }) => void) => () => void;
+  onNewBrowserBlock: (
+    callback: (data: { url: string; sourceBlockId?: string }) => void
+  ) => () => void;
   applyBlockOperations: (
     operations: BlockOperation[],
     origin?: import("./operations").TransactionOrigin
@@ -93,9 +91,15 @@ interface ElectronAPI {
   };
   profiles: {
     list: () => Promise<ProfileRecord[]>;
-    create: (payload: { name: string; icon?: string | null; color?: string | null }) => Promise<ProfileRecord>;
+    create: (payload: {
+      name: string;
+      icon?: string | null;
+      color?: string | null;
+    }) => Promise<ProfileRecord>;
     delete: (profileId: string) => Promise<{ success: boolean }>;
-    onUpdated: (callback: (event: { profiles: ProfileRecord[] }) => void) => () => void;
+    onUpdated: (
+      callback: (event: { profiles: ProfileRecord[] }) => void
+    ) => () => void;
   };
   documents: {
     getActive: () => Promise<DocumentRecord | null>;
@@ -106,10 +110,20 @@ interface ElectronAPI {
       parentDocumentId?: string | null;
       position?: number;
     }) => Promise<DocumentRecord>;
-    rename: (payload: { documentId: string; title: string }) => Promise<DocumentRecord>;
+    rename: (payload: {
+      documentId: string;
+      title: string;
+    }) => Promise<DocumentRecord>;
     delete: (documentId: string) => Promise<{ success: boolean }>;
-    move: (payload: { documentId: string; newParentId: string | null; position: number }) => Promise<DocumentRecord>;
-    moveToProfile: (payload: { documentId: string; newProfileId: string }) => Promise<DocumentRecord>;
+    move: (payload: {
+      documentId: string;
+      newParentId: string | null;
+      position: number;
+    }) => Promise<DocumentRecord>;
+    moveToProfile: (payload: {
+      documentId: string;
+      newProfileId: string;
+    }) => Promise<DocumentRecord>;
     switch: (documentId: string) => Promise<DocumentRecord>;
     onTreeUpdated: (
       callback: (data: { profileId: string; tree: DocumentTreeNode[] }) => void
