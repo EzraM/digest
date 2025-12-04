@@ -16,6 +16,7 @@ export function registerServices(container: Container): void {
   
   // Database - foundational service with no dependencies
   container.register('database', {
+    version: '1.0.0',
     factory: async () => {
       log.debug('Initializing database service', 'ServiceRegistry');
       const dbManager = DatabaseManager.getInstance();
@@ -26,6 +27,7 @@ export function registerServices(container: Container): void {
 
   // EventLogger - depends on database
   container.register('eventLogger', {
+    version: '1.0.0',
     dependencies: ['database'],
     factory: async (c) => {
       log.debug('Initializing EventLogger service', 'ServiceRegistry');
@@ -36,6 +38,7 @@ export function registerServices(container: Container): void {
 
   // BlockOperationService - depends on database (eventLogger resolved lazily)
   container.register('blockOperationService', {
+    version: '1.0.0',
     dependencies: ['database'],
     factory: async (c) => {
       log.debug('Initializing BlockOperationService', 'ServiceRegistry');
@@ -47,6 +50,7 @@ export function registerServices(container: Container): void {
 
   // ProfileManager - depends on database
   container.register('profileManager', {
+    version: '1.0.0',
     dependencies: ['database'],
     factory: async (c) => {
       log.debug('Initializing ProfileManager service', 'ServiceRegistry');
@@ -57,6 +61,7 @@ export function registerServices(container: Container): void {
 
   // DocumentManager - depends on database and profileManager
   container.register('documentManager', {
+    version: '1.0.0',
     dependencies: ['database', 'profileManager'],
     factory: async (c) => {
       log.debug('Initializing DocumentManager service', 'ServiceRegistry');
@@ -69,6 +74,7 @@ export function registerServices(container: Container): void {
 
   // DebugEventService - depends on eventLogger being available  
   container.register('debugEventService', {
+    version: '1.0.0',
     dependencies: ['eventLogger'],
     factory: async () => {
       log.debug('Initializing DebugEventService', 'ServiceRegistry');
@@ -79,6 +85,7 @@ export function registerServices(container: Container): void {
 
   // BlockEventManager - depends on eventLogger and blockOperationService
   container.register('blockEventManager', {
+    version: '1.0.0',
     dependencies: ['eventLogger', 'blockOperationService'],
     factory: async () => {
       log.debug('Initializing BlockEventManager', 'ServiceRegistry');
