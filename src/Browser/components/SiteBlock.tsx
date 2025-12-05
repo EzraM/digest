@@ -143,9 +143,7 @@ export const site = createReactBlockSpec(
               ↗
             </button>
             <span aria-hidden="true">🌐</span>
-            <button
-              type="button"
-              onClick={handleCopy}
+            <span
               style={{
                 flex: 1,
                 fontFamily: "monospace",
@@ -153,17 +151,31 @@ export const site = createReactBlockSpec(
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 userSelect: "text",
-                background: "none",
-                border: "none",
-                padding: 0,
-                textAlign: "left",
-                cursor: "pointer",
                 color: "#333",
+              }}
+            >
+              {url}
+            </span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              style={{
+                border: "1px solid #d0d0d0",
+                backgroundColor: "#fff",
+                color: "#333",
+                borderRadius: "4px",
+                padding: "2px 8px",
+                cursor: "pointer",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: "36px",
               }}
               title={copied ? "Copied!" : "Copy link"}
               aria-label={copied ? "Copied link" : "Copy link"}
             >
-              {url}
+              🔗
             </button>
             {devToolsAvailable && (
               <button
