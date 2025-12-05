@@ -1,13 +1,15 @@
-import { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, useContext } from "react";
 import { Box } from "@mantine/core";
 import { StatusBar } from "./StatusBar";
 import { useStatusBar } from "../../hooks/useStatusBar";
 import { SidebarToggleButton } from "./SidebarToggleButton";
+import { BlockNotificationContext } from "../../context/BlockNotificationContext";
 
 const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
 const FOOTER_HEIGHT = 28;
 const TOGGLE_SAFE_SPACE = 56;
+const NOTIFICATION_HEIGHT = 120; // Top bar (~32px) + content (80px) + padding
 
 type RendererLayoutProps = {
   navbar: ReactNode;
@@ -35,6 +37,12 @@ export const RendererLayout = ({
     documentTitle,
     onToggleSidebar: onNavbarToggle,
   });
+
+  // Get notification state to add margin when notifications are active
+  const notificationContext = useContext(BlockNotificationContext);
+  const hasActiveNotifications = notificationContext
+    ? notificationContext.pendingBlockIds.length > 0
+    : false;
 
   const { navWidth, asideWidth } = useMemo(
     () => ({
@@ -82,7 +90,9 @@ export const RendererLayout = ({
           zIndex: 0,
           paddingBottom: FOOTER_HEIGHT + 8,
           paddingLeft: isNavbarOpened ? 0 : TOGGLE_SAFE_SPACE,
+          marginBottom: hasActiveNotifications ? NOTIFICATION_HEIGHT : 0,
           overflow: "auto",
+          transition: "margin-bottom 0.3s ease-out",
         }}
       >
         {main}
