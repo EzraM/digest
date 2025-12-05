@@ -4,7 +4,7 @@ import set from "lodash/set";
 
 import { BlockViewUpdateEvent, BlockViewState } from "../types/window";
 import { log } from "../utils/mainLogger";
-import { shouldOpenDevTools } from "../config/development";
+import { shouldOpenDevTools, DEV_CONFIG } from "../config/development";
 import { ViewLayerManager, ViewLayer } from "./ViewLayerManager";
 import {
   ViewState,
@@ -53,7 +53,9 @@ export class ViewManager {
   }
 
   // Method to set the link click callback
-  public setLinkClickCallback(callback: (url: string, sourceBlockId?: string) => void) {
+  public setLinkClickCallback(
+    callback: (url: string, sourceBlockId?: string) => void
+  ) {
     this.onLinkClickCallback = callback;
   }
 
@@ -194,6 +196,52 @@ export class ViewManager {
       }
 
       try {
+        // Check if WebView rendering is disabled in development
+        if (DEV_CONFIG.features.disableWebViewRendering) {
+          log.debug(
+            `WebView rendering disabled - skipping WebContentsView creation for blockId: ${blockId}`,
+            "ViewManager"
+          );
+          log.debug(
+            `URL: ${view.url}, Bounds: ${JSON.stringify(
+              view.bounds
+            )}, profile: ${view.profileId}`,
+            "ViewManager"
+          );
+
+          // Still send notifications so React UI can render
+          // Transition to LOADING state
+          this.transitionState(
+            blockId,
+            ViewState.LOADING,
+            "WebView rendering disabled"
+          );
+
+          // Send created notification
+          this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+            blockId,
+            success: true,
+            status: "created",
+          });
+
+          // Simulate a loaded state after a short delay
+          setTimeout(() => {
+            this.transitionState(
+              blockId,
+              ViewState.LOADED,
+              "WebView rendering disabled (simulated)"
+            );
+            this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+              blockId,
+              success: true,
+              status: "loaded",
+            });
+            this.broadcastNavigationState(blockId, view.url);
+          }, 100);
+
+          return; // Skip actual WebView creation
+        }
+
         const partition =
           view?.partition || getProfilePartition(view.profileId);
 
@@ -922,7 +970,10 @@ export class ViewManager {
 
   // Handle link clicks by creating a new browser block
   private handleLinkClick(url: string, sourceBlockId?: string) {
-    log.debug(`Handling link click to URL: ${url}, sourceBlockId: ${sourceBlockId}`, "ViewManager");
+    log.debug(
+      `Handling link click to URL: ${url}, sourceBlockId: ${sourceBlockId}`,
+      "ViewManager"
+    );
 
     try {
       // Ensure the URL is valid before sending

@@ -11,6 +11,7 @@ import { useDocumentSync } from "./useDocumentSync";
 import { handleElectronPaste } from "../clipboard/handleElectronPaste";
 
 let currentEditor: CustomBlockNoteEditor | null = null;
+let onBlockCreatedCallback: ((blockId: string) => void) | null = null;
 
 const createNewBrowserBlock = (url: string, sourceBlockId?: string): void => {
   if (!currentEditor) {
@@ -22,7 +23,8 @@ const createNewBrowserBlock = (url: string, sourceBlockId?: string): void => {
     const sourceBlock = currentEditor.getBlock(sourceBlockId);
     if (sourceBlock) {
       // Insert the new block after the source block
-      currentEditor.insertBlocks(
+      // insertBlocks returns the inserted blocks array
+      const insertedBlocks = currentEditor.insertBlocks(
         [
           {
             type: "site",
@@ -32,18 +34,32 @@ const createNewBrowserBlock = (url: string, sourceBlockId?: string): void => {
         sourceBlock,
         "after"
       );
+
+      // Get block ID from return value and trigger notification
+      const newBlockId = insertedBlocks[0]?.id;
+      if (newBlockId && onBlockCreatedCallback) {
+        onBlockCreatedCallback(newBlockId);
+      }
       return;
     }
   }
 
   // Fallback to default insertion if no source block or source block not found
-  insertOrUpdateBlock(currentEditor, {
+  // insertOrUpdateBlock without a block ID inserts at the end automatically
+  const newBlock = insertOrUpdateBlock(currentEditor, {
     type: "site",
     props: { url },
   } as unknown as CustomPartialBlock);
+
+  // Get block ID from return value and trigger notification
+  if (newBlock?.id && onBlockCreatedCallback) {
+    onBlockCreatedCallback(newBlock.id);
+  }
 };
 
-export const useRendererEditor = (): CustomBlockNoteEditor => {
+export const useRendererEditor = (
+  onBlockCreated?: (blockId: string) => void
+): CustomBlockNoteEditor => {
   const editor = useCreateBlockNote({
     schema,
     initialContent: undefined,
@@ -56,6 +72,14 @@ export const useRendererEditor = (): CustomBlockNoteEditor => {
       currentEditor = null;
     };
   }, [editor]);
+
+  useEffect(() => {
+    // Set the callback for block creation notifications
+    onBlockCreatedCallback = onBlockCreated || null;
+    return () => {
+      onBlockCreatedCallback = null;
+    };
+  }, [onBlockCreated]);
 
   useEffect(() => {
     if (!window.electronAPI?.onNewBrowserBlock) {

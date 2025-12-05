@@ -9,7 +9,9 @@ export class LinkInterceptionService {
   }
 
   // Method to set the link click callback
-  public setLinkClickCallback(callback: (url: string, sourceBlockId?: string) => void) {
+  public setLinkClickCallback(
+    callback: (url: string, sourceBlockId?: string) => void
+  ) {
     this.onLinkClickCallback = callback;
   }
 

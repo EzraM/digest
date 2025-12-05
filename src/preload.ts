@@ -40,6 +40,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     toggleDevTools: (blockId: string) =>
       ipcRenderer.invoke("browser:toggle-devtools", blockId),
     goBack: (blockId: string) => ipcRenderer.invoke("browser:go-back", blockId),
+    createBlock: (url: string, sourceBlockId?: string) => {
+      log.debug(
+        `Creating browser block via IPC: ${url}, sourceBlockId: ${sourceBlockId}`,
+        "preload"
+      );
+      ipcRenderer.send("browser:create-block", { url, sourceBlockId });
+    },
   },
   addBlockEvent: (e: { type: "open" | "close" }) => {
     log.debug(`Sending event: block-menu:${e.type}`, "preload");
@@ -130,7 +137,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },
-  onNewBrowserBlock: (callback: (data: { url: string; sourceBlockId?: string }) => void) => {
+  onNewBrowserBlock: (
+    callback: (data: { url: string; sourceBlockId?: string }) => void
+  ) => {
     const subscription = (_: any, data: any) => {
       // Handle both string and object formats
       const url = typeof data === "string" ? data : data?.url;
@@ -245,11 +254,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   profiles: {
     list: () => ipcRenderer.invoke("profiles:list"),
-    create: (payload: { name: string; icon?: string | null; color?: string | null }) =>
-      ipcRenderer.invoke("profiles:create", payload),
-    delete: (profileId: string) => ipcRenderer.invoke("profiles:delete", profileId),
+    create: (payload: {
+      name: string;
+      icon?: string | null;
+      color?: string | null;
+    }) => ipcRenderer.invoke("profiles:create", payload),
+    delete: (profileId: string) =>
+      ipcRenderer.invoke("profiles:delete", profileId),
     onUpdated: (
-      callback: (event: { profiles: import("./types/documents").ProfileRecord[] }) => void
+      callback: (event: {
+        profiles: import("./types/documents").ProfileRecord[];
+      }) => void
     ) => {
       const channel = "profiles:updated";
       const handler = (_: unknown, data: any) => callback(data);
@@ -271,12 +286,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }) => ipcRenderer.invoke("documents:create", payload),
     rename: (payload: { documentId: string; title: string }) =>
       ipcRenderer.invoke("documents:rename", payload),
-    delete: (documentId: string) => ipcRenderer.invoke("documents:delete", documentId),
-    move: (payload: { documentId: string; newParentId: string | null; position: number }) =>
-      ipcRenderer.invoke("documents:move", payload),
+    delete: (documentId: string) =>
+      ipcRenderer.invoke("documents:delete", documentId),
+    move: (payload: {
+      documentId: string;
+      newParentId: string | null;
+      position: number;
+    }) => ipcRenderer.invoke("documents:move", payload),
     moveToProfile: (payload: { documentId: string; newProfileId: string }) =>
       ipcRenderer.invoke("documents:move-to-profile", payload),
-    switch: (documentId: string) => ipcRenderer.invoke("documents:switch", documentId),
+    switch: (documentId: string) =>
+      ipcRenderer.invoke("documents:switch", documentId),
     onTreeUpdated: (
       callback: (data: {
         profileId: string;
@@ -291,7 +311,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
       };
     },
     onDocumentSwitched: (
-      callback: (data: { document: import("./types/documents").DocumentRecord | null }) => void
+      callback: (data: {
+        document: import("./types/documents").DocumentRecord | null;
+      }) => void
     ) => {
       const channel = "document:switched";
       const handler = (_: unknown, data: any) => callback(data);

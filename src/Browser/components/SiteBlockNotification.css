@@ -1,0 +1,49 @@
+@keyframes bounceUpFromBottom {
+  0% {
+    transform: translate(var(--center-x, 0), 100%);
+    opacity: 0;
+  }
+  /* First bounce up */
+  25% {
+    transform: translate(var(--center-x, 0), -40px);
+    opacity: 1;
+  }
+  /* Settle partway */
+  50% {
+    transform: translate(var(--center-x, 0), -10px);
+    opacity: 1;
+  }
+  /* Second bounce up */
+  75% {
+    transform: translate(var(--center-x, 0), -30px);
+    opacity: 1;
+  }
+  /* Back to peek position */
+  100% {
+    transform: translate(var(--center-x, 0), 0);
+    opacity: 1;
+  }
+}
+
+.site-block-notification {
+  position: fixed;
+  bottom: 0;
+  --center-x: 0; /* Default: no horizontal translation */
+  max-width: 90vw;
+  overflow: visible;
+  z-index: 9999;
+  animation: bounceUpFromBottom 2.5s ease-out forwards;
+  pointer-events: none;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15);
+  /* Match SiteBlock styling */
+}
+
+.site-block-notification-content {
+  /* Inner content - simplified for testing visibility */
+  height: 100%;
+  width: 100%;
+}
+

@@ -7,6 +7,7 @@ import React from "react";
 import { CustomBlockNoteEditor } from "../../types/schema";
 import { SlashCommandOption } from "../../types/slashCommand";
 import { useEditorScrollIntoView } from "../../hooks/useEditorScrollIntoView";
+import { BlockNotificationContainer } from "./BlockNotificationContainer";
 
 type EditorPaneProps = {
   editor: CustomBlockNoteEditor;
@@ -36,6 +37,7 @@ export const EditorPane = ({
         />
       </BlockNoteView>
       <div style={{ height: "2000px", width: "100%", color: "gray" }} />
+      <BlockNotificationContainer editor={editor} />
     </div>
   );
 };

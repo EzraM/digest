@@ -24,6 +24,7 @@ interface ElectronAPI {
     goBack: (
       blockId: string
     ) => Promise<{ success: boolean; canGoBack: boolean; error?: string }>;
+    createBlock: (url: string, sourceBlockId?: string) => void;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
   startSlashCommand: () => void;
