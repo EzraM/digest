@@ -5,6 +5,8 @@ import { useRendererDocuments } from "./hooks/useRendererDocuments";
 import { useDocumentCreationFlow } from "./hooks/useDocumentCreationFlow";
 import { useSlashCommandBridge } from "./hooks/useSlashCommandBridge";
 import { useProfileCreationModal } from "./hooks/useProfileCreationModal";
+import { useProfileRenameModal } from "./hooks/useProfileRenameModal";
+import { useProfileDeleteModal } from "./hooks/useProfileDeleteModal";
 import { useRendererEditor } from "./hooks/useRendererEditor";
 import { useDocumentActions } from "./hooks/useDocumentActions";
 import { useRendererRouter } from "./hooks/useRendererRouter";
@@ -14,6 +16,7 @@ import { FileTreePane } from "./components/renderer/FileTreePane";
 import { EditorPane } from "./components/renderer/EditorPane";
 import { DebugPane } from "./components/renderer/DebugPane";
 import { ProfileModal } from "./components/renderer/ProfileModal";
+import { ProfileDeleteModal } from "./components/renderer/ProfileDeleteModal";
 import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
@@ -89,6 +92,41 @@ const RendererAppContent = () => {
     onProfileCreated: (profile) => setActiveProfileId(profile.id),
   });
 
+  const {
+    isModalOpen: isRenameProfileModalOpen,
+    profileName: renameProfileModalName,
+    profileError: renameProfileModalError,
+    isRenaming: isRenamingProfile,
+    openModal: openRenameProfileModal,
+    closeModal: closeRenameProfileModal,
+    handleNameChange: handleRenameProfileModalNameChange,
+    handleConfirm: handleConfirmRenameProfile,
+  } = useProfileRenameModal();
+
+  const {
+    isModalOpen: isDeleteProfileModalOpen,
+    profile: profileToDelete,
+    pageCount,
+    isDeleting: isDeletingProfile,
+    openModal: openDeleteProfileModal,
+    closeModal: closeDeleteProfileModal,
+    handleConfirm: handleConfirmDeleteProfile,
+  } = useProfileDeleteModal({
+    onProfileDeleted: (deletedProfileId) => {
+      // If the deleted profile was active, switch to another profile
+      if (deletedProfileId === activeProfileId) {
+        const remainingProfiles = profiles.filter(
+          (p) => p.id !== deletedProfileId
+        );
+        if (remainingProfiles.length > 0) {
+          setActiveProfileId(remainingProfiles[0].id);
+        } else {
+          setActiveProfileId(null);
+        }
+      }
+    },
+  });
+
   const { activeProfileName, activeProfileTree } = useActiveProfileData({
     profiles,
     activeProfileId,
@@ -138,6 +176,26 @@ const RendererAppContent = () => {
     closeProfileModal();
   }, [closeProfileModal]);
 
+  const handleRenameProfile = useCallback(
+    (profileId: string) => {
+      const profile = profiles.find((p) => p.id === profileId);
+      if (profile) {
+        openRenameProfileModal(profile);
+      }
+    },
+    [profiles, openRenameProfileModal]
+  );
+
+  const handleDeleteProfile = useCallback(
+    (profileId: string) => {
+      const profile = profiles.find((p) => p.id === profileId);
+      if (profile) {
+        openDeleteProfileModal(profile, activeProfileTree);
+      }
+    },
+    [profiles, activeProfileTree, openDeleteProfileModal]
+  );
+
   return (
     <MantineProvider defaultColorScheme="auto">
       <RendererRouteProvider value={{ route, navigateToDoc, navigateToBlock }}>
@@ -161,6 +219,8 @@ const RendererAppContent = () => {
                 activeProfileId={activeProfileId}
                 onSelectProfile={handleProfileSelect}
                 onCreateProfile={handleOpenCreateProfileModal}
+                onRenameProfile={handleRenameProfile}
+                onDeleteProfile={handleDeleteProfile}
                 documentTree={activeProfileTree}
                 activeDocumentId={activeDocumentId}
                 onSelectDocument={handleDocumentSelect}
@@ -206,6 +266,23 @@ const RendererAppContent = () => {
           onNameChange={handleProfileModalNameChange}
           onClose={handleCloseCreateProfileModal}
           onConfirm={handleConfirmCreateProfile}
+        />
+        <ProfileModal
+          opened={isRenameProfileModalOpen}
+          title="Rename profile"
+          profileName={renameProfileModalName}
+          error={renameProfileModalError}
+          isCreating={isRenamingProfile}
+          onNameChange={handleRenameProfileModalNameChange}
+          onClose={closeRenameProfileModal}
+          onConfirm={handleConfirmRenameProfile}
+        />
+        <ProfileDeleteModal
+          opened={isDeleteProfileModalOpen}
+          profileName={profileToDelete?.name ?? ""}
+          pageCount={pageCount}
+          onClose={closeDeleteProfileModal}
+          onConfirm={handleConfirmDeleteProfile}
         />
       </RendererRouteProvider>
     </MantineProvider>

@@ -259,6 +259,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       icon?: string | null;
       color?: string | null;
     }) => ipcRenderer.invoke("profiles:create", payload),
+    rename: (payload: { profileId: string; name: string }) =>
+      ipcRenderer.invoke("profiles:rename", payload),
     delete: (profileId: string) =>
       ipcRenderer.invoke("profiles:delete", profileId),
     onUpdated: (

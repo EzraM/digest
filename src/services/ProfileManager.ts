@@ -45,11 +45,16 @@ export class ProfileManager {
     return this.getProfile(profileId).partitionName;
   }
 
-  createProfile(name: string, options: CreateProfileOptions = {}): ProfileRecord {
+  createProfile(
+    name: string,
+    options: CreateProfileOptions = {}
+  ): ProfileRecord {
     const id = options.profileId ?? randomUUID();
     const partitionName = options.partitionName ?? deriveProfilePartition(id);
     const now = Date.now();
-    const settingsString = options.settings ? JSON.stringify(options.settings) : null;
+    const settingsString = options.settings
+      ? JSON.stringify(options.settings)
+      : null;
 
     const stmt = this.database.prepare(
       `INSERT INTO profiles (id, name, partition_name, icon, color, created_at, updated_at, settings)
@@ -81,6 +86,25 @@ export class ProfileManager {
     this.profiles.set(id, profile);
     log.debug(`Created profile ${id} (${name})`, "ProfileManager");
     return profile;
+  }
+
+  renameProfile(profileId: string, name: string): ProfileRecord {
+    const profile = this.getProfile(profileId);
+    const now = Date.now();
+
+    const stmt = this.database.prepare(
+      `UPDATE profiles SET name = ?, updated_at = ? WHERE id = ?`
+    );
+    stmt.run(name, now, profileId);
+
+    const updated: ProfileRecord = {
+      ...profile,
+      name,
+      updatedAt: now,
+    };
+    this.profiles.set(profileId, updated);
+    log.debug(`Renamed profile ${profileId} to ${name}`, "ProfileManager");
+    return updated;
   }
 
   deleteProfile(profileId: string): void {
@@ -127,7 +151,10 @@ export class ProfileManager {
       try {
         parsedSettings = JSON.parse(row.settings);
       } catch (error) {
-        log.debug(`Failed to parse profile settings for ${row.id}: ${error}`, "ProfileManager");
+        log.debug(
+          `Failed to parse profile settings for ${row.id}: ${error}`,
+          "ProfileManager"
+        );
       }
     }
 

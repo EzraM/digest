@@ -22,11 +22,20 @@ export function createProfileHandlers(
         return profile;
       },
     },
+    "profiles:rename": {
+      type: "invoke",
+      fn: (_event, payload: { profileId: string; name: string }) => {
+        const profile = profileManager.renameProfile(payload.profileId, payload.name);
+        broadcastProfiles();
+        return profile;
+      },
+    },
     "profiles:delete": {
       type: "invoke",
       fn: (_event, profileId: string) => {
         profileManager.deleteProfile(profileId);
         broadcastProfiles();
+        broadcastDocumentTree(null);
         return { success: true };
       },
     },

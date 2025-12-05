@@ -97,6 +97,10 @@ interface ElectronAPI {
       icon?: string | null;
       color?: string | null;
     }) => Promise<ProfileRecord>;
+    rename: (payload: {
+      profileId: string;
+      name: string;
+    }) => Promise<ProfileRecord>;
     delete: (profileId: string) => Promise<{ success: boolean }>;
     onUpdated: (
       callback: (event: { profiles: ProfileRecord[] }) => void

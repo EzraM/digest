@@ -12,6 +12,8 @@ type FileTreeProps = {
   activeProfileId: string | null;
   onSelectProfile: (profileId: string) => void;
   onCreateProfile: () => void;
+  onRenameProfile?: (profileId: string) => void;
+  onDeleteProfile?: (profileId: string) => void;
   documentTree: DocumentTreeNode[];
   activeDocumentId: string | null;
   onSelectDocument: (documentId: string) => void;
@@ -43,6 +45,8 @@ export const FileTree = ({
   activeProfileId,
   onSelectProfile,
   onCreateProfile,
+  onRenameProfile,
+  onDeleteProfile,
   documentTree,
   activeDocumentId,
   onSelectDocument,
@@ -67,6 +71,8 @@ export const FileTree = ({
         activeProfileId={activeProfileId}
         onSelectProfile={onSelectProfile}
         onCreateProfile={onCreateProfile}
+        onRenameProfile={onRenameProfile}
+        onDeleteProfile={onDeleteProfile}
       />
 
       <Divider />
