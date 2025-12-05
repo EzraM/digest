@@ -1,9 +1,10 @@
-import { ReactNode, useMemo, useContext } from "react";
+import { ReactNode, useMemo, useContext, useRef } from "react";
 import { Box } from "@mantine/core";
 import { StatusBar } from "./StatusBar";
 import { useStatusBar } from "../../hooks/useStatusBar";
 import { SidebarToggleButton } from "./SidebarToggleButton";
 import { BlockNotificationContext } from "../../context/BlockNotificationContext";
+import { ScrollContainerProvider } from "../../context/ScrollContainerContext";
 
 const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
@@ -52,6 +53,8 @@ export const RendererLayout = ({
     [isNavbarOpened, isDebugSidebarVisible]
   );
 
+  const scrollContainerRef = useRef<HTMLElement>(null);
+
   return (
     <Box
       style={{
@@ -81,22 +84,25 @@ export const RendererLayout = ({
         {navbar}
       </Box>
 
-      <Box
-        component="main"
-        id="renderer-main-scroll-container"
-        style={{
-          gridArea: "main",
-          position: "relative",
-          zIndex: 0,
-          paddingBottom: FOOTER_HEIGHT + 8,
-          paddingLeft: isNavbarOpened ? 0 : TOGGLE_SAFE_SPACE,
-          marginBottom: hasActiveNotifications ? NOTIFICATION_HEIGHT : 0,
-          overflow: "auto",
-          transition: "margin-bottom 0.3s ease-out",
-        }}
-      >
-        {main}
-      </Box>
+      <ScrollContainerProvider scrollContainerRef={scrollContainerRef}>
+        <Box
+          component="main"
+          ref={scrollContainerRef}
+          id="renderer-main-scroll-container"
+          style={{
+            gridArea: "main",
+            position: "relative",
+            zIndex: 0,
+            paddingBottom: FOOTER_HEIGHT + 8,
+            paddingLeft: isNavbarOpened ? 0 : TOGGLE_SAFE_SPACE,
+            marginBottom: hasActiveNotifications ? NOTIFICATION_HEIGHT : 0,
+            overflow: "auto",
+            transition: "margin-bottom 0.3s ease-out",
+          }}
+        >
+          {main}
+        </Box>
+      </ScrollContainerProvider>
 
       <Box
         component="aside"

@@ -1,6 +1,7 @@
-import React, { useRef, useMemo } from "react";
+import React, { useRef } from "react";
 import { BrowserSlotProps } from "../types";
 import { useSize } from "../hooks/useSize";
+import { useScrollContainer } from "../../context/ScrollContainerContext";
 
 export function BrowserSlot({
   blockId,
@@ -9,13 +10,8 @@ export function BrowserSlot({
   onRetry,
 }: BrowserSlotProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const scrollContainer = useMemo(
-    () => document.getElementById("renderer-main-scroll-container"),
-    []
-  );
+  const scrollContainer = useScrollContainer();
 
-  // Use IntersectionObserver-based measurement hook
-  // Pass the scroll container so intersections exclude the footer automatically
   useSize(ref, onBoundsChange, scrollContainer);
 
   return (
@@ -134,48 +130,6 @@ export function BrowserSlot({
                 {initStatus.state === "initializing" && initStatus.detail
                   ? `Status: ${initStatus.detail}`
                   : "Hang tight, we're getting things ready."}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                  alignItems: "center",
-                }}
-              >
-                <button
-                  onClick={() => {
-                    // Use direct IPC call to create browser block with sourceBlockId
-                    // This ensures the block is inserted after the source block, even when WebViews are disabled
-                    // Using a button instead of a link avoids triggering window.open() and LinkInterceptionService
-                    window.electronAPI?.browser?.createBlock?.(
-                      "https://google.com",
-                      blockId
-                    );
-                  }}
-                  style={{
-                    padding: "8px 16px",
-                    cursor: "pointer",
-                    borderRadius: "20px",
-                    border: "1px solid #1c7ed6",
-                    backgroundColor: "#fff",
-                    color: "#1c7ed6",
-                    fontWeight: 600,
-                    fontSize: "0.9rem",
-                    display: "inline-block",
-                  }}
-                >
-                  Open Google
-                </button>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "#888",
-                    marginTop: "4px",
-                  }}
-                >
-                  (Ctrl+Click for background tab)
-                </div>
               </div>
             </>
           )}

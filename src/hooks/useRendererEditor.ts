@@ -45,39 +45,16 @@ const createNewBrowserBlock = (url: string, sourceBlockId?: string): void => {
   }
 
   // Fallback to default insertion if no source block or source block not found
-  insertOrUpdateBlock(currentEditor, {
+  // insertOrUpdateBlock without a block ID inserts at the end automatically
+  const newBlock = insertOrUpdateBlock(currentEditor, {
     type: "site",
     props: { url },
   } as unknown as CustomPartialBlock);
 
-  // For fallback case, we need to find the block by URL match
-  // Query all blocks to find the one we just inserted
-  setTimeout(() => {
-    if (!currentEditor || !onBlockCreatedCallback) return;
-
-    const allBlocks = currentEditor.document;
-    const findBlockRecursive = (
-      blocks: typeof allBlocks
-    ): (typeof allBlocks)[number] | null => {
-      for (const block of blocks) {
-        if (block.type === "site" && block.props?.url === url) {
-          // Check if this is likely the newly inserted block
-          // (we could improve this by tracking insertion time, but this is simpler)
-          return block;
-        }
-        if (block.children) {
-          const found = findBlockRecursive(block.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const foundBlock = findBlockRecursive(allBlocks);
-    if (foundBlock?.id && onBlockCreatedCallback) {
-      onBlockCreatedCallback(foundBlock.id);
-    }
-  }, 100); // Small delay to ensure block is inserted
+  // Get block ID from return value and trigger notification
+  if (newBlock?.id && onBlockCreatedCallback) {
+    onBlockCreatedCallback(newBlock.id);
+  }
 };
 
 export const useRendererEditor = (
