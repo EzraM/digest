@@ -15,6 +15,11 @@ import {
 } from "./ViewState";
 import { injectScrollForwardingScript } from "./ScrollForwardingService";
 import { getProfilePartition } from "../config/profiles";
+import {
+  ViewLifecycleManager,
+  ViewConfig,
+  ViewLifecycleCallbacks,
+} from "./ViewLifecycleManager";
 
 const EVENTS = {
   BROWSER: {
@@ -38,6 +43,7 @@ export class ViewManager {
   > = new Map();
   // Track state for each view
   private viewStates: Map<string, ViewState> = new Map();
+  private lifecycleManager: ViewLifecycleManager;
 
   constructor(
     private baseWindow: BrowserWindow,
@@ -49,6 +55,43 @@ export class ViewManager {
       `ViewManager: Renderer WebContents set to ID ${rendererWebContents.id}`,
       "ViewManager"
     );
+
+    // Create lifecycle manager with callbacks
+    const lifecycleCallbacks: ViewLifecycleCallbacks = {
+      canTransitionState: (blockId: string, newState: ViewState) => {
+        const currentState = this.viewStates.get(blockId) ?? getDefaultState();
+        return isValidTransition(currentState, newState);
+      },
+      transitionState: (blockId: string, newState: ViewState, reason?: string) => {
+        return this.transitionState(blockId, newState, reason);
+      },
+      getViewState: (blockId: string) => {
+        return this.getViewState(blockId);
+      },
+      isValidUrl: (url: string) => {
+        return this.isValidUrl(url);
+      },
+      sendInitializationNotification: (blockId: string, notification) => {
+        this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+          blockId,
+          ...notification,
+        });
+      },
+      broadcastNavigationState: (blockId: string, url?: string) => {
+        this.broadcastNavigationState(blockId, url);
+      },
+      setupEventHandlers: (view: WebContentsView, blockId: string, config: ViewConfig) => {
+        this.setupViewEventHandlers(view, blockId, config);
+      },
+    };
+
+    this.lifecycleManager = new ViewLifecycleManager(
+      this.baseWindow,
+      this.viewLayerManager,
+      this.rendererWebContents,
+      lifecycleCallbacks
+    );
+
     this.setupEventHandlers();
   }
 
@@ -96,6 +139,291 @@ export class ViewManager {
     return this.viewStates.get(blockId) ?? getDefaultState();
   }
 
+  /**
+   * Setup event handlers for a WebContentsView
+   * This will be extracted to ViewEventHandlers in a future refactoring
+   */
+  private setupViewEventHandlers(
+    view: WebContentsView,
+    blockId: string,
+    config: ViewConfig
+  ): void {
+    // Add comprehensive event listeners for debugging
+    view.webContents.on("did-start-loading", () => {
+      log.debug(
+        `WebContents started loading for blockId: ${blockId}`,
+        "ViewManager"
+      );
+    });
+
+    // Log all navigation attempts
+    view.webContents.on(
+      "did-start-navigation",
+      (event, url, isInPlace, isMainFrame) => {
+        log.debug(
+          `[${blockId}] Navigation started: ${url} [inPlace: ${isInPlace}, mainFrame: ${isMainFrame}]`,
+          "ViewManager"
+        );
+      }
+    );
+
+    // Log when DOM is ready (but resources might still be loading)
+    view.webContents.on("dom-ready", () => {
+      log.debug(
+        `[${blockId}] DOM ready for ${view.webContents.getURL()}`,
+        "ViewManager"
+      );
+    });
+
+    view.webContents.on("did-finish-load", () => {
+      log.debug(
+        `WebContents finished loading for blockId: ${blockId}`,
+        "ViewManager"
+      );
+
+      // Log additional debugging info about the loaded page
+      const url = view.webContents.getURL();
+      const title = view.webContents.getTitle();
+      log.debug(
+        `[${blockId}] Page loaded: "${title}" at ${url}`,
+        "ViewManager"
+      );
+
+      // Check if there was a previous error for this block
+      const hasError = this.blockErrors.has(blockId);
+      if (hasError) {
+        const errorInfo = this.blockErrors.get(blockId);
+        log.debug(
+          `[${blockId}] Skipping success notification - error already reported: ${errorInfo?.errorDescription} (${errorInfo?.errorCode})`,
+          "ViewManager"
+        );
+        // Don't send success message if there was an error
+        return;
+      }
+
+      // Transition to LOADED state
+      this.transitionState(blockId, ViewState.LOADED, "page loaded successfully");
+
+      // Send success notification when page is fully loaded
+      this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+        blockId,
+        success: true,
+        status: "loaded",
+      });
+      log.debug(
+        `[${blockId}] Sent success notification to renderer`,
+        "ViewManager"
+      );
+
+      injectScrollForwardingScript(view, blockId, this.rendererWebContents);
+    });
+
+    // Add devtools support for each browser block if configured
+    if (shouldOpenDevTools("openBrowserViews")) {
+      try {
+        log.debug(
+          `Attaching devtools for browser block ${blockId}`,
+          "ViewManager"
+        );
+        view.webContents.openDevTools({ mode: "detach" });
+      } catch (error) {
+        log.debug(
+          `Failed to attach devtools for ${blockId}: ${error}`,
+          "ViewManager"
+        );
+      }
+    }
+
+    // Update the main page load failure handler to be more specific
+    view.webContents.on(
+      "did-fail-load",
+      (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        if (isMainFrame) {
+          log.debug(
+            `Main frame failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
+            "ViewManager"
+          );
+          // Track the error to prevent success messages from overriding it
+          this.blockErrors.set(blockId, {
+            errorCode,
+            errorDescription,
+            url: validatedURL,
+          });
+          // Transition to ERROR state
+          this.transitionState(
+            blockId,
+            ViewState.ERROR,
+            `load failed: ${errorDescription}`
+          );
+          log.debug(
+            `[${blockId}] Tracking error: ${errorDescription} (${errorCode}) for ${validatedURL}`,
+            "ViewManager"
+          );
+
+          // Hide/remove the WebContentsView when there's an error
+          // This ensures only the renderer's error UI is shown
+          try {
+            const viewState = this.views[blockId];
+            if (viewState?.contents) {
+              log.debug(
+                `[${blockId}] Hiding WebContentsView due to error`,
+                "ViewManager"
+              );
+              if (this.viewLayerManager) {
+                // Remove from layer manager to hide it
+                this.viewLayerManager.removeView(`browser-block-${blockId}`);
+                log.debug(
+                  `[${blockId}] Removed WebContentsView from ViewLayerManager`,
+                  "ViewManager"
+                );
+              } else {
+                // Fallback: remove from window directly
+                this.baseWindow.contentView.removeChildView(viewState.contents);
+                log.debug(
+                  `[${blockId}] Removed WebContentsView from baseWindow`,
+                  "ViewManager"
+                );
+              }
+            }
+          } catch (error) {
+            log.debug(
+              `[${blockId}] Failed to hide WebContentsView: ${error}`,
+              "ViewManager"
+            );
+          }
+
+          this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+            blockId,
+            success: false,
+            error: `Failed to load: ${errorDescription} (${errorCode})`,
+            errorCode,
+            errorDescription,
+            url: validatedURL,
+          });
+          log.debug(
+            `[${blockId}] Sent error notification to renderer: ${errorDescription} (${errorCode})`,
+            "ViewManager"
+          );
+        } else {
+          log.debug(
+            `Resource failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
+            "ViewManager"
+          );
+        }
+      }
+    );
+
+    // Handle new window requests with disposition check
+    view.webContents.setWindowOpenHandler(({ url, disposition }) => {
+      log.debug(
+        `New window request in blockId: ${blockId}, URL: ${url}, disposition: ${disposition}`,
+        "ViewManager"
+      );
+
+      // Only create new blocks for actual "new tab/window" scenarios
+      if (
+        disposition === "foreground-tab" ||
+        disposition === "background-tab" ||
+        disposition === "new-window"
+      ) {
+        log.debug(
+          `Creating new block for disposition: ${disposition}`,
+          "ViewManager"
+        );
+        this.handleLinkClick(url, blockId);
+        return { action: "deny" };
+      }
+
+      // Allow default disposition to navigate in current page
+      log.debug(
+        `Allowing navigation in current page for disposition: ${disposition}`,
+        "ViewManager"
+      );
+      return { action: "deny" };
+    });
+
+    // Handle regular link navigation - allow all navigation to proceed
+    view.webContents.on("will-navigate", (event, url) => {
+      const currentUrl = view.webContents.getURL();
+
+      log.debug(
+        `Navigation event in blockId: ${blockId}, from: ${
+          currentUrl || "unknown"
+        } to: ${url}`,
+        "ViewManager"
+      );
+
+      // Allow all navigation to proceed - new blocks are only created via setWindowOpenHandler
+      log.debug(
+        `Allowing navigation in blockId: ${blockId}, from: ${
+          currentUrl || "unknown"
+        } to: ${url}`,
+        "ViewManager"
+      );
+    });
+
+    const handleNavigationUpdate = (nextUrl?: string) => {
+      if (nextUrl) {
+        log.debug(
+          `Navigation event in blockId: ${blockId}, new URL: ${nextUrl}`,
+          "ViewManager"
+        );
+      }
+      this.broadcastNavigationState(blockId, nextUrl);
+    };
+
+    // Also listen for page redirects to catch server-side redirects
+    view.webContents.on(
+      "did-navigate",
+      (_event, url, httpResponseCode, httpStatusText) => {
+        log.debug(
+          `Did navigate in blockId: ${blockId}, to: ${url}, status: ${httpResponseCode} ${httpStatusText}`,
+          "ViewManager"
+        );
+        handleNavigationUpdate(url);
+      }
+    );
+
+    view.webContents.on("did-navigate-in-page", (_event, url) => {
+      log.debug(
+        `In-page navigation in blockId: ${blockId}, to: ${url}`,
+        "ViewManager"
+      );
+      handleNavigationUpdate(url);
+    });
+
+    view.webContents.on("did-redirect-navigation", (_event, url) => {
+      log.debug(
+        `Redirect navigation in blockId: ${blockId}, to: ${url}`,
+        "ViewManager"
+      );
+      handleNavigationUpdate(url);
+    });
+
+    view.webContents.on("did-finish-load", () => {
+      log.debug(
+        `Finished load for blockId: ${blockId}, current URL: ${view.webContents.getURL()}`,
+        "ViewManager"
+      );
+      handleNavigationUpdate(view.webContents.getURL());
+    });
+
+    // Listen for click events
+    view.webContents.on("before-input-event", (event, input) => {
+      if (
+        input.type === "keyDown" &&
+        input.key === "Enter" &&
+        input.control
+      ) {
+        log.debug(
+          `Detected Ctrl+Enter in blockId: ${blockId}`,
+          "ViewManager"
+        );
+        // This could be used for special key combinations to force new window
+      }
+    });
+  }
+
   private setupEventHandlers() {
     this.events$.subscribe((ev) => {
       const { blockId } = ev;
@@ -141,12 +469,6 @@ export class ViewManager {
   }
 
   private handleViewCreation(blockId: string) {
-    if (this.baseWindow.isDestroyed()) {
-      log.warn(
-        `ViewManager: baseWindow is destroyed, skipping view creation for blockId: ${blockId}`
-      );
-      return;
-    }
     const view = this.views[blockId];
     log.debug(`Checking view creation for blockId: ${blockId}`, "ViewManager");
     log.debug(
@@ -155,21 +477,6 @@ export class ViewManager {
       )}, hasContents=${!!view?.contents}`,
       "ViewManager"
     );
-
-    // Validate URL
-    if (view?.url && !this.isValidUrl(view.url)) {
-      log.debug(
-        `Invalid URL for blockId: ${blockId}: ${view.url}`,
-        "ViewManager"
-      );
-      this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-        blockId,
-        success: false,
-        error: `Invalid URL: ${view.url}`,
-        errorDescription: "invalid-url",
-      });
-      return;
-    }
 
     // Check if we have both URL and bounds
     if (!view?.url) {
@@ -184,419 +491,23 @@ export class ViewManager {
 
     // If we have both URL and bounds but no contents, create a new view
     if (!view.contents) {
-      // Transition to CREATING state
-      if (
-        !this.transitionState(
-          blockId,
-          ViewState.CREATING,
-          "starting view creation"
-        )
-      ) {
-        return; // Invalid transition, abort
+      // Use lifecycle manager to create the view
+      const partition = view?.partition || getProfilePartition(view.profileId);
+      if (view) {
+        view.partition = partition;
       }
 
-      try {
-        // Check if WebView rendering is disabled in development
-        if (DEV_CONFIG.features.disableWebViewRendering) {
-          log.debug(
-            `WebView rendering disabled - skipping WebContentsView creation for blockId: ${blockId}`,
-            "ViewManager"
-          );
-          log.debug(
-            `URL: ${view.url}, Bounds: ${JSON.stringify(
-              view.bounds
-            )}, profile: ${view.profileId}`,
-            "ViewManager"
-          );
+      const config: ViewConfig = {
+        url: view.url,
+        bounds: view.bounds,
+        profileId: view.profileId,
+        partition,
+      };
 
-          // Still send notifications so React UI can render
-          // Transition to LOADING state
-          this.transitionState(
-            blockId,
-            ViewState.LOADING,
-            "WebView rendering disabled"
-          );
-
-          // Send created notification
-          this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-            blockId,
-            success: true,
-            status: "created",
-          });
-
-          // Simulate a loaded state after a short delay
-          setTimeout(() => {
-            this.transitionState(
-              blockId,
-              ViewState.LOADED,
-              "WebView rendering disabled (simulated)"
-            );
-            this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-              blockId,
-              success: true,
-              status: "loaded",
-            });
-            this.broadcastNavigationState(blockId, view.url);
-          }, 100);
-
-          return; // Skip actual WebView creation
-        }
-
-        const partition =
-          view?.partition || getProfilePartition(view.profileId);
-
-        if (view) {
-          view.partition = partition;
-        }
-
-        log.debug(
-          `Creating new WebContentsView for blockId: ${blockId}`,
-          "ViewManager"
-        );
-        log.debug(
-          `URL: ${view.url}, Bounds: ${JSON.stringify(
-            view.bounds
-          )}, profile: ${view.profileId}, partition: ${partition}`,
-          "ViewManager"
-        );
-
-        const newView = new WebContentsView({
-          webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            webSecurity: true,
-            allowRunningInsecureContent: false,
-            partition,
-          },
-        });
-
-        // Add comprehensive event listeners for debugging
-        newView.webContents.on("did-start-loading", () => {
-          log.debug(
-            `WebContents started loading for blockId: ${blockId}`,
-            "ViewManager"
-          );
-        });
-
-        // Log all navigation attempts
-        newView.webContents.on(
-          "did-start-navigation",
-          (event, url, isInPlace, isMainFrame) => {
-            log.debug(
-              `[${blockId}] Navigation started: ${url} [inPlace: ${isInPlace}, mainFrame: ${isMainFrame}]`,
-              "ViewManager"
-            );
-          }
-        );
-
-        // Log when DOM is ready (but resources might still be loading)
-        newView.webContents.on("dom-ready", () => {
-          log.debug(
-            `[${blockId}] DOM ready for ${newView.webContents.getURL()}`,
-            "ViewManager"
-          );
-        });
-
-        newView.webContents.on("did-finish-load", () => {
-          log.debug(
-            `WebContents finished loading for blockId: ${blockId}`,
-            "ViewManager"
-          );
-
-          // Log additional debugging info about the loaded page
-          const url = newView.webContents.getURL();
-          const title = newView.webContents.getTitle();
-          log.debug(
-            `[${blockId}] Page loaded: "${title}" at ${url}`,
-            "ViewManager"
-          );
-
-          // Check if there was a previous error for this block
-          const hasError = this.blockErrors.has(blockId);
-          if (hasError) {
-            const errorInfo = this.blockErrors.get(blockId);
-            log.debug(
-              `[${blockId}] Skipping success notification - error already reported: ${errorInfo?.errorDescription} (${errorInfo?.errorCode})`,
-              "ViewManager"
-            );
-            // Don't send success message if there was an error
-            return;
-          }
-
-          // Transition to LOADED state
-          this.transitionState(
-            blockId,
-            ViewState.LOADED,
-            "page loaded successfully"
-          );
-
-          // Send success notification when page is fully loaded
-          this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-            blockId,
-            success: true,
-            status: "loaded",
-          });
-          log.debug(
-            `[${blockId}] Sent success notification to renderer`,
-            "ViewManager"
-          );
-
-          injectScrollForwardingScript(
-            newView,
-            blockId,
-            this.rendererWebContents
-          );
-        });
-
-        // Add devtools support for each browser block if configured
-        if (shouldOpenDevTools("openBrowserViews")) {
-          try {
-            log.debug(
-              `Attaching devtools for browser block ${blockId}`,
-              "ViewManager"
-            );
-            newView.webContents.openDevTools({ mode: "detach" });
-          } catch (error) {
-            log.debug(
-              `Failed to attach devtools for ${blockId}: ${error}`,
-              "ViewManager"
-            );
-          }
-        }
-
-        // Update the main page load failure handler to be more specific
-        newView.webContents.on(
-          "did-fail-load",
-          (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-            if (isMainFrame) {
-              log.debug(
-                `Main frame failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
-                "ViewManager"
-              );
-              // Track the error to prevent success messages from overriding it
-              this.blockErrors.set(blockId, {
-                errorCode,
-                errorDescription,
-                url: validatedURL,
-              });
-              // Transition to ERROR state
-              this.transitionState(
-                blockId,
-                ViewState.ERROR,
-                `load failed: ${errorDescription}`
-              );
-              log.debug(
-                `[${blockId}] Tracking error: ${errorDescription} (${errorCode}) for ${validatedURL}`,
-                "ViewManager"
-              );
-
-              // Hide/remove the WebContentsView when there's an error
-              // This ensures only the renderer's error UI is shown
-              try {
-                const view = this.views[blockId];
-                if (view?.contents) {
-                  log.debug(
-                    `[${blockId}] Hiding WebContentsView due to error`,
-                    "ViewManager"
-                  );
-                  if (this.viewLayerManager) {
-                    // Remove from layer manager to hide it
-                    this.viewLayerManager.removeView(
-                      `browser-block-${blockId}`
-                    );
-                    log.debug(
-                      `[${blockId}] Removed WebContentsView from ViewLayerManager`,
-                      "ViewManager"
-                    );
-                  } else {
-                    // Fallback: remove from window directly
-                    this.baseWindow.contentView.removeChildView(view.contents);
-                    log.debug(
-                      `[${blockId}] Removed WebContentsView from baseWindow`,
-                      "ViewManager"
-                    );
-                  }
-                }
-              } catch (error) {
-                log.debug(
-                  `[${blockId}] Failed to hide WebContentsView: ${error}`,
-                  "ViewManager"
-                );
-              }
-
-              this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-                blockId,
-                success: false,
-                error: `Failed to load: ${errorDescription} (${errorCode})`,
-                errorCode,
-                errorDescription,
-                url: validatedURL,
-              });
-              log.debug(
-                `[${blockId}] Sent error notification to renderer: ${errorDescription} (${errorCode})`,
-                "ViewManager"
-              );
-            } else {
-              log.debug(
-                `Resource failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
-                "ViewManager"
-              );
-            }
-          }
-        );
-
-        // Handle new window requests with disposition check
-        newView.webContents.setWindowOpenHandler(({ url, disposition }) => {
-          log.debug(
-            `New window request in blockId: ${blockId}, URL: ${url}, disposition: ${disposition}`,
-            "ViewManager"
-          );
-
-          // Only create new blocks for actual "new tab/window" scenarios
-          if (
-            disposition === "foreground-tab" ||
-            disposition === "background-tab" ||
-            disposition === "new-window"
-          ) {
-            log.debug(
-              `Creating new block for disposition: ${disposition}`,
-              "ViewManager"
-            );
-            this.handleLinkClick(url, blockId);
-            return { action: "deny" };
-          }
-
-          // Allow default disposition to navigate in current page
-          log.debug(
-            `Allowing navigation in current page for disposition: ${disposition}`,
-            "ViewManager"
-          );
-          return { action: "deny" };
-        });
-
-        // Handle regular link navigation - allow all navigation to proceed
-        newView.webContents.on("will-navigate", (event, url) => {
-          const currentUrl = newView.webContents.getURL();
-
-          log.debug(
-            `Navigation event in blockId: ${blockId}, from: ${
-              currentUrl || "unknown"
-            } to: ${url}`,
-            "ViewManager"
-          );
-
-          // Allow all navigation to proceed - new blocks are only created via setWindowOpenHandler
-          log.debug(
-            `Allowing navigation in blockId: ${blockId}, from: ${
-              currentUrl || "unknown"
-            } to: ${url}`,
-            "ViewManager"
-          );
-        });
-
-        const handleNavigationUpdate = (nextUrl?: string) => {
-          if (nextUrl) {
-            log.debug(
-              `Navigation event in blockId: ${blockId}, new URL: ${nextUrl}`,
-              "ViewManager"
-            );
-          }
-          this.broadcastNavigationState(blockId, nextUrl);
-        };
-
-        // Also listen for page redirects to catch server-side redirects
-        newView.webContents.on(
-          "did-navigate",
-          (_event, url, httpResponseCode, httpStatusText) => {
-            log.debug(
-              `Did navigate in blockId: ${blockId}, to: ${url}, status: ${httpResponseCode} ${httpStatusText}`,
-              "ViewManager"
-            );
-            handleNavigationUpdate(url);
-          }
-        );
-
-        newView.webContents.on("did-navigate-in-page", (_event, url) => {
-          log.debug(
-            `In-page navigation in blockId: ${blockId}, to: ${url}`,
-            "ViewManager"
-          );
-          handleNavigationUpdate(url);
-        });
-
-        newView.webContents.on("did-redirect-navigation", (_event, url) => {
-          log.debug(
-            `Redirect navigation in blockId: ${blockId}, to: ${url}`,
-            "ViewManager"
-          );
-          handleNavigationUpdate(url);
-        });
-
-        newView.webContents.on("did-finish-load", () => {
-          log.debug(
-            `Finished load for blockId: ${blockId}, current URL: ${newView.webContents.getURL()}`,
-            "ViewManager"
-          );
-          handleNavigationUpdate(newView.webContents.getURL());
-        });
-
-        // Listen for click events
-        newView.webContents.on("before-input-event", (event, input) => {
-          if (
-            input.type === "keyDown" &&
-            input.key === "Enter" &&
-            input.control
-          ) {
-            log.debug(
-              `Detected Ctrl+Enter in blockId: ${blockId}`,
-              "ViewManager"
-            );
-            // This could be used for special key combinations to force new window
-          }
-        });
-
-        // Set bounds before loading URL
-        log.debug(
-          `Setting bounds for WebContentsView: ${JSON.stringify(view.bounds)}`,
-          "ViewManager"
-        );
-        newView.setBounds(view.bounds);
-
-        // Add to window before loading URL
-        log.debug(
-          `Adding WebContentsView to window for blockId: ${blockId}`,
-          "ViewManager"
-        );
-
-        if (this.viewLayerManager) {
-          // Use the layer manager for proper z-ordering
-          this.viewLayerManager.addView(
-            `browser-block-${blockId}`,
-            newView,
-            ViewLayer.BROWSER_BLOCKS
-          );
-          log.debug(
-            `Browser block ${blockId} added via ViewLayerManager`,
-            "ViewManager"
-          );
-        } else {
-          // Fallback to direct addition
-          this.baseWindow.contentView.addChildView(newView);
-        }
-
-        // Load URL last
-        log.debug(
-          `Loading URL for blockId: ${blockId}: ${view.url}`,
-          "ViewManager"
-        );
-        // Transition to LOADING state
-        this.transitionState(blockId, ViewState.LOADING, "loading URL");
-        newView.webContents.loadURL(view.url);
-
-        // Ensure the renderer has the initial navigation state
-        this.broadcastNavigationState(blockId, view.url);
-
-        // Store the view
+      const newView = this.lifecycleManager.createView(blockId, config);
+      
+      if (newView) {
+        // Store the view in our state
         this.views[blockId].contents = newView;
 
         // Only clear errors if we're creating a completely new view (not retrying after error)
@@ -634,28 +545,6 @@ export class ViewManager {
             "ViewManager"
           );
         }
-
-        // Ensure overlays stay on top after adding a new browser block
-        if (this.viewLayerManager) {
-          this.viewLayerManager.forceReorder();
-          log.debug("Forced reorder after adding browser block", "ViewManager");
-        }
-
-        log.debug(
-          `Successfully created WebContentsView for blockId: ${blockId}`,
-          "ViewManager"
-        );
-      } catch (error) {
-        log.debug(
-          `Failed to create WebContentsView for blockId: ${blockId}. Error: ${error}`,
-          "ViewManager"
-        );
-        // Send failure notification back to renderer
-        this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-          blockId,
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        });
       }
     } else if (view?.contents) {
       log.debug(
@@ -671,49 +560,19 @@ export class ViewManager {
           `[${blockId}] Re-adding WebContentsView after error (retry)`,
           "ViewManager"
         );
-        try {
-          // Transition to LOADING state for retry
-          this.transitionState(
-            blockId,
-            ViewState.LOADING,
-            "retrying after error"
-          );
-          // Clear the error so we can retry
-          this.blockErrors.delete(blockId);
+        // Clear the error so we can retry
+        this.blockErrors.delete(blockId);
 
-          // Re-add the view to the hierarchy
-          if (this.viewLayerManager) {
-            this.viewLayerManager.addView(
-              `browser-block-${blockId}`,
-              view.contents,
-              ViewLayer.BROWSER_BLOCKS
-            );
-            log.debug(
-              `[${blockId}] Re-added WebContentsView via ViewLayerManager`,
-              "ViewManager"
-            );
-          } else {
-            this.baseWindow.contentView.addChildView(view.contents);
-            log.debug(
-              `[${blockId}] Re-added WebContentsView to baseWindow`,
-              "ViewManager"
-            );
-          }
+        const partition = view?.partition || getProfilePartition(view.profileId);
+        const config: ViewConfig = {
+          url: view.url!,
+          bounds: view.bounds!,
+          profileId: view.profileId,
+          partition,
+        };
 
-          // Reload the URL
-          if (view.url) {
-            log.debug(
-              `[${blockId}] Reloading URL after retry: ${view.url}`,
-              "ViewManager"
-            );
-            view.contents.webContents.loadURL(view.url);
-          }
-        } catch (error) {
-          log.debug(
-            `[${blockId}] Failed to re-add WebContentsView: ${error}`,
-            "ViewManager"
-          );
-        }
+        // Use lifecycle manager to re-add the view
+        this.lifecycleManager.reAddView(blockId, view.contents, config);
       }
 
       // If view already exists, only send success notification if we're not in an error state
@@ -738,15 +597,8 @@ export class ViewManager {
   }
 
   private handleViewUpdate(blockId: string, ev: BlockViewUpdateEvent) {
-    if (this.baseWindow.isDestroyed()) {
-      log.warn(
-        `ViewManager: baseWindow is destroyed, skipping view update for blockId: ${blockId}`
-      );
-      return;
-    }
-    const view = this.views[blockId];
-    if (view?.contents && ev.type === "update-block-view") {
-      view.contents.setBounds(ev.bounds);
+    if (ev.type === "update-block-view") {
+      this.lifecycleManager.updateBounds(blockId, ev.bounds);
     }
   }
 
@@ -1007,12 +859,6 @@ export class ViewManager {
   }
 
   private handleViewRemoval(blockId: string) {
-    if (this.baseWindow.isDestroyed()) {
-      log.warn(
-        `ViewManager: baseWindow is destroyed, skipping view removal for blockId: ${blockId}`
-      );
-      return;
-    }
     const view = this.views[blockId];
     if (!view) {
       log.debug(
@@ -1022,53 +868,13 @@ export class ViewManager {
       return;
     }
 
-    if (view.contents) {
-      try {
-        log.debug(
-          `Removing WebContentsView for blockId: ${blockId}`,
-          "ViewManager"
-        );
+    // Use lifecycle manager to remove the view
+    this.lifecycleManager.removeView(blockId);
 
-        if (this.viewLayerManager) {
-          // Remove via layer manager
-          this.viewLayerManager.removeView(`browser-block-${blockId}`);
-          log.debug(
-            `Browser block ${blockId} removed via ViewLayerManager`,
-            "ViewManager"
-          );
-        } else {
-          // Remove the view from the window directly
-          this.baseWindow.contentView.removeChildView(view.contents);
-        }
-
-        // Clean up any event listeners or resources
-        view.contents.webContents.close();
-        // Remove the view from our state
-        delete this.views[blockId];
-        // Clean up error tracking
-        this.blockErrors.delete(blockId);
-        // Transition to REMOVED state
-        this.transitionState(blockId, ViewState.REMOVED, "view removed");
-        log.debug(
-          `Successfully removed WebContentsView for blockId: ${blockId}`,
-          "ViewManager"
-        );
-      } catch (error) {
-        log.debug(
-          `Failed to remove WebContentsView for blockId: ${blockId}. Error: ${error}`,
-          "ViewManager"
-        );
-      }
-    } else {
-      // If there's no contents but we have the blockId in our state, clean it up
-      delete this.views[blockId];
-      // Clean up error tracking
-      this.blockErrors.delete(blockId);
-      log.debug(
-        `Removed view state for blockId: ${blockId} (no WebContentsView)`,
-        "ViewManager"
-      );
-    }
+    // Clean up our state
+    delete this.views[blockId];
+    // Clean up error tracking
+    this.blockErrors.delete(blockId);
   }
 
   public handleRemoveView(blockId: string) {
