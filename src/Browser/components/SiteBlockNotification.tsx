@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-// import { Page } from "./Page"; // TEMPORARILY DISABLED - testing without webview
 import "./SiteBlockNotification.css";
 import { log } from "../../utils/rendererLogger";
+import { useSize } from "../hooks/useSize";
+import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
 
 type SiteBlockNotificationProps = {
   blockId: string;
@@ -11,11 +12,10 @@ type SiteBlockNotificationProps = {
 };
 
 /**
- * Temporary notification component that shows a bounce animation
+ * Notification component that shows a bounce animation
  * when a new page block is created in the background.
  * Renders as a portal overlay at the bottom of the viewport.
- *
- * TEMPORARILY: Not rendering webview to test if webview layers interfere with animation
+ * Includes a preview of the page content in the preview area.
  */
 export const SiteBlockNotification = ({
   blockId,
@@ -23,14 +23,38 @@ export const SiteBlockNotification = ({
   onAnimationComplete,
 }: SiteBlockNotificationProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const animationCompleteRef = useRef(false);
 
+  // Create a preview browser view with a unique blockId
+  const previewBlockId = `${blockId}-preview`;
+  const { handleUrlChange, handleBoundsChange } =
+    useBrowserViewUpdater(previewBlockId);
+
+  // Set up preview browser view bounds tracking
+  useSize(previewRef, handleBoundsChange);
+
+  // Set URL for preview when component mounts
   useEffect(() => {
     log.debug(
       `SiteBlockNotification mounted for blockId: ${blockId}, url: ${url}`,
       "SiteBlockNotification"
     );
-  }, [blockId, url]);
+    if (url) {
+      handleUrlChange(url);
+    }
+  }, [blockId, url, handleUrlChange]);
+
+  // Clean up preview browser view when notification is removed
+  useEffect(() => {
+    return () => {
+      log.debug(
+        `Cleaning up preview browser view for blockId: ${previewBlockId}`,
+        "SiteBlockNotification"
+      );
+      window.electronAPI.removeBrowser(previewBlockId);
+    };
+  }, [previewBlockId]);
 
   // Use useLayoutEffect to ensure listener is attached before animation starts
   useLayoutEffect(() => {
@@ -148,6 +172,7 @@ export const SiteBlockNotification = ({
 
       {/* Content area - 80px height, matching site block preview */}
       <div
+        ref={previewRef}
         style={{
           height: "80px",
           width: "100%",
@@ -155,23 +180,9 @@ export const SiteBlockNotification = ({
           border: "1px solid #e0e0e0",
           overflow: "hidden",
           position: "relative",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
         }}
       >
-        {/* Placeholder content - will be replaced with actual page preview when WebViews enabled */}
-        <div
-          style={{
-            color: "#999",
-            fontSize: "14px",
-            textAlign: "center",
-            padding: "16px",
-          }}
-        >
-          <div style={{ fontSize: "24px", marginBottom: "8px" }}>🌐</div>
-          <div>Page preview</div>
-        </div>
+        {/* Browser view will be positioned here by the main process */}
       </div>
     </div>,
     portalRoot
