@@ -46,13 +46,12 @@ export class BlockOperationService {
   private readonly BATCH_DELAY_MS = 50;
 
   // Snapshot tracking for efficient reloads
-  private operationsSinceLastSnapshot = 0;
-  private lastSnapshotOperationCount = 0;
   private lastSnapshotCreatedAt = 0;
-  private readonly INITIAL_SNAPSHOT_OPERATION_THRESHOLD = 1;
-  private readonly SNAPSHOT_OPERATION_THRESHOLD = 200;
-  private readonly SNAPSHOT_MIN_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
   private readonly MAX_STORED_SNAPSHOTS = 5;
+
+  // Debounced snapshot creation - wait 200ms after last operation
+  private snapshotTimeout: NodeJS.Timeout | null = null;
+  private readonly SNAPSHOT_DEBOUNCE_MS = 200; // 200ms
 
   private constructor(documentId = "default", database?: Database.Database) {
     const resolvedDatabase = database ?? BlockOperationService.database;
@@ -106,7 +105,6 @@ export class BlockOperationService {
       "BlockOperationService"
     );
   }
-
 
   /**
    * Set the renderer web contents for sending updates
@@ -164,15 +162,19 @@ export class BlockOperationService {
     // Log block operation event
     this.eventLogger.logBlockOperation(
       operations,
-      origin?.source === 'ai' ? 'ai' : (origin?.source === 'sync' ? 'sync' : 'user'),
+      origin?.source === "llm"
+        ? "ai"
+        : origin?.source === "sync"
+          ? "sync"
+          : "user",
       result,
       {
         batchId,
         requestId: origin?.requestId,
         timing: { startTime: Date.now(), endTime: Date.now() },
-        source: 'BlockOperationService',
+        source: "BlockOperationService",
         documentId: this.documentId,
-        blockCount: this.yBlocks.length
+        blockCount: this.yBlocks.length,
       }
     );
 
@@ -384,7 +386,7 @@ export class BlockOperationService {
       const snapshot = this.loadLatestSnapshot();
       if (snapshot) {
         Y.applyUpdate(this.yDoc, snapshot.data);
-        this.updateSnapshotTracking(snapshot);
+        this.lastSnapshotCreatedAt = snapshot.createdAt;
 
         const appliedAfterSnapshot = await this.replayOperations({
           offset: snapshot.operationCount,
@@ -397,7 +399,7 @@ export class BlockOperationService {
       } else {
         // Fallback: replay operations from scratch
         await this.replayOperations();
-        this.updateSnapshotTracking(null);
+        this.lastSnapshotCreatedAt = 0;
         log.debug(
           "Loaded document by replaying operations",
           "BlockOperationService"
@@ -421,33 +423,6 @@ export class BlockOperationService {
     } catch (error) {
       log.debug(`Error loading document: ${error}`, "BlockOperationService");
       return [];
-    }
-  }
-
-  /**
-   * Update snapshot tracking counters
-   */
-  private updateSnapshotTracking(snapshot: StoredSnapshot | null): void {
-    if (!this.database) {
-      this.operationsSinceLastSnapshot = 0;
-      this.lastSnapshotCreatedAt = snapshot?.createdAt ?? 0;
-      this.lastSnapshotOperationCount = snapshot?.operationCount ?? 0;
-      return;
-    }
-
-    const totalOperations = this.getOperationCount();
-
-    if (snapshot) {
-      this.lastSnapshotCreatedAt = snapshot.createdAt;
-      this.lastSnapshotOperationCount = snapshot.operationCount;
-      this.operationsSinceLastSnapshot = Math.max(
-        0,
-        totalOperations - snapshot.operationCount
-      );
-    } else {
-      this.lastSnapshotCreatedAt = 0;
-      this.lastSnapshotOperationCount = 0;
-      this.operationsSinceLastSnapshot = totalOperations;
     }
   }
 
@@ -532,7 +507,9 @@ export class BlockOperationService {
   /**
    * Replay operations from database (for loading without snapshot)
    */
-  private async replayOperations(options: { offset?: number } = {}): Promise<number> {
+  private async replayOperations(
+    options: { offset?: number } = {}
+  ): Promise<number> {
     if (!this.database) return 0;
 
     const { offset = 0 } = options;
@@ -565,7 +542,8 @@ export class BlockOperationService {
   }
 
   /**
-   * Determine if a snapshot should be created based on recent activity
+   * Schedule snapshot creation after block updates
+   * Debounced by 200ms to batch rapid updates
    */
   private async evaluateSnapshotCreation(
     operationsApplied = 0,
@@ -573,32 +551,29 @@ export class BlockOperationService {
   ): Promise<void> {
     if (!this.database) return;
 
+    // If no snapshot exists and we have operations, create one immediately
+    if (
+      options.forceIfNoSnapshot &&
+      this.lastSnapshotCreatedAt === 0 &&
+      operationsApplied > 0
+    ) {
+      await this.createSnapshot();
+      return;
+    }
+
+    // If operations were applied, schedule debounced snapshot creation
     if (operationsApplied > 0) {
-      this.operationsSinceLastSnapshot += operationsApplied;
-    }
-
-    const hasSnapshot = this.lastSnapshotCreatedAt > 0;
-
-    if (!hasSnapshot) {
-      if (
-        (options.forceIfNoSnapshot && this.operationsSinceLastSnapshot > 0) ||
-        this.operationsSinceLastSnapshot >= this.INITIAL_SNAPSHOT_OPERATION_THRESHOLD
-      ) {
-        await this.createSnapshot();
+      // Clear existing timeout to reset the debounce
+      if (this.snapshotTimeout) {
+        clearTimeout(this.snapshotTimeout);
       }
-      return;
-    }
 
-    if (this.operationsSinceLastSnapshot < this.SNAPSHOT_OPERATION_THRESHOLD) {
-      return;
+      // Schedule snapshot creation after debounce period
+      this.snapshotTimeout = setTimeout(async () => {
+        await this.createSnapshot();
+        this.snapshotTimeout = null;
+      }, this.SNAPSHOT_DEBOUNCE_MS);
     }
-
-    const now = Date.now();
-    if (now - this.lastSnapshotCreatedAt < this.SNAPSHOT_MIN_INTERVAL_MS) {
-      return;
-    }
-
-    await this.createSnapshot();
   }
 
   /**
@@ -626,8 +601,6 @@ export class BlockOperationService {
       );
 
       this.lastSnapshotCreatedAt = createdAt;
-      this.lastSnapshotOperationCount = operationCount;
-      this.operationsSinceLastSnapshot = 0;
 
       this.pruneOldSnapshots();
 
@@ -691,6 +664,11 @@ export class BlockOperationService {
   destroy(): void {
     if (this.batchTimeout) {
       clearTimeout(this.batchTimeout);
+    }
+
+    if (this.snapshotTimeout) {
+      clearTimeout(this.snapshotTimeout);
+      this.snapshotTimeout = null;
     }
 
     this.yDoc.destroy();
