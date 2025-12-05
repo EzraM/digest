@@ -72,6 +72,10 @@ export const DocumentTreeNode = ({
 
   const handleInputKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
+      // Stop propagation for all keys to prevent Tree component from intercepting
+      // This allows arrow keys and spaces to work normally in the input
+      event.stopPropagation();
+      
       if (event.key === "Enter") {
         event.preventDefault();
         onSubmitEditing();
@@ -79,6 +83,8 @@ export const DocumentTreeNode = ({
         event.preventDefault();
         onCancelEditing();
       }
+      // For all other keys (including arrow keys and space), let them work normally
+      // by not calling preventDefault()
     },
     [onSubmitEditing, onCancelEditing]
   );
