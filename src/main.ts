@@ -331,6 +331,9 @@ const setupIpcHandlers = (
     if (seedIfEmpty && blocks.length === 0) {
       await blockService.seedInitialContent(welcomeContent);
     }
+
+    // Create snapshot when page is opened to avoid jank on reopen
+    await blockService.createSnapshot();
   };
 
   const loadInitialDocument = async () => {
