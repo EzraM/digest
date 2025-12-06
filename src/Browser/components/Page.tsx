@@ -27,7 +27,9 @@ export function Page({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const height = layout === "full" ? viewportHeight : NORMAL_HEIGHT;
+  // For "full" layout, use 100% to fill the grid container (no scrolling on parent)
+  // For "inline" layout, use a fixed height
+  const height = layout === "full" ? "100%" : NORMAL_HEIGHT;
 
   const handleBoundsChange = useCallback(
     (bounds: { x: number; y: number; width: number; height: number }) => {

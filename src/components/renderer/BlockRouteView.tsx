@@ -110,24 +110,27 @@ export const BlockRouteView = ({
     <DocumentProvider profileId={resolvedProfileId} documentId={docId}>
       <div
         style={{
-          minHeight: "100vh",
+          height: "100vh",
           backgroundColor: "#f5f6f8",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-          padding: "16px",
+          display: "grid",
+          gridTemplateRows: "34px 1fr",
+          gap: 0,
+          padding: 0,
+          overflow: "hidden",
         }}
       >
         <div
           style={{
-            padding: "10px 12px",
+            height: "34px",
+            padding: "0 6px",
             backgroundColor: "#fff",
-            border: "1px solid #e0e0e0",
-            borderRadius: "10px",
+            borderBottom: "1px solid #e0e0e0",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+            gap: "6px",
+            flexShrink: 0,
+            overflow: "hidden",
+            minWidth: 0,
           }}
         >
           <button
@@ -138,12 +141,14 @@ export const BlockRouteView = ({
               border: "1px solid #d0d0d0",
               backgroundColor: "#fff",
               color: canGoBack ? "#111" : "#bbb",
-              borderRadius: "6px",
-              padding: "6px 10px",
+              borderRadius: "4px",
+              padding: "4px 8px",
               cursor:
                 !canGoBack || isNavigatingBack ? "not-allowed" : "pointer",
-              fontSize: "14px",
-              minWidth: "40px",
+              fontSize: "13px",
+              minWidth: "32px",
+              height: "26px",
+              lineHeight: "1",
             }}
             title={canGoBack ? "Go back" : "No previous page available"}
             aria-disabled={!canGoBack}
@@ -157,23 +162,28 @@ export const BlockRouteView = ({
               border: "1px solid #d0d0d0",
               backgroundColor: "#e7f5ff",
               color: "#1c7ed6",
-              borderRadius: "6px",
-              padding: "6px 10px",
+              borderRadius: "4px",
+              padding: "4px 8px",
               cursor: "pointer",
-              fontSize: "14px",
-              minWidth: "40px",
+              fontSize: "13px",
+              minWidth: "32px",
+              height: "26px",
+              lineHeight: "1",
             }}
             title="Back to document"
             aria-label="Collapse block"
           >
             ⊟
           </button>
-          <span aria-hidden="true">🌐</span>
+          <span aria-hidden="true" style={{ fontSize: "13px" }}>
+            🌐
+          </span>
           <button
             type="button"
             onClick={handleCopy}
             style={{
               flex: 1,
+              minWidth: 0,
               fontFamily: "monospace",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -185,8 +195,11 @@ export const BlockRouteView = ({
               textAlign: "left",
               cursor: "pointer",
               color: "#111",
+              fontSize: "12px",
+              height: "26px",
+              lineHeight: "26px",
             }}
-            title={copied ? "Copied!" : "Copy link"}
+            title={url}
             aria-label={copied ? "Copied link" : "Copy link"}
           >
             {url}
@@ -201,10 +214,12 @@ export const BlockRouteView = ({
                 border: "1px solid #d0d0d0",
                 backgroundColor: devToolsOpen ? "#e7f5ff" : "#fff",
                 color: devToolsOpen ? "#1c7ed6" : "#333",
-                borderRadius: "6px",
-                padding: "6px 10px",
+                borderRadius: "4px",
+                padding: "4px 8px",
                 cursor: isTogglingDevTools ? "wait" : "pointer",
-                fontSize: "14px",
+                fontSize: "12px",
+                height: "26px",
+                lineHeight: "1",
               }}
               title={
                 devToolsOpen ? "Close developer tools" : "Open developer tools"
@@ -213,21 +228,17 @@ export const BlockRouteView = ({
               {isTogglingDevTools
                 ? "…"
                 : devToolsOpen
-                  ? "Close DevTools"
-                  : "Open DevTools"}
+                  ? "DevTools"
+                  : "DevTools"}
             </button>
           )}
         </div>
 
         <div
           style={{
-            flex: 1,
             minHeight: 0,
             backgroundColor: "#fff",
-            border: "1px solid #e0e0e0",
-            borderRadius: "12px",
             overflow: "hidden",
-            boxShadow: "0 12px 32px rgba(0,0,0,0.08)",
           }}
         >
           <Page blockId={blockId} url={url} layout="full" />

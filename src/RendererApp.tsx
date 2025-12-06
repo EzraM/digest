@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useContext } from "react";
 import { MantineProvider } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
+import { theme } from "./config/theme";
 import { useRendererDocuments } from "./hooks/useRendererDocuments";
 import { useDocumentCreationFlow } from "./hooks/useDocumentCreationFlow";
 import { useSlashCommandBridge } from "./hooks/useSlashCommandBridge";
@@ -197,7 +198,7 @@ const RendererAppContent = () => {
   );
 
   return (
-    <MantineProvider defaultColorScheme="auto">
+    <MantineProvider theme={theme} defaultColorScheme="auto">
       <RendererRouteProvider value={{ route, navigateToDoc, navigateToBlock }}>
         {route.kind === "block" ? (
           <BlockRouteView
