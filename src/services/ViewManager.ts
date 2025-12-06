@@ -62,7 +62,11 @@ export class ViewManager {
         const currentState = this.viewStates.get(blockId) ?? getDefaultState();
         return isValidTransition(currentState, newState);
       },
-      transitionState: (blockId: string, newState: ViewState, reason?: string) => {
+      transitionState: (
+        blockId: string,
+        newState: ViewState,
+        reason?: string
+      ) => {
         return this.transitionState(blockId, newState, reason);
       },
       getViewState: (blockId: string) => {
@@ -80,7 +84,11 @@ export class ViewManager {
       broadcastNavigationState: (blockId: string, url?: string) => {
         this.broadcastNavigationState(blockId, url);
       },
-      setupEventHandlers: (view: WebContentsView, blockId: string, config: ViewConfig) => {
+      setupEventHandlers: (
+        view: WebContentsView,
+        blockId: string,
+        config: ViewConfig
+      ) => {
         this.setupViewEventHandlers(view, blockId, config);
       },
     };
@@ -202,7 +210,11 @@ export class ViewManager {
       }
 
       // Transition to LOADED state
-      this.transitionState(blockId, ViewState.LOADED, "page loaded successfully");
+      this.transitionState(
+        blockId,
+        ViewState.LOADED,
+        "page loaded successfully"
+      );
 
       // Send success notification when page is fully loaded
       this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
@@ -392,13 +404,28 @@ export class ViewManager {
       handleNavigationUpdate(url);
     });
 
-    view.webContents.on("did-redirect-navigation", (_event, url) => {
-      log.debug(
-        `Redirect navigation in blockId: ${blockId}, to: ${url}`,
-        "ViewManager"
-      );
-      handleNavigationUpdate(url);
-    });
+    // did-redirect-navigation can fire for subframes, so we must check isMainFrame
+    // Only update state for main frame redirects to prevent subframe navigations
+    // from incorrectly updating the block's stored URL
+    view.webContents.on(
+      "did-redirect-navigation",
+      (_event, url, isInPlace, isMainFrame) => {
+        // Only process main frame redirects
+        if (!isMainFrame) {
+          log.debug(
+            `Ignoring subframe/in-place redirect in blockId: ${blockId}, to: ${url} [inPlace: ${isInPlace}, mainFrame: ${isMainFrame}]`,
+            "ViewManager"
+          );
+          return;
+        }
+
+        log.debug(
+          `Main frame redirect in blockId: ${blockId}, to: ${url}`,
+          "ViewManager"
+        );
+        handleNavigationUpdate(url);
+      }
+    );
 
     view.webContents.on("did-finish-load", () => {
       log.debug(
@@ -410,15 +437,8 @@ export class ViewManager {
 
     // Listen for click events
     view.webContents.on("before-input-event", (event, input) => {
-      if (
-        input.type === "keyDown" &&
-        input.key === "Enter" &&
-        input.control
-      ) {
-        log.debug(
-          `Detected Ctrl+Enter in blockId: ${blockId}`,
-          "ViewManager"
-        );
+      if (input.type === "keyDown" && input.key === "Enter" && input.control) {
+        log.debug(`Detected Ctrl+Enter in blockId: ${blockId}`, "ViewManager");
         // This could be used for special key combinations to force new window
       }
     });
@@ -505,7 +525,7 @@ export class ViewManager {
       };
 
       const newView = this.lifecycleManager.createView(blockId, config);
-      
+
       if (newView) {
         // Store the view in our state
         this.views[blockId].contents = newView;
@@ -563,7 +583,8 @@ export class ViewManager {
         // Clear the error so we can retry
         this.blockErrors.delete(blockId);
 
-        const partition = view?.partition || getProfilePartition(view.profileId);
+        const partition =
+          view?.partition || getProfilePartition(view.profileId);
         const config: ViewConfig = {
           url: view.url!,
           bounds: view.bounds!,
