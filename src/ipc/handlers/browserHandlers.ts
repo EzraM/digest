@@ -1,9 +1,9 @@
 import { IPCHandlerMap } from "../IPCRouter";
-import { ViewManager } from "../../services/ViewManager";
+import { ViewStore } from "../../services/ViewStore";
 import { log } from "../../utils/mainLogger";
 
 export function createBrowserHandlers(
-  viewManager: ViewManager,
+  viewStore: ViewStore,
   createBrowserBlockCallback?: (url: string, sourceBlockId?: string) => void
 ): IPCHandlerMap {
   return {
@@ -17,7 +17,7 @@ export function createBrowserHandlers(
       type: "on",
       fn: (_event, blockId: string) => {
         log.debug(`Received remove-browser event for block ${blockId}`, "main");
-        viewManager.handleRemoveView(blockId);
+        viewStore.handleRemoveView(blockId);
       },
     },
     "browser:get-devtools-state": {
@@ -27,7 +27,7 @@ export function createBrowserHandlers(
           `Received browser:get-devtools-state request for block ${blockId}`,
           "main"
         );
-        return viewManager.getDevToolsState(blockId);
+        return viewStore.getDevToolsState(blockId);
       },
     },
     "browser:toggle-devtools": {
@@ -37,7 +37,7 @@ export function createBrowserHandlers(
           `Received browser:toggle-devtools request for block ${blockId}`,
           "main"
         );
-        return viewManager.toggleDevTools(blockId);
+        return viewStore.toggleDevTools(blockId);
       },
     },
     "browser:go-back": {
@@ -47,7 +47,7 @@ export function createBrowserHandlers(
           `Received browser:go-back request for block ${blockId}`,
           "main"
         );
-        return viewManager.goBack(blockId);
+        return viewStore.goBack(blockId);
       },
     },
     "update-browser-view": {
@@ -57,7 +57,7 @@ export function createBrowserHandlers(
           `Received update-browser-view event for block ${data.blockId}`,
           "main"
         );
-        viewManager.handleBlockViewUpdate(data);
+        viewStore.handleBlockViewUpdate(data);
       },
     },
     "browser:create-block": {

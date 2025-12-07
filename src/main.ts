@@ -1,6 +1,6 @@
 import { app, BrowserWindow, WebContentsView, globalShortcut } from "electron";
 import path from "path";
-import { ViewManager } from "./services/ViewManager";
+import { ViewStore } from "./services/ViewStore";
 import { viteConfig } from "./config/vite";
 import { AppOverlay } from "./services/AppOverlay";
 import { SlashCommandManager } from "./services/SlashCommandManager";
@@ -150,7 +150,7 @@ const createWindow = async () => {
   // Set up link interception for the main renderer process
   const linkInterceptionService = new LinkInterceptionService(appViewInstance);
 
-  const viewManager = new ViewManager(
+  const viewStore = new ViewStore(
     baseWindow,
     viewLayerManager,
     appViewInstance.webContents
@@ -178,8 +178,8 @@ const createWindow = async () => {
     }
   };
 
-  // Set up the link click callback for ViewManager to properly target the correct WebContents
-  viewManager.setLinkClickCallback(createBrowserBlock);
+  // Set up the link click callback for ViewStore to properly target the correct WebContents
+  viewStore.setLinkClickCallback(createBrowserBlock);
 
   // Set up the link click callback for LinkInterceptionService
   linkInterceptionService.setLinkClickCallback(createBrowserBlock);
@@ -218,7 +218,7 @@ const createWindow = async () => {
   // Set up IPC handlers (including renderer-ready handler)
   setupIpcHandlers(
     ipcRouter,
-    viewManager,
+    viewStore,
     slashCommandManager,
     services,
     appViewInstance,
@@ -286,7 +286,7 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 
 const setupIpcHandlers = (
   router: IPCRouter,
-  viewManager: ViewManager,
+  viewStore: ViewStore,
   slashCommandManager: SlashCommandManager,
   services: ReturnType<typeof getServices>,
   rendererView: WebContentsView,
@@ -373,7 +373,7 @@ const setupIpcHandlers = (
     })
   );
 
-  registerMap(createBrowserHandlers(viewManager, createBrowserBlock));
+  registerMap(createBrowserHandlers(viewStore, createBrowserBlock));
   registerMap(createSlashCommandHandlers(slashCommandManager));
   registerMap(createBlockHandlers(documentManager, rendererView));
   registerMap(
