@@ -255,66 +255,11 @@ export class ViewManager {
             `Main frame failed to load for blockId: ${blockId}. URL: ${validatedURL}, Error: ${errorDescription} (${errorCode})`,
             "ViewManager"
           );
-          // Track the error to prevent success messages from overriding it
-          this.blockErrors.set(blockId, {
+          this.handleBrowserError(
+            blockId,
             errorCode,
             errorDescription,
-            url: validatedURL,
-          });
-          // Transition to ERROR state
-          this.transitionState(
-            blockId,
-            ViewState.ERROR,
-            `load failed: ${errorDescription}`
-          );
-          log.debug(
-            `[${blockId}] Tracking error: ${errorDescription} (${errorCode}) for ${validatedURL}`,
-            "ViewManager"
-          );
-
-          // Hide/remove the WebContentsView when there's an error
-          // This ensures only the renderer's error UI is shown
-          try {
-            const viewState = this.views[blockId];
-            if (viewState?.contents) {
-              log.debug(
-                `[${blockId}] Hiding WebContentsView due to error`,
-                "ViewManager"
-              );
-              if (this.viewLayerManager) {
-                // Remove from layer manager to hide it
-                this.viewLayerManager.removeView(`browser-block-${blockId}`);
-                log.debug(
-                  `[${blockId}] Removed WebContentsView from ViewLayerManager`,
-                  "ViewManager"
-                );
-              } else {
-                // Fallback: remove from window directly
-                this.baseWindow.contentView.removeChildView(viewState.contents);
-                log.debug(
-                  `[${blockId}] Removed WebContentsView from baseWindow`,
-                  "ViewManager"
-                );
-              }
-            }
-          } catch (error) {
-            log.debug(
-              `[${blockId}] Failed to hide WebContentsView: ${error}`,
-              "ViewManager"
-            );
-          }
-
-          this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
-            blockId,
-            success: false,
-            error: `Failed to load: ${errorDescription} (${errorCode})`,
-            errorCode,
-            errorDescription,
-            url: validatedURL,
-          });
-          log.debug(
-            `[${blockId}] Sent error notification to renderer: ${errorDescription} (${errorCode})`,
-            "ViewManager"
+            validatedURL
           );
         } else {
           log.debug(
@@ -324,6 +269,38 @@ export class ViewManager {
         }
       }
     );
+
+    // Handle renderer process crashes
+    view.webContents.on(
+      "render-process-gone",
+      (_event, details: { reason: string; exitCode: number }) => {
+        const url = view.webContents.getURL() || config.url || "unknown";
+        log.debug(
+          `Renderer process crashed for blockId: ${blockId}. Reason: ${details.reason}, Exit code: ${details.exitCode}, URL: ${url}`,
+          "ViewManager"
+        );
+        // Use a generic crash error code
+        const errorCode = -999; // Custom error code for process crash
+        const errorDescription =
+          details.reason === "killed"
+            ? "ERR_PROCESS_CRASHED"
+            : `ERR_PROCESS_CRASHED (${details.reason})`;
+        this.handleBrowserError(blockId, errorCode, errorDescription, url);
+      }
+    );
+
+    // Handle unresponsive renderer process
+    view.webContents.on("unresponsive", () => {
+      const url = view.webContents.getURL() || config.url || "unknown";
+      log.debug(
+        `Renderer process became unresponsive for blockId: ${blockId}, URL: ${url}`,
+        "ViewManager"
+      );
+      // Use a timeout error code for unresponsive
+      const errorCode = -118; // ERR_TIMED_OUT
+      const errorDescription = "ERR_PROCESS_UNRESPONSIVE";
+      this.handleBrowserError(blockId, errorCode, errorDescription, url);
+    });
 
     // Handle new window requests with disposition check
     view.webContents.setWindowOpenHandler(({ url, disposition }) => {
@@ -442,6 +419,100 @@ export class ViewManager {
         // This could be used for special key combinations to force new window
       }
     });
+  }
+
+  /**
+   * Handle browser errors consistently across different error scenarios
+   * (load failures, process crashes, unresponsive processes)
+   */
+  private handleBrowserError(
+    blockId: string,
+    errorCode: number,
+    errorDescription: string,
+    url: string
+  ): void {
+    // Track the error to prevent success messages from overriding it
+    this.blockErrors.set(blockId, {
+      errorCode,
+      errorDescription,
+      url,
+    });
+
+    // Check current state before transitioning
+    const currentState = this.getViewState(blockId);
+
+    // Only transition to ERROR if it's a valid transition
+    // If already in ERROR, we'll just update the error info
+    if (currentState !== ViewState.ERROR) {
+      const transitioned = this.transitionState(
+        blockId,
+        ViewState.ERROR,
+        `error: ${errorDescription}`
+      );
+      if (!transitioned) {
+        log.debug(
+          `[${blockId}] Cannot transition to ERROR from ${currentState}, but error occurred: ${errorDescription} (${errorCode})`,
+          "ViewManager"
+        );
+        // Still send error notification even if transition failed
+      }
+    } else {
+      log.debug(
+        `[${blockId}] Already in ERROR state, updating error info: ${errorDescription} (${errorCode})`,
+        "ViewManager"
+      );
+    }
+
+    log.debug(
+      `[${blockId}] Tracking error: ${errorDescription} (${errorCode}) for ${url}`,
+      "ViewManager"
+    );
+
+    // Hide/remove the WebContentsView when there's an error
+    // This ensures only the renderer's error UI is shown
+    try {
+      const viewState = this.views[blockId];
+      if (viewState?.contents) {
+        log.debug(
+          `[${blockId}] Hiding WebContentsView due to error`,
+          "ViewManager"
+        );
+        if (this.viewLayerManager) {
+          // Remove from layer manager to hide it
+          this.viewLayerManager.removeView(`browser-block-${blockId}`);
+          log.debug(
+            `[${blockId}] Removed WebContentsView from ViewLayerManager`,
+            "ViewManager"
+          );
+        } else {
+          // Fallback: remove from window directly
+          this.baseWindow.contentView.removeChildView(viewState.contents);
+          log.debug(
+            `[${blockId}] Removed WebContentsView from baseWindow`,
+            "ViewManager"
+          );
+        }
+      }
+    } catch (error) {
+      log.debug(
+        `[${blockId}] Failed to hide WebContentsView: ${error}`,
+        "ViewManager"
+      );
+    }
+
+    // Send error notification to renderer
+    this.baseWindow.webContents.send(EVENTS.BROWSER.INITIALIZED, {
+      blockId,
+      success: false,
+      error: `Failed to load: ${errorDescription} (${errorCode})`,
+      errorCode,
+      errorDescription,
+      url,
+    });
+    log.debug(
+      `[${blockId}] Sent error notification to renderer: ${errorDescription} (${errorCode})`,
+      "ViewManager"
+    );
   }
 
   private setupEventHandlers() {

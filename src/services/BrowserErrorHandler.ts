@@ -31,7 +31,8 @@ export function categorizeBrowserError(
   if (errorCode === -2) {
     return {
       errorCategory: "network",
-      userMessage: "Cannot connect to this website. Please check your internet connection.",
+      userMessage:
+        "Cannot connect to this website. Please check your internet connection.",
       technicalDetails: `Failed to resolve DNS for ${validatedURL}`,
       canRetry: true,
     };
@@ -41,7 +42,8 @@ export function categorizeBrowserError(
   if (errorCode === -7 || errorCode === -21 || errorCode === -118) {
     return {
       errorCategory: "network",
-      userMessage: "Connection timed out. The website is taking too long to respond.",
+      userMessage:
+        "Connection timed out. The website is taking too long to respond.",
       technicalDetails: `${errorDescription} (${errorCode}) for ${validatedURL}`,
       canRetry: true,
     };
@@ -51,7 +53,8 @@ export function categorizeBrowserError(
   if (errorCode === -100 || errorCode === -101 || errorCode === -102) {
     return {
       errorCategory: "network",
-      userMessage: "Cannot reach this website. The connection was refused or timed out.",
+      userMessage:
+        "Cannot reach this website. The connection was refused or timed out.",
       technicalDetails: `${errorDescription} (${errorCode}) for ${validatedURL}`,
       canRetry: true,
     };
@@ -71,7 +74,8 @@ export function categorizeBrowserError(
   if (errorCode >= -200 && errorCode <= -100 && errorCode !== -118) {
     return {
       errorCategory: "security",
-      userMessage: "Security certificate error. This website's certificate is not trusted.",
+      userMessage:
+        "Security certificate error. This website's certificate is not trusted.",
       technicalDetails: `SSL error (${errorCode}): ${errorDescription} for ${validatedURL}`,
       canRetry: false,
     };
@@ -91,8 +95,31 @@ export function categorizeBrowserError(
   if (errorCode === -324) {
     return {
       errorCategory: "http",
-      userMessage: "Website returned an error. The page may not exist or the server is having issues.",
+      userMessage:
+        "Website returned an error. The page may not exist or the server is having issues.",
       technicalDetails: `${errorDescription} (${errorCode}) for ${validatedURL}`,
+      canRetry: true,
+    };
+  }
+
+  // Process crash (custom error code)
+  if (errorCode === -999 || errorDescription.includes("ERR_PROCESS_CRASHED")) {
+    return {
+      errorCategory: "crash",
+      userMessage:
+        "The page crashed. This may be due to a problem with the website or your system.",
+      technicalDetails: `Process crashed: ${errorDescription} (${errorCode}) for ${validatedURL}`,
+      canRetry: true,
+    };
+  }
+
+  // Unresponsive process
+  if (errorDescription.includes("ERR_PROCESS_UNRESPONSIVE")) {
+    return {
+      errorCategory: "timeout",
+      userMessage:
+        "The page became unresponsive. It may be taking too long to load or has stopped responding.",
+      technicalDetails: `Process unresponsive: ${errorDescription} (${errorCode}) for ${validatedURL}`,
       canRetry: true,
     };
   }
