@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Group, Menu, SegmentedControl, Stack, Text } from "@mantine/core";
+import { ActionIcon, Group, Menu, SegmentedControl, Stack, Text } from "@mantine/core";
 import { ProfileRecord } from "../../types/documents";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
 
@@ -19,12 +19,11 @@ export const ProfileList = ({
   onRenameProfile,
   onDeleteProfile,
 }: ProfileListProps) => {
-  const value =
-    profiles.length > 0 &&
-    (activeProfileId &&
-      profiles.some((profile) => profile.id === activeProfileId) &&
-      activeProfileId) ||
-    (profiles.length > 0 ? profiles[0].id : null);
+  // Determine which profile to show as selected in the SegmentedControl
+  // Priority: activeProfileId if valid, otherwise first profile, otherwise null
+  const isActiveProfileValid =
+    activeProfileId && profiles.some((p) => p.id === activeProfileId);
+  const value = isActiveProfileValid ? activeProfileId : profiles[0]?.id ?? null;
 
   const activeProfile = profiles.find((p) => p.id === activeProfileId);
   const canDelete = activeProfile && activeProfile.id !== DEFAULT_PROFILE_ID;

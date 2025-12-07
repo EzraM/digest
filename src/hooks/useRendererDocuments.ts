@@ -9,7 +9,9 @@ import {
 type RendererDocumentsState = {
   profiles: ProfileRecord[];
   documentTrees: Record<string, DocumentTreeNode[]>;
-  activeProfileId: string | null;
+  // The profile currently being viewed in the sidebar (UI state)
+  viewingProfileId: string | null;
+  // The active document being edited (source of truth from main process)
   activeDocument: DocumentRecord | null;
 };
 
@@ -19,7 +21,7 @@ type RendererDocumentsAction =
       payload: {
         profiles: ProfileRecord[];
         documentTrees: Record<string, DocumentTreeNode[]>;
-        activeProfileId: string | null;
+        viewingProfileId: string | null;
         activeDocument: DocumentRecord | null;
       };
     }
@@ -29,12 +31,12 @@ type RendererDocumentsAction =
       payload: { profileId: string; tree: DocumentTreeNode[] };
     }
   | { type: "SET_ACTIVE_DOCUMENT"; payload: DocumentRecord | null }
-  | { type: "SET_ACTIVE_PROFILE"; payload: string | null };
+  | { type: "SET_VIEWING_PROFILE"; payload: string | null };
 
 const initialState: RendererDocumentsState = {
   profiles: [],
   documentTrees: {},
-  activeProfileId: null,
+  viewingProfileId: null,
   activeDocument: null,
 };
 
@@ -48,32 +50,30 @@ const reducer = (
         ...state,
         profiles: action.payload.profiles,
         documentTrees: action.payload.documentTrees,
-        activeProfileId: action.payload.activeProfileId,
+        viewingProfileId: action.payload.viewingProfileId,
         activeDocument: action.payload.activeDocument,
       };
     case "SET_PROFILES": {
       const { profiles } = action.payload;
-      let activeProfileId = state.activeProfileId;
-      if (
-        activeProfileId &&
-        !profiles.some((profile) => profile.id === activeProfileId)
-      ) {
+      let viewingProfileId = state.viewingProfileId;
+
+      // If the currently viewed profile was deleted, fall back
+      if (viewingProfileId && !profiles.some((p) => p.id === viewingProfileId)) {
+        // Prefer the active document's profile if it still exists
         const activeDocProfile = state.activeDocument?.profileId;
-        if (
-          activeDocProfile &&
-          profiles.some((profile) => profile.id === activeDocProfile)
-        ) {
-          activeProfileId = activeDocProfile;
+        if (activeDocProfile && profiles.some((p) => p.id === activeDocProfile)) {
+          viewingProfileId = activeDocProfile;
         } else {
-          activeProfileId = profiles[0]?.id ?? null;
+          viewingProfileId = profiles[0]?.id ?? null;
         }
-      } else if (!activeProfileId) {
-        activeProfileId = profiles[0]?.id ?? null;
+      } else if (!viewingProfileId && profiles.length > 0) {
+        viewingProfileId = profiles[0].id;
       }
+
       return {
         ...state,
         profiles,
-        activeProfileId,
+        viewingProfileId,
       };
     }
     case "SET_DOCUMENT_TREE": {
@@ -88,16 +88,17 @@ const reducer = (
     }
     case "SET_ACTIVE_DOCUMENT": {
       const nextActive = action.payload;
+      // When document switches, also switch the viewing profile to match
       return {
         ...state,
         activeDocument: nextActive,
-        activeProfileId: nextActive?.profileId ?? state.activeProfileId,
+        viewingProfileId: nextActive?.profileId ?? state.viewingProfileId,
       };
     }
-    case "SET_ACTIVE_PROFILE":
+    case "SET_VIEWING_PROFILE":
       return {
         ...state,
-        activeProfileId: action.payload,
+        viewingProfileId: action.payload,
       };
     default:
       return state;
@@ -107,8 +108,8 @@ const reducer = (
 export const useRendererDocuments = () => {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  const setActiveProfileId = useCallback((profileId: string | null) => {
-    dispatch({ type: "SET_ACTIVE_PROFILE", payload: profileId });
+  const setViewingProfileId = useCallback((profileId: string | null) => {
+    dispatch({ type: "SET_VIEWING_PROFILE", payload: profileId });
   }, []);
 
   useEffect(() => {
@@ -126,21 +127,21 @@ export const useRendererDocuments = () => {
 
         if (cancelled) return;
 
-        const resolvedActiveProfileId =
+        const resolvedViewingProfileId =
           activeDoc?.profileId ?? profileList[0]?.id ?? null;
         let documentTrees: Record<string, DocumentTreeNode[]> = {};
 
-        if (resolvedActiveProfileId) {
+        if (resolvedViewingProfileId) {
           try {
             const tree = await window.electronAPI.documents.getTree(
-              resolvedActiveProfileId
+              resolvedViewingProfileId
             );
             if (!cancelled) {
-              documentTrees = { [resolvedActiveProfileId]: tree };
+              documentTrees = { [resolvedViewingProfileId]: tree };
             }
           } catch (treeError) {
             log.debug(
-              `Failed to load tree for profile ${resolvedActiveProfileId}: ${treeError}`,
+              `Failed to load tree for profile ${resolvedViewingProfileId}: ${treeError}`,
               "renderer"
             );
           }
@@ -151,7 +152,7 @@ export const useRendererDocuments = () => {
           payload: {
             profiles: profileList,
             documentTrees,
-            activeProfileId: resolvedActiveProfileId,
+            viewingProfileId: resolvedViewingProfileId,
             activeDocument: activeDoc ?? null,
           },
         });
@@ -218,17 +219,18 @@ export const useRendererDocuments = () => {
     return unsubscribe;
   }, []);
 
+  // Fetch tree for the viewing profile if not already loaded
   const profileNeedingTree = useMemo(() => {
-    if (!state.activeProfileId) {
+    if (!state.viewingProfileId) {
       return null;
     }
 
-    if (state.documentTrees[state.activeProfileId]) {
+    if (state.documentTrees[state.viewingProfileId]) {
       return null;
     }
 
-    return state.activeProfileId;
-  }, [state.activeProfileId, state.documentTrees]);
+    return state.viewingProfileId;
+  }, [state.viewingProfileId, state.documentTrees]);
 
   useEffect(() => {
     if (!profileNeedingTree) {
@@ -266,11 +268,13 @@ export const useRendererDocuments = () => {
     };
   }, [profileNeedingTree]);
 
+  // For backwards compatibility, expose viewingProfileId as activeProfileId
+  // This represents which profile's tree is being shown in the sidebar
   return {
     profiles: state.profiles,
     documentTrees: state.documentTrees,
-    activeProfileId: state.activeProfileId,
+    activeProfileId: state.viewingProfileId,
     activeDocument: state.activeDocument,
-    setActiveProfileId,
+    setActiveProfileId: setViewingProfileId,
   };
 };
