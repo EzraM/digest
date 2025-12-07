@@ -1,4 +1,4 @@
-import { createTheme } from "@mantine/core";
+import { createTheme, MantineTheme } from "@mantine/core";
 
 /**
  * Custom Mantine theme with tighter spacing for a more compact,
@@ -111,17 +111,17 @@ export const theme = createTheme({
 
     // More compact buttons (but don't force size, just reduce padding)
     Button: {
-      styles: {
+      styles: (_theme: MantineTheme, props: any) => ({
         root: {
           // Only reduce padding for xs size buttons to match debug toolbar
-          "&[data-size='xs']": {
+          ...(props.size === "xs" && {
             padding: "4px 8px",
             fontSize: "12px",
             height: "auto",
             minHeight: "24px",
-          },
+          }),
         },
-      },
+      }),
     },
   },
 });
