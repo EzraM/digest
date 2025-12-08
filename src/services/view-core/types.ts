@@ -6,15 +6,16 @@ export type Rect = {
 };
 
 export type ViewStatus =
-  | { type: 'idle' }
-  | { type: 'loading' }
-  | { type: 'ready'; canGoBack: boolean }
-  | { type: 'error'; code: number; message: string };
+  | { type: "idle" }
+  | { type: "loading" }
+  | { type: "ready"; canGoBack: boolean }
+  | { type: "error"; code: number; message: string };
 
 export type ViewEntry = {
   url: string;
   bounds: Rect;
   profile: string;
+  layout: "inline" | "full";
   status: ViewStatus;
 };
 

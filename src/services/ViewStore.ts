@@ -1,14 +1,14 @@
-import { BrowserWindow, WebContents } from 'electron';
-import { ViewWorld, emptyWorld } from './view-core/types';
-import { Command } from './view-core/commands';
-import { reduce } from './view-core/reducer';
-import { Interpreter } from './view-adapter/Interpreter';
-import { NotificationLayer } from './view-adapter/NotificationLayer';
-import { HandleRegistry } from './view-adapter/HandleRegistry';
-import { EventTranslator } from './view-adapter/EventTranslator';
-import { HandleOperations } from './view-adapter/HandleOperations';
-import { ViewLayerManager } from './ViewLayerManager';
-import { log } from '../utils/mainLogger';
+import { BrowserWindow, WebContents } from "electron";
+import { ViewWorld, emptyWorld } from "./view-core/types";
+import { Command } from "./view-core/commands";
+import { reduce } from "./view-core/reducer";
+import { Interpreter } from "./view-adapter/Interpreter";
+import { NotificationLayer } from "./view-adapter/NotificationLayer";
+import { HandleRegistry } from "./view-adapter/HandleRegistry";
+import { EventTranslator } from "./view-adapter/EventTranslator";
+import { HandleOperations } from "./view-adapter/HandleOperations";
+import { ViewLayerManager } from "./ViewLayerManager";
+import { log } from "../utils/mainLogger";
 
 /**
  * The ViewStore orchestrates the pure core with Electron adapters.
@@ -26,7 +26,7 @@ export class ViewStore {
   constructor(
     baseWindow: BrowserWindow,
     layerManager: ViewLayerManager | undefined,
-    rendererWebContents: WebContents,
+    rendererWebContents: WebContents
   ) {
     this.notifications = new NotificationLayer(rendererWebContents);
     this.events = new EventTranslator();
@@ -39,10 +39,10 @@ export class ViewStore {
       (id, view) => {
         // When a view is created, attach event listeners
         this.events.attach(id, view, (cmd) => this.dispatch(cmd));
-      },
+      }
     );
 
-    log.debug('ViewStore initialized', 'ViewStore');
+    log.debug("ViewStore initialized", "ViewStore");
   }
 
   /**
@@ -58,8 +58,8 @@ export class ViewStore {
       this.world = nextWorld;
 
       log.debug(
-        `[${cmd.id ?? 'unknown'}] Command dispatched: ${cmd.type}`,
-        'ViewStore'
+        `[${cmd.id ?? "unknown"}] Command dispatched: ${cmd.type}`,
+        "ViewStore"
       );
 
       // Execute side effects
@@ -84,20 +84,22 @@ export class ViewStore {
     url: string;
     bounds: { x: number; y: number; width: number; height: number };
     profileId: string;
+    layout?: "inline" | "full";
   }): void {
     const existing = this.world.get(update.blockId);
 
     if (!existing) {
       log.debug(
         `[${update.blockId}] Creating new view for ${update.url}`,
-        'ViewStore'
+        "ViewStore"
       );
       this.dispatch({
-        type: 'create',
+        type: "create",
         id: update.blockId,
         url: update.url,
         bounds: update.bounds,
         profile: update.profileId,
+        layout: update.layout ?? "inline", // Default to 'inline' for backward compatibility
       });
     } else {
       // Check if we need to update bounds
@@ -108,12 +110,9 @@ export class ViewStore {
         existing.bounds.height !== update.bounds.height;
 
       if (boundsChanged) {
-        log.debug(
-          `[${update.blockId}] Updating bounds`,
-          'ViewStore'
-        );
+        log.debug(`[${update.blockId}] Updating bounds`, "ViewStore");
         this.dispatch({
-          type: 'updateBounds',
+          type: "updateBounds",
           id: update.blockId,
           bounds: update.bounds,
         });
@@ -122,13 +121,13 @@ export class ViewStore {
   }
 
   handleRemoveView(blockId: string): void {
-    log.debug(`[${blockId}] Removing view`, 'ViewStore');
-    this.dispatch({ type: 'remove', id: blockId });
+    log.debug(`[${blockId}] Removing view`, "ViewStore");
+    this.dispatch({ type: "remove", id: blockId });
   }
 
   retryView(blockId: string): void {
-    log.debug(`[${blockId}] Retrying view`, 'ViewStore');
-    this.dispatch({ type: 'retry', id: blockId });
+    log.debug(`[${blockId}] Retrying view`, "ViewStore");
+    this.dispatch({ type: "retry", id: blockId });
   }
 
   /**
@@ -144,7 +143,11 @@ export class ViewStore {
    * Get DevTools state for a view.
    * This is a query on the Electron handle, not a state change.
    */
-  getDevToolsState(blockId: string): { success: boolean; isOpen: boolean; error?: string } {
+  getDevToolsState(blockId: string): {
+    success: boolean;
+    isOpen: boolean;
+    error?: string;
+  } {
     const result = this.operations.getDevToolsState(blockId);
     if (!result.success) {
       return { success: false, isOpen: false, error: result.error };
@@ -156,7 +159,11 @@ export class ViewStore {
    * Toggle DevTools for a view.
    * This is a side effect on the Electron handle, not a state change.
    */
-  toggleDevTools(blockId: string): { success: boolean; isOpen: boolean; error?: string } {
+  toggleDevTools(blockId: string): {
+    success: boolean;
+    isOpen: boolean;
+    error?: string;
+  } {
     const result = this.operations.toggleDevTools(blockId);
     if (!result.success) {
       return { success: false, isOpen: false, error: result.error };
@@ -168,7 +175,11 @@ export class ViewStore {
    * Navigate back in history.
    * This triggers a side effect; the URL change will come back as an event.
    */
-  goBack(blockId: string): { success: boolean; canGoBack: boolean; error?: string } {
+  goBack(blockId: string): {
+    success: boolean;
+    canGoBack: boolean;
+    error?: string;
+  } {
     const result = this.operations.goBack(blockId);
     if (!result.success) {
       return { success: false, canGoBack: false, error: result.error };
@@ -180,7 +191,9 @@ export class ViewStore {
    * Set callback for link clicks that should open new blocks.
    * This is external coordination with main.ts, not a state change.
    */
-  setLinkClickCallback(callback: (url: string, sourceBlockId?: string) => void): void {
+  setLinkClickCallback(
+    callback: (url: string, sourceBlockId?: string) => void
+  ): void {
     this.events.setLinkClickCallback(callback);
   }
 }

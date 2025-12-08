@@ -4,17 +4,15 @@ import { BrowserSlot } from "./BrowserSlot";
 import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
 import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
 
-const FOOTER_HEIGHT = 28;
 const NORMAL_HEIGHT = 800;
 
 export function Page({
   blockId,
   url,
-  heightMode = "normal",
   layout = "inline",
 }: PageProps & { layout?: "inline" | "full" }) {
   const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
-    useBrowserViewUpdater(blockId);
+    useBrowserViewUpdater(blockId, layout);
   const { initStatus, retryInitialization, getInitAttemptRef } =
     useBrowserInitialization(blockId);
 

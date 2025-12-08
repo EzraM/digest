@@ -8,13 +8,19 @@ const consoleListeners = new Map<
 >();
 
 /**
- * Injects a script into the web view to detect scroll boundaries and forward scroll events
+ * Injects a script into the web view to prevent internal scrolling and forward all scroll events to parent
+ * Only injects for inline layout - fullscreen pages scroll normally
  */
 export function injectScrollForwardingScript(
   view: WebContentsView,
   blockId: string,
-  rendererWebContents: WebContents
+  rendererWebContents: WebContents,
+  layout: "inline" | "full" = "inline"
 ): void {
+  // Only inject script for inline layout
+  if (layout !== "inline") {
+    return;
+  }
   // Track console listeners per block to avoid duplicates on reinjection
   const listenerKey = `${view.webContents.id}-${blockId}`;
   const existingListener = consoleListeners.get(listenerKey);
@@ -30,91 +36,25 @@ export function injectScrollForwardingScript(
       }
       window.__scrollForwardingInjected = true;
 
-      let lastWheelDelta = 0;
-
-      function isScrollable(element) {
-        if (!element || element === window) return false;
-        const style = window.getComputedStyle(element);
-        const canScrollY = ["auto", "scroll"].includes(style.overflowY);
-        return (
-          canScrollY &&
-          element.scrollHeight - element.clientHeight > 1 // >1 accounts for subpixel diffs
-        );
-      }
-
-      function getScrollTarget(event) {
-        const path = event.composedPath ? event.composedPath() : [];
-        if (path.length) {
-          for (const el of path) {
-            if (el instanceof Element && isScrollable(el)) {
-              return el;
-            }
-          }
-        }
-
-        // Fallback: climb the DOM from target
-        let node = event.target;
-        while (node && node !== document) {
-          if (node instanceof Element && isScrollable(node)) {
-            return node;
-          }
-          node = node.parentNode;
-        }
-
-        // Final fallback: document scrolling element
-        return document.scrollingElement || document.documentElement;
-      }
-
-      function getScrollState(element) {
-        if (!element) {
-          return { isAtTop: true, isAtBottom: true };
-        }
-
-        const scrollTop = element.scrollTop;
-        const scrollHeight = element.scrollHeight;
-        const clientHeight = element.clientHeight;
-        const threshold = 5;
-
-        return {
-          isAtTop: scrollTop <= threshold,
-          isAtBottom: scrollTop + clientHeight >= scrollHeight - threshold,
-        };
-      }
-
       function handleWheel(event) {
-        // Store wheel delta for direction detection
-        lastWheelDelta = event.deltaY;
-
-        const target = getScrollTarget(event);
-        const { isAtTop, isAtBottom } = getScrollState(target);
+        // Prevent default scrolling behavior inside inline page blocks
+        event.preventDefault();
         
-        // If at top and scrolling up, forward scroll immediately
-        if (isAtTop && lastWheelDelta < 0) {
-          // Send message via console that main process will capture
-          // Pass the actual deltaY so the renderer can use it for natural scrolling
-          console.log('__SCROLL_FORWARD__' + JSON.stringify({
-            type: 'scroll-forward',
-            direction: 'up',
-            blockId: '${blockId}',
-            deltaY: lastWheelDelta
-          }));
-        }
-        
-        // If at bottom and scrolling down, forward scroll immediately
-        if (isAtBottom && lastWheelDelta > 0) {
-          // Send message via console that main process will capture
-          // Pass the actual deltaY so the renderer can use it for natural scrolling
-          console.log('__SCROLL_FORWARD__' + JSON.stringify({
-            type: 'scroll-forward',
-            direction: 'down',
-            blockId: '${blockId}',
-            deltaY: lastWheelDelta
-          }));
-        }
+        // Forward ALL scroll events to parent
+        // Send message via console that main process will capture
+        // Pass the actual deltaY so the renderer can use it for natural scrolling
+        const deltaY = event.deltaY;
+        const direction = deltaY < 0 ? 'up' : 'down';
+        console.log('__SCROLL_FORWARD__' + JSON.stringify({
+          type: 'scroll-forward',
+          direction: direction,
+          blockId: '${blockId}',
+          deltaY: deltaY
+        }));
       }
 
-      // Listen for wheel events
-      window.addEventListener('wheel', handleWheel, { passive: true });
+      // Listen for wheel events with preventDefault support
+      window.addEventListener('wheel', handleWheel, { passive: false });
 
       // Cleanup on unload to avoid leaking listeners across navigations
       window.addEventListener('beforeunload', () => {

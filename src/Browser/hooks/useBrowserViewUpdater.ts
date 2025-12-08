@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { useDocumentContext } from "../../context/DocumentContext";
 
 type Bounds = { x: number; y: number; width: number; height: number };
@@ -9,12 +9,22 @@ type Bounds = { x: number; y: number; width: number; height: number };
  * and sends a consolidated update only when both are available.
  *
  * @param blockId The ID of the block to update.
+ * @param layout The layout mode ('inline' or 'full').
  * @returns An object with stable `handleUrlChange` and `handleBoundsChange` callbacks.
  */
-export const useBrowserViewUpdater = (blockId: string) => {
+export const useBrowserViewUpdater = (
+  blockId: string,
+  layout?: "inline" | "full"
+) => {
   const { profileId } = useDocumentContext();
   const urlRef = useRef<string | null>(null);
   const boundsRef = useRef<Bounds | null>(null);
+  const layoutRef = useRef<"inline" | "full" | undefined>(layout);
+
+  // Update layout ref when it changes
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
 
   const sendUpdate = useCallback(() => {
     // Only send the update if we have both a URL and bounds.
@@ -24,6 +34,7 @@ export const useBrowserViewUpdater = (blockId: string) => {
         url: urlRef.current,
         bounds: boundsRef.current,
         profileId,
+        layout: layoutRef.current,
       });
     }
   }, [blockId, profileId]);

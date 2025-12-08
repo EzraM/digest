@@ -208,7 +208,7 @@ export const site = createReactBlockSpec(
           </div>
 
           {/* Browser content */}
-          <Page blockId={block.id} url={url} />
+          <Page blockId={block.id} url={url} layout="inline" />
         </div>
       );
     },

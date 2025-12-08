@@ -1,12 +1,12 @@
-import { WebContentsView, BrowserWindow } from 'electron';
-import { Command } from '../view-core/commands';
-import { ViewWorld, Rect } from '../view-core/types';
-import { HandleRegistry } from './HandleRegistry';
-import { ViewLayerManager, ViewLayer } from '../ViewLayerManager';
-import { getProfilePartition } from '../../config/profiles';
-import { injectScrollForwardingScript } from '../ScrollForwardingService';
-import { log } from '../../utils/mainLogger';
-import { DEV_CONFIG } from '../../config/development';
+import { WebContentsView, BrowserWindow } from "electron";
+import { Command } from "../view-core/commands";
+import { ViewWorld, Rect } from "../view-core/types";
+import { HandleRegistry } from "./HandleRegistry";
+import { ViewLayerManager, ViewLayer } from "../ViewLayerManager";
+import { getProfilePartition } from "../../config/profiles";
+import { injectScrollForwardingScript } from "../ScrollForwardingService";
+import { log } from "../../utils/mainLogger";
+import { DEV_CONFIG } from "../../config/development";
 
 /**
  * Interprets commands by producing Electron side effects.
@@ -20,7 +20,7 @@ export class Interpreter {
     private layerManager: ViewLayerManager | undefined,
     private handles: HandleRegistry,
     private rendererWebContents: Electron.WebContents,
-    private onViewCreated: (id: string, view: WebContentsView) => void,
+    private onViewCreated: (id: string, view: WebContentsView) => void
   ) {}
 
   /**
@@ -29,23 +29,23 @@ export class Interpreter {
    */
   interpret(cmd: Command, prevWorld: ViewWorld, nextWorld: ViewWorld): void {
     switch (cmd.type) {
-      case 'create':
-        this.createView(cmd.id, cmd.url, cmd.bounds, cmd.profile);
+      case "create":
+        this.createView(cmd.id, cmd.url, cmd.bounds, cmd.profile, cmd.layout);
         break;
 
-      case 'updateBounds':
+      case "updateBounds":
         this.updateBounds(cmd.id, cmd.bounds);
         break;
 
-      case 'remove':
+      case "remove":
         this.removeView(cmd.id);
         break;
 
-      case 'retry':
+      case "retry":
         this.reloadView(cmd.id);
         break;
 
-      case 'markError':
+      case "markError":
         this.hideView(cmd.id);
         break;
 
@@ -54,11 +54,17 @@ export class Interpreter {
     }
   }
 
-  private createView(id: string, url: string, bounds: Rect, profile: string): void {
+  private createView(
+    id: string,
+    url: string,
+    bounds: Rect,
+    profile: string,
+    layout?: "inline" | "full"
+  ): void {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
         `Interpreter: baseWindow is destroyed, skipping view creation for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
       return;
     }
@@ -67,7 +73,7 @@ export class Interpreter {
     if (this.handles.has(id)) {
       log.debug(
         `WebContentsView already exists for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
       return;
     }
@@ -76,7 +82,7 @@ export class Interpreter {
     if (DEV_CONFIG.features.disableWebViewRendering) {
       log.debug(
         `WebView rendering disabled - skipping WebContentsView creation for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
       return;
     }
@@ -86,11 +92,11 @@ export class Interpreter {
 
       log.debug(
         `Creating new WebContentsView for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
       log.debug(
         `URL: ${url}, Bounds: ${JSON.stringify(bounds)}, profile: ${profile}, partition: ${partition}`,
-        'Interpreter'
+        "Interpreter"
       );
 
       const newView = new WebContentsView({
@@ -115,7 +121,7 @@ export class Interpreter {
         );
         log.debug(
           `Browser block ${id} added via ViewLayerManager`,
-          'Interpreter'
+          "Interpreter"
         );
       } else {
         this.baseWindow.contentView.addChildView(newView);
@@ -127,11 +133,16 @@ export class Interpreter {
       // Notify that view was created (this will attach event listeners)
       this.onViewCreated(id, newView);
 
-      // Inject scroll forwarding script
-      injectScrollForwardingScript(newView, id, this.rendererWebContents);
+      // Inject scroll forwarding script only for inline layout
+      injectScrollForwardingScript(
+        newView,
+        id,
+        this.rendererWebContents,
+        layout ?? "inline"
+      );
 
       // Load URL
-      log.debug(`Loading URL for blockId: ${id}: ${url}`, 'Interpreter');
+      log.debug(`Loading URL for blockId: ${id}: ${url}`, "Interpreter");
       newView.webContents.loadURL(url);
 
       // Ensure overlays stay on top after adding a new browser block
@@ -141,17 +152,17 @@ export class Interpreter {
 
       // Open DevTools if configured
       if (DEV_CONFIG.devtools.openBrowserViews) {
-        newView.webContents.openDevTools({ mode: 'detach' });
+        newView.webContents.openDevTools({ mode: "detach" });
       }
 
       log.debug(
         `Successfully created WebContentsView for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
     } catch (error) {
       log.debug(
         `Failed to create WebContentsView for blockId: ${id}. Error: ${error}`,
-        'Interpreter'
+        "Interpreter"
       );
     }
   }
@@ -160,7 +171,7 @@ export class Interpreter {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
         `Interpreter: baseWindow is destroyed, skipping bounds update for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
       return;
     }
@@ -169,7 +180,7 @@ export class Interpreter {
     if (!view) {
       log.debug(
         `No view found for blockId: ${id} to update bounds`,
-        'Interpreter'
+        "Interpreter"
       );
       return;
     }
@@ -178,12 +189,12 @@ export class Interpreter {
       view.setBounds(bounds);
       log.debug(
         `Updated bounds for blockId: ${id}: ${JSON.stringify(bounds)}`,
-        'Interpreter'
+        "Interpreter"
       );
     } catch (error) {
       log.debug(
         `Failed to update bounds for blockId: ${id}. Error: ${error}`,
-        'Interpreter'
+        "Interpreter"
       );
     }
   }
@@ -192,25 +203,25 @@ export class Interpreter {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
         `Interpreter: baseWindow is destroyed, skipping view removal for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
       return;
     }
 
     const view = this.handles.get(id);
     if (!view) {
-      log.debug(`No view found for blockId: ${id} to remove`, 'Interpreter');
+      log.debug(`No view found for blockId: ${id} to remove`, "Interpreter");
       return;
     }
 
     try {
-      log.debug(`Removing WebContentsView for blockId: ${id}`, 'Interpreter');
+      log.debug(`Removing WebContentsView for blockId: ${id}`, "Interpreter");
 
       if (this.layerManager) {
         this.layerManager.removeView(`browser-block-${id}`);
         log.debug(
           `Browser block ${id} removed via ViewLayerManager`,
-          'Interpreter'
+          "Interpreter"
         );
       } else {
         this.baseWindow.contentView.removeChildView(view);
@@ -224,12 +235,12 @@ export class Interpreter {
 
       log.debug(
         `Successfully removed WebContentsView for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
     } catch (error) {
       log.debug(
         `Failed to remove WebContentsView for blockId: ${id}. Error: ${error}`,
-        'Interpreter'
+        "Interpreter"
       );
     }
   }
@@ -238,21 +249,21 @@ export class Interpreter {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
         `Interpreter: baseWindow is destroyed, skipping view hide for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
       return;
     }
 
     const view = this.handles.get(id);
     if (!view) {
-      log.debug(`No view found for blockId: ${id} to hide`, 'Interpreter');
+      log.debug(`No view found for blockId: ${id} to hide`, "Interpreter");
       return;
     }
 
     try {
       log.debug(
         `Hiding WebContentsView for blockId: ${id} (error state)`,
-        'Interpreter'
+        "Interpreter"
       );
 
       // Remove from display but keep handle for potential retry
@@ -262,11 +273,14 @@ export class Interpreter {
         this.baseWindow.contentView.removeChildView(view);
       }
 
-      log.debug(`Successfully hid WebContentsView for blockId: ${id}`, 'Interpreter');
+      log.debug(
+        `Successfully hid WebContentsView for blockId: ${id}`,
+        "Interpreter"
+      );
     } catch (error) {
       log.debug(
         `Failed to hide WebContentsView for blockId: ${id}. Error: ${error}`,
-        'Interpreter'
+        "Interpreter"
       );
     }
   }
@@ -275,19 +289,22 @@ export class Interpreter {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
         `Interpreter: baseWindow is destroyed, skipping view reload for blockId: ${id}`,
-        'Interpreter'
+        "Interpreter"
       );
       return;
     }
 
     const view = this.handles.get(id);
     if (!view) {
-      log.debug(`No view found for blockId: ${id} to reload`, 'Interpreter');
+      log.debug(`No view found for blockId: ${id} to reload`, "Interpreter");
       return;
     }
 
     try {
-      log.debug(`Reloading WebContentsView for blockId: ${id} (retry)`, 'Interpreter');
+      log.debug(
+        `Reloading WebContentsView for blockId: ${id} (retry)`,
+        "Interpreter"
+      );
 
       // Re-add to display if it was hidden
       if (this.layerManager) {
@@ -303,11 +320,14 @@ export class Interpreter {
       // Reload the page
       view.webContents.reload();
 
-      log.debug(`Successfully reloaded WebContentsView for blockId: ${id}`, 'Interpreter');
+      log.debug(
+        `Successfully reloaded WebContentsView for blockId: ${id}`,
+        "Interpreter"
+      );
     } catch (error) {
       log.debug(
         `Failed to reload WebContentsView for blockId: ${id}. Error: ${error}`,
-        'Interpreter'
+        "Interpreter"
       );
     }
   }

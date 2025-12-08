@@ -12,6 +12,7 @@ interface ElectronAPI {
     url: string;
     bounds: { x: number; y: number; width: number; height: number };
     profileId: string;
+    layout?: "inline" | "full";
   }) => void;
   removeBrowser: (blockId: string) => void;
   browser: {
