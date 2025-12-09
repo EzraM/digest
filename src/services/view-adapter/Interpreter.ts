@@ -30,6 +30,7 @@ export class Interpreter {
    * Execute side effects for a command.
    * Called AFTER the reducer has produced the new world.
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interpret(cmd: Command, prevWorld: ViewWorld, nextWorld: ViewWorld): void {
     switch (cmd.type) {
       case "create":
@@ -214,6 +215,22 @@ export class Interpreter {
     }
   }
 
+  /**
+   * Handle garbage collection by destroying views that were removed from the world.
+   */
+  private handleGC(prevWorld: ViewWorld, nextWorld: ViewWorld): void {
+    // Find views that were in prevWorld but not in nextWorld
+    for (const [id] of prevWorld) {
+      if (!nextWorld.has(id)) {
+        log.debug(
+          `[GC] Removing view ${id} that was garbage collected`,
+          "Interpreter"
+        );
+        this.removeView(id);
+      }
+    }
+  }
+
   private removeView(id: string): void {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
@@ -388,14 +405,12 @@ export class Interpreter {
       })();
     `;
 
-    view.webContents
-      .executeJavaScript(scrollTrackingScript)
-      .catch((error) => {
-        log.debug(
-          `Failed to inject scroll tracking script for blockId: ${blockId}: ${error}`,
-          "Interpreter"
-        );
-      });
+    view.webContents.executeJavaScript(scrollTrackingScript).catch((error) => {
+      log.debug(
+        `Failed to inject scroll tracking script for blockId: ${blockId}: ${error}`,
+        "Interpreter"
+      );
+    });
   }
 
   /**
@@ -405,7 +420,11 @@ export class Interpreter {
     view: WebContentsView,
     blockId: string
   ): void {
-    const consoleListener = (event: any, level: number, message: string) => {
+    const consoleListener = (
+      _event: unknown,
+      _level: number,
+      message: string
+    ) => {
       try {
         if (
           typeof message === "string" &&

@@ -84,5 +84,19 @@ export function createBrowserHandlers(
         viewStore.setScrollPercent(data.blockId, data.scrollPercent);
       },
     },
+    "acquire-view": {
+      type: "on",
+      fn: (_event, blockId: string) => {
+        log.debug(`Received acquire-view for block ${blockId}`, "main");
+        viewStore.acquireView(blockId);
+      },
+    },
+    "release-view": {
+      type: "on",
+      fn: (_event, blockId: string) => {
+        log.debug(`Received release-view for block ${blockId}`, "main");
+        viewStore.releaseView(blockId);
+      },
+    },
   };
 }

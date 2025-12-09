@@ -90,6 +90,7 @@ export const site = createReactBlockSpec(
         >
           {/* Read-only URL bar */}
           <div
+            onDoubleClick={openDedicatedView}
             style={{
               padding: "8px 12px",
               backgroundColor: "#f8f9fa",
@@ -99,11 +100,14 @@ export const site = createReactBlockSpec(
               gap: "8px",
               fontSize: "12px",
               color: "#666",
+              cursor: "pointer",
             }}
+            title="Double-click to open in full view"
           >
             <button
               type="button"
               onClick={goBack}
+              onDoubleClick={(e) => e.stopPropagation()}
               disabled={!canGoBack || isNavigatingBack}
               style={{
                 border: "1px solid #d0d0d0",
@@ -127,6 +131,7 @@ export const site = createReactBlockSpec(
             <button
               type="button"
               onClick={openDedicatedView}
+              onDoubleClick={(e) => e.stopPropagation()}
               style={{
                 border: "1px solid #d0d0d0",
                 backgroundColor: "#fff",
@@ -162,6 +167,7 @@ export const site = createReactBlockSpec(
             <button
               type="button"
               onClick={handleCopy}
+              onDoubleClick={(e) => e.stopPropagation()}
               style={{
                 border: "1px solid #d0d0d0",
                 backgroundColor: "#fff",
@@ -184,6 +190,7 @@ export const site = createReactBlockSpec(
               <button
                 type="button"
                 onClick={toggleDevTools}
+                onDoubleClick={(e) => e.stopPropagation()}
                 disabled={isTogglingDevTools}
                 aria-pressed={devToolsOpen}
                 style={{
@@ -211,7 +218,12 @@ export const site = createReactBlockSpec(
           </div>
 
           {/* Browser content */}
-          <Page blockId={block.id} url={url} layout="inline" scrollPercent={scrollPercent} />
+          <Page
+            blockId={block.id}
+            url={url}
+            layout="inline"
+            scrollPercent={scrollPercent}
+          />
         </div>
       );
     },

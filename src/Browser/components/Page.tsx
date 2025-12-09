@@ -62,11 +62,15 @@ export function Page({
     }
   }, [blockId, scrollPercent]);
 
-  // Cleanup when component unmounts
+  // Acquire/release pattern for view lifecycle management
   useEffect(() => {
+    // Acquire on mount
+    window.electronAPI.acquireView(blockId);
+
     return () => {
-      console.log(`[Browser] Cleaning up browser for blockId: ${blockId}`);
-      window.electronAPI.removeBrowser(blockId);
+      // Release on unmount (does NOT destroy immediately)
+      // The view will be garbage collected after a delay if not reacquired
+      window.electronAPI.releaseView(blockId);
     };
   }, [blockId]);
 

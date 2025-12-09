@@ -9,6 +9,7 @@ import { EventTranslator } from "./view-adapter/EventTranslator";
 import { HandleOperations } from "./view-adapter/HandleOperations";
 import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
+import { VIEW_LIFECYCLE } from "../config/viewLifecycle";
 
 /**
  * The ViewStore orchestrates the pure core with Electron adapters.
@@ -22,6 +23,7 @@ export class ViewStore {
   private notifications: NotificationLayer;
   private events: EventTranslator;
   private operations: HandleOperations;
+  private gcTimer: NodeJS.Timeout | null = null;
 
   constructor(
     baseWindow: BrowserWindow,
@@ -57,8 +59,9 @@ export class ViewStore {
     if (prevWorld !== nextWorld) {
       this.world = nextWorld;
 
+      const cmdId = "id" in cmd ? cmd.id : undefined;
       log.debug(
-        `[${cmd.id ?? "unknown"}] Command dispatched: ${cmd.type}`,
+        `[${cmdId ?? "unknown"}] Command dispatched: ${cmd.type}`,
         "ViewStore"
       );
 
@@ -66,7 +69,7 @@ export class ViewStore {
       this.interpreter.interpret(cmd, prevWorld, nextWorld);
 
       // Notify renderer of changes
-      this.notifications.notify(cmd.id, prevWorld, nextWorld);
+      this.notifications.notify(cmdId, prevWorld, nextWorld);
     }
   }
 
@@ -101,6 +104,7 @@ export class ViewStore {
         profile: update.profileId,
         layout: update.layout ?? "inline", // Default to 'inline' for backward compatibility
       });
+      // Note: create command initializes refCount: 1, lastAccess, and gcCandidate: false
     } else {
       // Check if we need to update bounds
       const boundsChanged =
@@ -123,6 +127,55 @@ export class ViewStore {
   handleRemoveView(blockId: string): void {
     log.debug(`[${blockId}] Removing view`, "ViewStore");
     this.dispatch({ type: "remove", id: blockId });
+  }
+
+  /**
+   * Acquire: component wants access to view
+   * Increments refCount and clears gcCandidate if view exists.
+   * If view doesn't exist, handleBlockViewUpdate will create it.
+   */
+  acquireView(blockId: string): void {
+    const existing = this.world.get(blockId);
+    if (existing) {
+      log.debug(
+        `[${blockId}] Acquiring view (refCount: ${existing.refCount} -> ${existing.refCount + 1})`,
+        "ViewStore"
+      );
+      this.dispatch({ type: "acquire", id: blockId });
+    } else {
+      log.debug(
+        `[${blockId}] Acquire called but view doesn't exist yet (will be created on update)`,
+        "ViewStore"
+      );
+    }
+    // If view doesn't exist, handleBlockViewUpdate will create it
+  }
+
+  /**
+   * Release: component is done (for now)
+   * Decrements refCount and schedules GC if refCount reaches 0.
+   */
+  releaseView(blockId: string): void {
+    log.debug(`[${blockId}] Releasing view`, "ViewStore");
+    this.dispatch({ type: "release", id: blockId });
+    this.scheduleGC();
+  }
+
+  /**
+   * Schedule garbage collection after a delay.
+   * If GC is already scheduled, this is a no-op.
+   */
+  private scheduleGC(): void {
+    if (this.gcTimer) {
+      return; // Already scheduled
+    }
+
+    log.debug(`Scheduling GC in ${VIEW_LIFECYCLE.GC_DELAY_MS}ms`, "ViewStore");
+    this.gcTimer = setTimeout(() => {
+      this.gcTimer = null;
+      log.debug("Running GC", "ViewStore");
+      this.dispatch({ type: "gc" });
+    }, VIEW_LIFECYCLE.GC_DELAY_MS);
   }
 
   retryView(blockId: string): void {
@@ -149,7 +202,7 @@ export class ViewStore {
     error?: string;
   } {
     const result = this.operations.getDevToolsState(blockId);
-    if (!result.success) {
+    if (result.success === false) {
       return { success: false, isOpen: false, error: result.error };
     }
     return { success: true, isOpen: result.value.isOpen };
@@ -165,7 +218,7 @@ export class ViewStore {
     error?: string;
   } {
     const result = this.operations.toggleDevTools(blockId);
-    if (!result.success) {
+    if (result.success === false) {
       return { success: false, isOpen: false, error: result.error };
     }
     return { success: true, isOpen: result.value.isOpen };
@@ -181,7 +234,7 @@ export class ViewStore {
     error?: string;
   } {
     const result = this.operations.goBack(blockId);
-    if (!result.success) {
+    if (result.success === false) {
       return { success: false, canGoBack: false, error: result.error };
     }
     return { success: true, canGoBack: result.value.canGoBack };

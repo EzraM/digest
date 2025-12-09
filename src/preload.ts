@@ -35,6 +35,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeBrowser: (blockId: string) => {
     ipcRenderer.send("remove-browser", blockId);
   },
+  acquireView: (blockId: string) => {
+    log.debug(`Acquiring view for block ${blockId}`, "preload");
+    ipcRenderer.send("acquire-view", blockId);
+  },
+  releaseView: (blockId: string) => {
+    log.debug(`Releasing view for block ${blockId}`, "preload");
+    ipcRenderer.send("release-view", blockId);
+  },
   browser: {
     getDevToolsState: (blockId: string) =>
       ipcRenderer.invoke("browser:get-devtools-state", blockId),
@@ -53,7 +61,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
         `Setting scroll percent for block ${blockId}: ${scrollPercent}`,
         "preload"
       );
-      ipcRenderer.send("browser:set-scroll-percent", { blockId, scrollPercent });
+      ipcRenderer.send("browser:set-scroll-percent", {
+        blockId,
+        scrollPercent,
+      });
     },
   },
   addBlockEvent: (e: { type: "open" | "close" }) => {
