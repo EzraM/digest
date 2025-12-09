@@ -1,5 +1,5 @@
 import { ReactNode, useMemo, useContext, useRef } from "react";
-import { Box } from "@mantine/core";
+import { Box, Transition } from "@mantine/core";
 import { StatusBar } from "./StatusBar";
 import { useStatusBar } from "../../hooks/useStatusBar";
 import { SidebarToggleButton } from "./SidebarToggleButton";
@@ -11,6 +11,7 @@ const ASIDE_WIDTH = 400;
 const FOOTER_HEIGHT = 28;
 const TOGGLE_SAFE_SPACE = 56;
 const NOTIFICATION_HEIGHT = 120; // Top bar (~32px) + content (80px) + padding
+const NAVBAR_TRANSITION_MS = 180;
 
 type RendererLayoutProps = {
   navbar: ReactNode;
@@ -65,23 +66,37 @@ export const RendererLayout = ({
         height: "100vh",
         position: "relative",
         backgroundColor: "var(--mantine-color-body)",
+        transition: `grid-template-columns ${NAVBAR_TRANSITION_MS}ms ease`,
       }}
     >
       <Box
         component="nav"
         style={{
           gridArea: "nav",
-          display: navWidth ? "block" : "none",
+          display: "block",
           minWidth: navWidth,
           maxWidth: navWidth,
           borderRight: navWidth
             ? "1px solid var(--mantine-color-default-border)"
             : "none",
           overflow: "hidden",
+          transition: `min-width ${NAVBAR_TRANSITION_MS}ms ease, max-width ${NAVBAR_TRANSITION_MS}ms ease, border-color 120ms ease`,
+          pointerEvents: isNavbarOpened ? "auto" : "none",
         }}
         p="md"
       >
-        {navbar}
+        <Transition
+          mounted={isNavbarOpened}
+          transition="slide-right"
+          duration={NAVBAR_TRANSITION_MS}
+          timingFunction="ease-out"
+          keepMounted
+          reduceMotion
+        >
+          {(styles) => (
+            <Box style={{ height: "100%", ...styles }}>{navbar}</Box>
+          )}
+        </Transition>
       </Box>
 
       <ScrollContainerProvider scrollContainerRef={scrollContainerRef}>
@@ -97,7 +112,7 @@ export const RendererLayout = ({
             paddingLeft: isNavbarOpened ? 0 : TOGGLE_SAFE_SPACE,
             marginBottom: hasActiveNotifications ? NOTIFICATION_HEIGHT : 0,
             overflow: "auto",
-            transition: "margin-bottom 0.3s ease-out",
+            transition: `margin-bottom 0.3s ease-out, padding-left ${NAVBAR_TRANSITION_MS}ms ease`,
           }}
         >
           {main}
