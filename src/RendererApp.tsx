@@ -29,7 +29,8 @@ import {
 } from "./context/BlockNotificationContext";
 
 const RendererAppContent = () => {
-  const [isNavbarOpened, { toggle: toggleNavbar }] = useDisclosure(true);
+  const [isNavbarOpened, { toggle: toggleNavbar, close: closeNavbar }] =
+    useDisclosure(true);
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
   const {
     profiles,
@@ -116,6 +117,14 @@ const RendererAppContent = () => {
     activeDocumentId,
     onPendingDocumentRemoved: handlePendingDocumentRemoved,
   });
+
+  const handleSidebarDocumentSelect = useCallback(
+    (documentId: string) => {
+      closeNavbar();
+      handleDocumentSelect(documentId);
+    },
+    [closeNavbar, handleDocumentSelect]
+  );
 
   const {
     isModalOpen: isCreateProfileModalOpen,
@@ -277,7 +286,7 @@ const RendererAppContent = () => {
                 onDeleteProfile={handleDeleteProfile}
                 documentTree={activeProfileTree}
                 activeDocumentId={activeDocumentId}
-                onSelectDocument={handleDocumentSelect}
+                onSelectDocument={handleSidebarDocumentSelect}
                 onCreateDocument={handleCreateDocument}
                 onRenameDocument={handleRenameDocument}
                 onDeleteDocument={handleDeleteDocument}
