@@ -106,19 +106,25 @@ export class ViewStore {
       });
       // Note: create command initializes refCount: 1, lastAccess, and gcCandidate: false
     } else {
-      // Check if we need to update bounds
+      // Check if we need to update bounds or layout
       const boundsChanged =
         existing.bounds.x !== update.bounds.x ||
         existing.bounds.y !== update.bounds.y ||
         existing.bounds.width !== update.bounds.width ||
         existing.bounds.height !== update.bounds.height;
+      const layoutChanged =
+        update.layout !== undefined && existing.layout !== update.layout;
 
-      if (boundsChanged) {
-        log.debug(`[${update.blockId}] Updating bounds`, "ViewStore");
+      if (boundsChanged || layoutChanged) {
+        log.debug(
+          `[${update.blockId}] Updating bounds${layoutChanged ? " and layout" : ""}`,
+          "ViewStore"
+        );
         this.dispatch({
           type: "updateBounds",
           id: update.blockId,
           bounds: update.bounds,
+          layout: update.layout,
         });
       }
     }

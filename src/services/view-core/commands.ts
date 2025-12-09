@@ -9,7 +9,12 @@ export type Command =
       profile: string;
       layout?: "inline" | "full";
     }
-  | { type: "updateBounds"; id: string; bounds: Rect }
+  | {
+      type: "updateBounds";
+      id: string;
+      bounds: Rect;
+      layout?: "inline" | "full";
+    }
   | { type: "updateUrl"; id: string; url: string }
   | { type: "remove"; id: string } // Explicit removal (block deleted)
   | { type: "acquire"; id: string } // Component wants view

@@ -25,6 +25,7 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
       return new Map(world).set(cmd.id, {
         ...existing,
         bounds: cmd.bounds,
+        layout: cmd.layout ?? existing.layout,
         lastAccess: Date.now(),
       });
     }

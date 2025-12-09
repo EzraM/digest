@@ -4,7 +4,7 @@ import { ViewWorld, Rect } from "../view-core/types";
 import { HandleRegistry } from "./HandleRegistry";
 import { ViewLayerManager, ViewLayer } from "../ViewLayerManager";
 import { getProfilePartition } from "../../config/profiles";
-import { injectScrollForwardingScript } from "../ScrollForwardingService";
+import { ensureScrollForwardingMatchesLayout } from "../ScrollForwardingService";
 import { log } from "../../utils/mainLogger";
 import { DEV_CONFIG } from "../../config/development";
 
@@ -38,7 +38,7 @@ export class Interpreter {
         break;
 
       case "updateBounds":
-        this.updateBounds(cmd.id, cmd.bounds);
+        this.updateBounds(cmd.id, cmd.bounds, cmd.layout, nextWorld);
         break;
 
       case "remove":
@@ -137,8 +137,8 @@ export class Interpreter {
       // Notify that view was created (this will attach event listeners)
       this.onViewCreated(id, newView);
 
-      // Inject scroll forwarding script only for inline layout
-      injectScrollForwardingScript(
+      // Ensure scroll forwarding matches layout (enforces invariant)
+      ensureScrollForwardingMatchesLayout(
         newView,
         id,
         this.rendererWebContents,
@@ -183,7 +183,12 @@ export class Interpreter {
     }
   }
 
-  private updateBounds(id: string, bounds: Rect): void {
+  private updateBounds(
+    id: string,
+    bounds: Rect,
+    layout: "inline" | "full" | undefined,
+    nextWorld: ViewWorld
+  ): void {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
         `Interpreter: baseWindow is destroyed, skipping bounds update for blockId: ${id}`,
@@ -207,6 +212,18 @@ export class Interpreter {
         `Updated bounds for blockId: ${id}: ${JSON.stringify(bounds)}`,
         "Interpreter"
       );
+
+      // Ensure scroll forwarding matches layout (enforces invariant on any view update)
+      // Use layout from command if provided, otherwise from world state
+      const layoutToUse = layout ?? nextWorld.get(id)?.layout;
+      if (layoutToUse) {
+        ensureScrollForwardingMatchesLayout(
+          view,
+          id,
+          this.rendererWebContents,
+          layoutToUse
+        );
+      }
     } catch (error) {
       log.debug(
         `Failed to update bounds for blockId: ${id}. Error: ${error}`,

@@ -30,10 +30,9 @@ export function injectScrollForwardingScript(
 
   const scrollForwardingScript = `
     (function() {
-      // Prevent multiple injections
-      if (window.__scrollForwardingInjected) {
-        return;
-      }
+      // Already in correct state? No-op.
+      if (window.__scrollForwardingInjected) return;
+
       window.__scrollForwardingInjected = true;
 
       function handleWheel(event) {
@@ -55,11 +54,7 @@ export function injectScrollForwardingScript(
 
       // Listen for wheel events with preventDefault support
       window.addEventListener('wheel', handleWheel, { passive: false });
-
-      // Cleanup on unload to avoid leaking listeners across navigations
-      window.addEventListener('beforeunload', () => {
-        window.removeEventListener('wheel', handleWheel);
-      });
+      window.__scrollForwardingHandler = handleWheel;
     })();
   `;
 
@@ -107,5 +102,54 @@ export function injectScrollForwardingScript(
       `[${blockId}] Error setting up scroll forwarding: ${error}`,
       "ScrollForwardingService"
     );
+  }
+}
+
+/**
+ * Removes scroll forwarding from a view. Internal helper.
+ */
+function removeScrollForwardingScript(
+  view: WebContentsView,
+  blockId: string
+): void {
+  const listenerKey = `${view.webContents.id}-${blockId}`;
+  const existingListener = consoleListeners.get(listenerKey);
+
+  if (existingListener) {
+    view.webContents.removeListener("console-message", existingListener);
+    consoleListeners.delete(listenerKey);
+  }
+
+  view.webContents
+    .executeJavaScript(
+      `
+    (function() {
+      if (window.__scrollForwardingHandler) {
+        window.removeEventListener('wheel', window.__scrollForwardingHandler, { passive: false });
+        window.__scrollForwardingHandler = null;
+      }
+      window.__scrollForwardingInjected = false;
+    })();
+  `
+    )
+    .catch(() => {});
+}
+
+/**
+ * Ensures scroll forwarding state matches the layout mode.
+ * This enforces the invariant: scrollForwarding = (layout == "inline")
+ *
+ * Idempotent - safe to call multiple times with the same layout.
+ */
+export function ensureScrollForwardingMatchesLayout(
+  view: WebContentsView,
+  blockId: string,
+  rendererWebContents: WebContents,
+  layout: "inline" | "full"
+): void {
+  if (layout === "inline") {
+    injectScrollForwardingScript(view, blockId, rendererWebContents, layout);
+  } else {
+    removeScrollForwardingScript(view, blockId);
   }
 }
