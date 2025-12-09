@@ -56,7 +56,7 @@ function reducer(state: DevToolsState, action: Action): DevToolsState {
   }
 }
 
-export function useDevToolsState(blockId: string) {
+export function useDevToolsState(viewId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export function useDevToolsState(blockId: string) {
     }
 
     browserApi
-      .getDevToolsState(blockId)
+      .getDevToolsState(viewId)
       .then((result) => {
         if (!isSubscribed) {
           return;
@@ -88,7 +88,7 @@ export function useDevToolsState(blockId: string) {
       .catch((error) => {
         if (isSubscribed) {
           console.error(
-            `Failed to fetch DevTools state for block ${blockId}:`,
+            `Failed to fetch DevTools state for view ${viewId}:`,
             error
           );
           dispatch({ type: "SET_AVAILABLE", isOpen: false });
@@ -98,7 +98,7 @@ export function useDevToolsState(blockId: string) {
     return () => {
       isSubscribed = false;
     };
-  }, [blockId]);
+  }, [viewId]);
 
   const toggleDevTools = useCallback(async () => {
     const browserApi = window.electronAPI?.browser;
@@ -114,7 +114,7 @@ export function useDevToolsState(blockId: string) {
     dispatch({ type: "START_TOGGLE" });
 
     try {
-      const result = await browserApi.toggleDevTools(blockId);
+      const result = await browserApi.toggleDevTools(viewId);
       if (result?.success) {
         dispatch({ type: "FINISH_TOGGLE", isOpen: result.isOpen });
         return;
@@ -122,19 +122,19 @@ export function useDevToolsState(blockId: string) {
 
       if (result?.error) {
         console.error(
-          `Failed to toggle DevTools for block ${blockId}: ${result.error}`
+          `Failed to toggle DevTools for view ${viewId}: ${result.error}`
         );
       }
 
       dispatch({ type: "END_TOGGLE_WITH_ERROR" });
     } catch (error) {
       console.error(
-        `Unexpected error while toggling DevTools for block ${blockId}:`,
+        `Unexpected error while toggling DevTools for view ${viewId}:`,
         error
       );
       dispatch({ type: "END_TOGGLE_WITH_ERROR" });
     }
-  }, [blockId, state.isBusy]);
+  }, [state.isBusy, viewId]);
 
   return {
     ...state,

@@ -8,6 +8,7 @@ interface ElectronAPI {
     availableFormats: () => string[];
   };
   updateBrowser: (data: {
+    viewId: string;
     blockId: string;
     url: string;
     bounds: { x: number; y: number; width: number; height: number };
@@ -15,15 +16,16 @@ interface ElectronAPI {
     layout?: "inline" | "full";
   }) => void;
   removeBrowser: (blockId: string) => void;
+  removeView: (viewId: string) => void;
   browser: {
     getDevToolsState: (
-      blockId: string
+      viewId: string
     ) => Promise<{ success: boolean; isOpen: boolean; error?: string }>;
     toggleDevTools: (
-      blockId: string
+      viewId: string
     ) => Promise<{ success: boolean; isOpen: boolean; error?: string }>;
     goBack: (
-      blockId: string
+      viewId: string
     ) => Promise<{ success: boolean; canGoBack: boolean; error?: string }>;
     createBlock: (url: string, sourceBlockId?: string) => void;
     setScrollPercent: (blockId: string, scrollPercent: number) => void;

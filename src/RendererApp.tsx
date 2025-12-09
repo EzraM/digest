@@ -22,6 +22,7 @@ import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
 import { RendererRouteProvider } from "./context/RendererRouteContext";
+import { RendererRoute } from "./hooks/useRendererRouter";
 import {
   BlockNotificationProvider,
   BlockNotificationContext,
@@ -64,9 +65,45 @@ const RendererAppContent = () => {
   });
 
   const activeDocumentId = activeDocument?.id ?? null;
-  const { route, navigateToDoc, navigateToBlock } = useRendererRouter(
+  const routeContext = useRendererRouter(
     activeDocumentId,
-    activeDocumentId
+    activeDocumentId,
+    editor
+  );
+  const { route } = routeContext;
+  const [displayedRoute, setDisplayedRoute] = useState<RendererRoute>(route);
+  const [handoffTarget, setHandoffTarget] = useState<RendererRoute | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (route.kind === "block") {
+      // Entering block view; keep doc visible until full view ready
+      if (displayedRoute.kind === "doc") {
+        setHandoffTarget(route);
+      } else {
+        setDisplayedRoute(route);
+        setHandoffTarget(null);
+      }
+    } else {
+      // Doc route: render doc and clear handoff
+      setDisplayedRoute(route);
+      setHandoffTarget(null);
+    }
+  }, [displayedRoute.kind, route]);
+
+  const handleFullscreenReady = useCallback(
+    (viewId: string) => {
+      if (
+        handoffTarget &&
+        handoffTarget.kind === "block" &&
+        `${handoffTarget.blockId}:full` === viewId
+      ) {
+        setDisplayedRoute(handoffTarget);
+        setHandoffTarget(null);
+      }
+    },
+    [handoffTarget]
   );
 
   const {
@@ -135,6 +172,11 @@ const RendererAppContent = () => {
   });
 
   const activeDocumentTitle = activeDocument?.title ?? null;
+  const isHandoff =
+    handoffTarget !== null &&
+    handoffTarget.kind === "block" &&
+    displayedRoute.kind === "doc" &&
+    route.kind === "block";
 
   const showDebug = useCallback(async () => {
     setIsDebugSidebarVisible(true);
@@ -199,15 +241,26 @@ const RendererAppContent = () => {
 
   return (
     <MantineProvider theme={theme} defaultColorScheme="auto">
-      <RendererRouteProvider value={{ route, navigateToDoc, navigateToBlock }}>
-        {route.kind === "block" ? (
+      <RendererRouteProvider value={routeContext}>
+        {route.kind === "block" && (
           <BlockRouteView
             blockId={route.blockId}
-            docId={route.docId ?? activeDocumentId}
+            docId={
+              routeContext.blockRouteProps?.docId ??
+              route.docId ??
+              activeDocumentId
+            }
             profileId={activeDocument?.profileId ?? null}
-            editor={editor}
+            url={routeContext.blockRouteProps?.url ?? null}
+            title={routeContext.blockRouteProps?.title ?? "Block"}
+            viewId={`${route.blockId}:full`}
+            onUrlChange={(nextUrl) =>
+              routeContext.updateCachedBlockUrl(route.blockId, nextUrl)
+            }
+            onReady={handleFullscreenReady}
           />
-        ) : (
+        )}
+        {(displayedRoute.kind === "doc" || isHandoff) && (
           <RendererLayout
             isNavbarOpened={isNavbarOpened}
             onNavbarToggle={toggleNavbar}

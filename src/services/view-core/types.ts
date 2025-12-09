@@ -17,9 +17,6 @@ export type ViewEntry = {
   profile: string;
   layout: "inline" | "full";
   status: ViewStatus;
-  refCount: number; // Number of active component references
-  lastAccess: number; // Timestamp of last acquire/update
-  gcCandidate: boolean; // Marked for potential cleanup
 };
 
 export type ViewWorld = ReadonlyMap<string, ViewEntry>;

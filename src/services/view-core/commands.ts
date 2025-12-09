@@ -16,10 +16,7 @@ export type Command =
       layout?: "inline" | "full";
     }
   | { type: "updateUrl"; id: string; url: string }
-  | { type: "remove"; id: string } // Explicit removal (block deleted)
-  | { type: "acquire"; id: string } // Component wants view
-  | { type: "release"; id: string } // Component done with view
-  | { type: "gc" } // Run garbage collection
+  | { type: "remove"; id: string }
   | { type: "markLoading"; id: string }
   | { type: "markReady"; id: string; canGoBack: boolean }
   | { type: "markError"; id: string; code: number; message: string }

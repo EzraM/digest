@@ -40,8 +40,11 @@ export const site = createReactBlockSpec(
       } = useDevToolsState(block.id);
       const { canGoBack, isNavigatingBack, goBack } = useBrowserNavigationState(
         block.id,
-        editor,
-        url
+        url,
+        {
+          editor,
+          blockIdForEditorSync: block.id,
+        }
       );
 
       const containerRef = useRef<HTMLDivElement>(null);

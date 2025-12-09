@@ -26,6 +26,12 @@ export const BlockNotificationContainer = ({
 
   const { pendingBlockIds, removeNotification } = context;
 
+  // Note: We don't check editor.view availability here because:
+  // 1. On initial mount, the view doesn't exist yet (BlockNoteView creates it)
+  // 2. During transitions, the view might be torn down, but we can't distinguish
+  //    between these cases reliably
+  // Instead, we use try-catch around editor.getBlock() calls as a safety net
+
   useEffect(() => {
     if (pendingBlockIds.length > 0) {
       log.debug(
@@ -38,24 +44,30 @@ export const BlockNotificationContainer = ({
   return (
     <>
       {pendingBlockIds.map((blockId) => {
-        const block = editor.getBlock(blockId);
-        if (!block || block.type !== "site") {
+        try {
+          const block = editor.getBlock(blockId);
+          if (!block || block.type !== "site") {
+            return null;
+          }
+
+          const url = block.props.url;
+          if (!url) {
+            return null;
+          }
+
+          return (
+            <SiteBlockNotification
+              key={blockId}
+              blockId={blockId}
+              url={url}
+              onAnimationComplete={() => removeNotification(blockId)}
+            />
+          );
+        } catch (error) {
+          // Editor view may become unavailable during route transitions
+          // Silently skip rendering this notification
           return null;
         }
-
-        const url = block.props.url;
-        if (!url) {
-          return null;
-        }
-
-        return (
-          <SiteBlockNotification
-            key={blockId}
-            blockId={blockId}
-            url={url}
-            onAnimationComplete={() => removeNotification(blockId)}
-          />
-        );
       })}
     </>
   );

@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     availableFormats: () => clipboard.availableFormats(),
   },
   updateBrowser: (data: {
+    viewId: string;
     blockId: string;
     url: string;
     bounds: { x: number; y: number; width: number; height: number };
@@ -35,13 +36,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeBrowser: (blockId: string) => {
     ipcRenderer.send("remove-browser", blockId);
   },
-  acquireView: (blockId: string) => {
-    log.debug(`Acquiring view for block ${blockId}`, "preload");
-    ipcRenderer.send("acquire-view", blockId);
-  },
-  releaseView: (blockId: string) => {
-    log.debug(`Releasing view for block ${blockId}`, "preload");
-    ipcRenderer.send("release-view", blockId);
+  removeView: (viewId: string) => {
+    log.debug(`Removing view ${viewId}`, "preload");
+    ipcRenderer.send("remove-view", viewId);
   },
   browser: {
     getDevToolsState: (blockId: string) =>

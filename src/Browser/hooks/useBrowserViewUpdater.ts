@@ -8,11 +8,13 @@ type Bounds = { x: number; y: number; width: number; height: number };
  * It stores the latest url and bounds in refs to avoid unnecessary re-renders
  * and sends a consolidated update only when both are available.
  *
- * @param blockId The ID of the block to update.
+ * @param viewId The ID of the view (layout-qualified, e.g., "blockId" or "blockId:full").
+ * @param blockId The ID of the block (for block-level operations like scroll save).
  * @param layout The layout mode ('inline' or 'full').
  * @returns An object with stable `handleUrlChange` and `handleBoundsChange` callbacks.
  */
 export const useBrowserViewUpdater = (
+  viewId: string,
   blockId: string,
   layout?: "inline" | "full"
 ) => {
@@ -30,6 +32,7 @@ export const useBrowserViewUpdater = (
     // Only send the update if we have both a URL and bounds.
     if (urlRef.current && boundsRef.current) {
       window.electronAPI.updateBrowser({
+        viewId,
         blockId,
         url: urlRef.current,
         bounds: boundsRef.current,
@@ -37,7 +40,7 @@ export const useBrowserViewUpdater = (
         layout: layoutRef.current,
       });
     }
-  }, [blockId, profileId]);
+  }, [viewId, blockId, profileId]);
 
   const handleUrlChange = useCallback(
     (url: string | null) => {

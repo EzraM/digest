@@ -54,10 +54,17 @@ export function createBrowserHandlers(
       type: "on",
       fn: (_event, data) => {
         log.debug(
-          `Received update-browser-view event for block ${data.blockId}`,
+          `Received update-browser-view event for view ${data.viewId}`,
           "main"
         );
         viewStore.handleBlockViewUpdate(data);
+      },
+    },
+    "remove-view": {
+      type: "on",
+      fn: (_event, viewId: string) => {
+        log.debug(`Received remove-view for view ${viewId}`, "main");
+        viewStore.handleRemoveView(viewId);
       },
     },
     "browser:create-block": {
@@ -82,20 +89,6 @@ export function createBrowserHandlers(
           "main"
         );
         viewStore.setScrollPercent(data.blockId, data.scrollPercent);
-      },
-    },
-    "acquire-view": {
-      type: "on",
-      fn: (_event, blockId: string) => {
-        log.debug(`Received acquire-view for block ${blockId}`, "main");
-        viewStore.acquireView(blockId);
-      },
-    },
-    "release-view": {
-      type: "on",
-      fn: (_event, blockId: string) => {
-        log.debug(`Received release-view for block ${blockId}`, "main");
-        viewStore.releaseView(blockId);
       },
     },
   };

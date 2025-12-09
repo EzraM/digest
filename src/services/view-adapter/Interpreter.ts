@@ -1,10 +1,10 @@
 import { WebContentsView, BrowserWindow } from "electron";
 import { Command } from "../view-core/commands";
-import { ViewWorld, Rect } from "../view-core/types";
+import { Rect } from "../view-core/types";
 import { HandleRegistry } from "./HandleRegistry";
 import { ViewLayerManager, ViewLayer } from "../ViewLayerManager";
 import { getProfilePartition } from "../../config/profiles";
-import { ensureScrollForwardingMatchesLayout } from "../ScrollForwardingService";
+import { injectScrollForwardingScript } from "../ScrollForwardingService";
 import { log } from "../../utils/mainLogger";
 import { DEV_CONFIG } from "../../config/development";
 
@@ -30,15 +30,14 @@ export class Interpreter {
    * Execute side effects for a command.
    * Called AFTER the reducer has produced the new world.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interpret(cmd: Command, prevWorld: ViewWorld, nextWorld: ViewWorld): void {
+  interpret(cmd: Command): void {
     switch (cmd.type) {
       case "create":
         this.createView(cmd.id, cmd.url, cmd.bounds, cmd.profile, cmd.layout);
         break;
 
       case "updateBounds":
-        this.updateBounds(cmd.id, cmd.bounds, cmd.layout, nextWorld);
+        this.updateBounds(cmd.id, cmd.bounds);
         break;
 
       case "remove":
@@ -137,8 +136,8 @@ export class Interpreter {
       // Notify that view was created (this will attach event listeners)
       this.onViewCreated(id, newView);
 
-      // Ensure scroll forwarding matches layout (enforces invariant)
-      ensureScrollForwardingMatchesLayout(
+      // Inject scroll forwarding for inline layout (set once at creation)
+      injectScrollForwardingScript(
         newView,
         id,
         this.rendererWebContents,
@@ -183,12 +182,7 @@ export class Interpreter {
     }
   }
 
-  private updateBounds(
-    id: string,
-    bounds: Rect,
-    layout: "inline" | "full" | undefined,
-    nextWorld: ViewWorld
-  ): void {
+  private updateBounds(id: string, bounds: Rect): void {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
         `Interpreter: baseWindow is destroyed, skipping bounds update for blockId: ${id}`,
@@ -212,39 +206,11 @@ export class Interpreter {
         `Updated bounds for blockId: ${id}: ${JSON.stringify(bounds)}`,
         "Interpreter"
       );
-
-      // Ensure scroll forwarding matches layout (enforces invariant on any view update)
-      // Use layout from command if provided, otherwise from world state
-      const layoutToUse = layout ?? nextWorld.get(id)?.layout;
-      if (layoutToUse) {
-        ensureScrollForwardingMatchesLayout(
-          view,
-          id,
-          this.rendererWebContents,
-          layoutToUse
-        );
-      }
     } catch (error) {
       log.debug(
         `Failed to update bounds for blockId: ${id}. Error: ${error}`,
         "Interpreter"
       );
-    }
-  }
-
-  /**
-   * Handle garbage collection by destroying views that were removed from the world.
-   */
-  private handleGC(prevWorld: ViewWorld, nextWorld: ViewWorld): void {
-    // Find views that were in prevWorld but not in nextWorld
-    for (const [id] of prevWorld) {
-      if (!nextWorld.has(id)) {
-        log.debug(
-          `[GC] Removing view ${id} that was garbage collected`,
-          "Interpreter"
-        );
-        this.removeView(id);
-      }
     }
   }
 

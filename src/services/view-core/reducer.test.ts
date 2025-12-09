@@ -15,6 +15,7 @@ describe('ViewWorld reducer', () => {
       url: 'https://example.com',
       bounds: { x: 0, y: 0, width: 800, height: 600 },
       profile: 'default',
+      layout: 'inline',
       status: { type: 'loading' },
     });
   });

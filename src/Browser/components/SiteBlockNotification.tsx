@@ -29,7 +29,7 @@ export const SiteBlockNotification = ({
   // Create a preview browser view with a unique blockId
   const previewBlockId = `${blockId}-preview`;
   const { handleUrlChange, handleBoundsChange } =
-    useBrowserViewUpdater(previewBlockId);
+    useBrowserViewUpdater(previewBlockId, previewBlockId, "inline");
 
   // Set up preview browser view bounds tracking
   useSize(previewRef, handleBoundsChange);

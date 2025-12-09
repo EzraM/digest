@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from "react";
+import React, { useEffect, useCallback, useState, useRef } from "react";
 import { PageProps } from "../types";
 import { BrowserSlot } from "./BrowserSlot";
 import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
@@ -11,11 +11,25 @@ export function Page({
   url,
   layout = "inline",
   scrollPercent,
-}: PageProps & { layout?: "inline" | "full" }) {
+  viewId: explicitViewId,
+  onReady,
+}: PageProps & {
+  layout?: "inline" | "full";
+  viewId?: string;
+  onReady?: (viewId: string) => void;
+}) {
+  // Layout-qualified view ID: separates inline from fullscreen views
+  const viewId = explicitViewId ?? (layout === "full" ? `${blockId}:full` : blockId);
+
+  console.log(
+    `[Page] Render: blockId=${blockId}, layout=${layout}, viewId=${viewId}`
+  );
+
   const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
-    useBrowserViewUpdater(blockId, layout);
+    useBrowserViewUpdater(viewId, blockId, layout);
   const { initStatus, retryInitialization, getInitAttemptRef } =
-    useBrowserInitialization(blockId);
+    useBrowserInitialization(viewId);
+  const hasReportedReadyRef = useRef(false);
 
   // Calculate height based on mode
   const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
@@ -52,6 +66,19 @@ export function Page({
     }
   }, [url, handleUrlChange]);
 
+  // Reset ready notification when view changes
+  useEffect(() => {
+    hasReportedReadyRef.current = false;
+  }, [viewId]);
+
+  useEffect(() => {
+    if (!onReady) return;
+    if (initStatus.state === "initialized" && !hasReportedReadyRef.current) {
+      hasReportedReadyRef.current = true;
+      onReady(viewId);
+    }
+  }, [initStatus.state, onReady, viewId]);
+
   // Send scrollPercent to main process when component mounts or scrollPercent changes
   useEffect(() => {
     if (scrollPercent !== undefined) {
@@ -62,17 +89,15 @@ export function Page({
     }
   }, [blockId, scrollPercent]);
 
-  // Acquire/release pattern for view lifecycle management
+  // View lifecycle: destroy view immediately on unmount
   useEffect(() => {
-    // Acquire on mount
-    window.electronAPI.acquireView(blockId);
-
+    console.log(`[Page] Mount effect: viewId=${viewId}, layout=${layout}`);
     return () => {
-      // Release on unmount (does NOT destroy immediately)
-      // The view will be garbage collected after a delay if not reacquired
-      window.electronAPI.releaseView(blockId);
+      console.log(`[Page] Unmount cleanup: viewId=${viewId}, layout=${layout}`);
+      // Destroy view immediately on unmount
+      window.electronAPI.removeView(viewId);
     };
-  }, [blockId]);
+  }, [viewId, layout]);
 
   const handleRetry = () => {
     retryInitialization();

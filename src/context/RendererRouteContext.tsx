@@ -1,13 +1,11 @@
 import React, { ReactNode, createContext, useContext } from "react";
-import { RendererRoute } from "../hooks/useRendererRouter";
+import { RouterHelpers } from "../hooks/useRendererRouter";
 
-type RendererRouteContextValue = {
-  route: RendererRoute;
-  navigateToDoc: (docId: string, focusBlockId?: string | null) => void;
-  navigateToBlock: (blockId: string, docId?: string | null) => void;
-};
+export type RendererRouteContextValue = RouterHelpers;
 
-const RendererRouteContext = createContext<RendererRouteContextValue | null>(null);
+const RendererRouteContext = createContext<RendererRouteContextValue | null>(
+  null
+);
 
 export const RendererRouteProvider = ({
   value,
@@ -24,7 +22,9 @@ export const RendererRouteProvider = ({
 export const useRendererRoute = (): RendererRouteContextValue => {
   const context = useContext(RendererRouteContext);
   if (!context) {
-    throw new Error("useRendererRoute must be used within a RendererRouteProvider");
+    throw new Error(
+      "useRendererRoute must be used within a RendererRouteProvider"
+    );
   }
   return context;
 };

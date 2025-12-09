@@ -16,18 +16,25 @@ interface NavigationState {
   goBack: () => void;
 }
 
+type NavigationOptions = {
+  editor?: CustomBlockNoteEditor;
+  blockIdForEditorSync?: string;
+  onUrlChange?: (url: string) => void;
+};
+
 /**
- * Hook that keeps track of browser navigation state for a site block.
- * It listens to navigation events from the main process and ensures the
- * block's stored URL stays in sync with the live browser view.
+ * Hook that keeps track of browser navigation state for a browser view.
+ * It listens to navigation events from the main process and can optionally
+ * sync URL updates back to the editor or a caller-provided callback.
  */
 export function useBrowserNavigationState(
-  blockId: string,
-  editor: CustomBlockNoteEditor | undefined,
-  initialUrl: string
+  viewId: string,
+  initialUrl: string,
+  options?: NavigationOptions
 ): NavigationState {
   const [canGoBack, setCanGoBack] = useState(false);
   const [isNavigatingBack, setIsNavigatingBack] = useState(false);
+  const { editor, blockIdForEditorSync = viewId, onUrlChange } = options ?? {};
 
   // Keep the block's stored URL in sync when navigation updates are received
   useEffect(() => {
@@ -39,23 +46,32 @@ export function useBrowserNavigationState(
 
     const unsubscribe = window.electronAPI.onBrowserNavigation(
       (event: NavigationUpdateEvent) => {
-        if (!isMounted || event.blockId !== blockId) {
+        const eventMatches =
+          event.blockId === viewId ||
+          (!!blockIdForEditorSync && event.blockId === blockIdForEditorSync);
+
+        if (!isMounted || !eventMatches) {
           return;
         }
 
         setCanGoBack(Boolean(event.canGoBack));
         setIsNavigatingBack(false);
 
+        if (options?.onUrlChange && event.url) {
+          options.onUrlChange(event.url);
+        }
+
         if (!editor) {
           return;
         }
 
-        const block = editor.getBlock(blockId);
+        const block = editor.getBlock(blockIdForEditorSync);
         if (!block || block.type !== "site") {
           return;
         }
 
-        const currentUrl = (block.props as { url?: string } | undefined)?.url ?? "";
+        const currentUrl =
+          (block.props as { url?: string } | undefined)?.url ?? "";
 
         if (event.url && event.url !== currentUrl) {
           editor.updateBlock(block, {
@@ -74,7 +90,7 @@ export function useBrowserNavigationState(
         unsubscribe();
       }
     };
-  }, [blockId, editor]);
+  }, [blockIdForEditorSync, editor, onUrlChange, viewId]);
 
   // Keep the stored URL aligned with the initial prop when the hook mounts
   useEffect(() => {
@@ -82,7 +98,7 @@ export function useBrowserNavigationState(
       return;
     }
 
-    const block = editor.getBlock(blockId);
+    const block = editor.getBlock(blockIdForEditorSync);
     if (!block || block.type !== "site") {
       return;
     }
@@ -96,7 +112,7 @@ export function useBrowserNavigationState(
         },
       } as CustomPartialBlock);
     }
-  }, [blockId, editor, initialUrl]);
+  }, [blockIdForEditorSync, editor, initialUrl]);
 
   const handleGoBack = useCallback(async () => {
     const browserApi = window.electronAPI?.browser;
@@ -107,16 +123,16 @@ export function useBrowserNavigationState(
     setIsNavigatingBack(true);
 
     try {
-      const result = await browserApi.goBack(blockId);
+      const result = await browserApi.goBack(viewId);
       if (!result?.success && result?.canGoBack === false) {
         setCanGoBack(false);
         setIsNavigatingBack(false);
       }
     } catch (error) {
-      console.error(`Failed to navigate back for block ${blockId}:`, error);
+      console.error(`Failed to navigate back for view ${viewId}:`, error);
       setIsNavigatingBack(false);
     }
-  }, [blockId, isNavigatingBack]);
+  }, [isNavigatingBack, viewId]);
 
   return {
     canGoBack,

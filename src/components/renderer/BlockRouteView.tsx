@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React from "react";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
 import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
 import { Page } from "../../Browser/components/Page";
-import { CustomBlockNoteEditor } from "../../types/schema";
 import { useRendererRoute } from "../../context/RendererRouteContext";
 import { DocumentProvider } from "../../context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
@@ -12,54 +11,48 @@ type BlockRouteViewProps = {
   blockId: string;
   docId: string | null;
   profileId: string | null;
-  editor: CustomBlockNoteEditor;
+  url: string | null;
+  title: string;
+  viewId: string;
+  onUrlChange?: (url: string) => void;
+  onReady?: (viewId: string) => void;
 };
 
 export const BlockRouteView = ({
   blockId,
   docId,
   profileId,
-  editor,
+  url,
+  title,
+  viewId,
+  onUrlChange,
+  onReady,
 }: BlockRouteViewProps) => {
-  const { navigateToDoc } = useRendererRoute();
-  const [url, setUrl] = useState<string>("");
-  const { copied, copy: handleCopy } = useCopyToClipboard(url);
+  const routeContext = useRendererRoute();
+
+  // Type guard: ensure we're on a block route
+  if (routeContext.route.kind !== "block") {
+    return null;
+  }
+
+  const { navigateToDoc } = routeContext;
+
+  const urlString = url ?? "";
+  const { copied, copy: handleCopy } = useCopyToClipboard(urlString);
   const {
     isAvailable: devToolsAvailable,
     isOpen: devToolsOpen,
     isBusy: isTogglingDevTools,
     toggleDevTools,
-  } = useDevToolsState(blockId);
+  } = useDevToolsState(viewId);
   const { canGoBack, isNavigatingBack, goBack } = useBrowserNavigationState(
-    blockId,
-    editor,
-    url
+    viewId,
+    urlString,
+    {
+      blockIdForEditorSync: blockId,
+      onUrlChange,
+    }
   );
-
-  const blockTitle = useMemo(() => {
-    const block = editor.getBlock(blockId);
-    return block?.type === "site" ? "Site" : "Block";
-  }, [editor, blockId]);
-
-  useEffect(() => {
-    const updateFromBlock = () => {
-      const block = editor.getBlock(blockId);
-      if (!block || block.type !== "site") {
-        return;
-      }
-      const nextUrl = (block.props as { url?: string } | undefined)?.url ?? "";
-      setUrl(nextUrl);
-    };
-
-    updateFromBlock();
-    const unsubscribe = editor.onChange(updateFromBlock);
-
-    return () => {
-      if (typeof unsubscribe === "function") {
-        unsubscribe();
-      }
-    };
-  }, [editor, blockId]);
 
   const handleMinimize = () => {
     if (docId) {
@@ -85,7 +78,7 @@ export const BlockRouteView = ({
       >
         <div style={{ fontWeight: 600 }}>Unable to load this site block.</div>
         <div style={{ fontSize: "0.9rem", color: "#666" }}>
-          {blockTitle} is missing a URL.
+          {title} is missing a URL.
         </div>
         <button
           type="button"
@@ -199,10 +192,10 @@ export const BlockRouteView = ({
               height: "26px",
               lineHeight: "26px",
             }}
-            title={url}
+            title={urlString}
             aria-label={copied ? "Copied link" : "Copy link"}
           >
-            {url}
+            {urlString}
           </button>
           {devToolsAvailable && (
             <button
@@ -241,7 +234,13 @@ export const BlockRouteView = ({
             overflow: "hidden",
           }}
         >
-          <Page blockId={blockId} url={url} layout="full" />
+          <Page
+            blockId={blockId}
+            url={urlString}
+            layout="full"
+            viewId={viewId}
+            onReady={onReady}
+          />
         </div>
       </div>
     </DocumentProvider>
