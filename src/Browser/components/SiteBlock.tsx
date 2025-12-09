@@ -13,6 +13,9 @@ const sitePropSchema = {
   url: {
     default: "" as const,
   },
+  scrollPercent: {
+    default: undefined as number | undefined,
+  },
 } as const;
 
 // Create a type-safe site block spec
@@ -27,7 +30,7 @@ export const site = createReactBlockSpec(
       const { block, editor } = props as typeof props & {
         editor: CustomBlockNoteEditor;
       };
-      const { url } = block.props;
+      const { url, scrollPercent } = block.props;
       const { copied, copy: handleCopy } = useCopyToClipboard(url);
       const {
         isAvailable: devToolsAvailable,
@@ -208,7 +211,7 @@ export const site = createReactBlockSpec(
           </div>
 
           {/* Browser content */}
-          <Page blockId={block.id} url={url} layout="inline" />
+          <Page blockId={block.id} url={url} layout="inline" scrollPercent={scrollPercent} />
         </div>
       );
     },

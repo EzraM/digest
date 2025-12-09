@@ -95,6 +95,29 @@ export const useRendererEditor = (
     return unsubscribe;
   }, []);
 
+  // Handle scroll position updates from main process
+  useEffect(() => {
+    if (!window.electronAPI?.onBrowserScrollPercent || !currentEditor) {
+      return;
+    }
+
+    const unsubscribe = window.electronAPI.onBrowserScrollPercent((data) => {
+      const { blockId, scrollPercent } = data;
+      if (!currentEditor) return;
+
+      // Update the block props with the new scroll percent
+      const block = currentEditor.getBlock(blockId);
+      if (block && block.type === "site") {
+        currentEditor.updateBlock(blockId, {
+          type: "site",
+          props: { ...block.props, scrollPercent },
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
   useBrowserScrollForward();
   useDocumentSync(editor);
 

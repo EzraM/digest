@@ -15,6 +15,9 @@ import { DEV_CONFIG } from "../../config/development";
  * to determine what side effects are needed.
  */
 export class Interpreter {
+  // Cache of pending scroll positions to restore (set by renderer on mount)
+  private pendingScrollRestores = new Map<string, number>();
+
   constructor(
     private baseWindow: BrowserWindow,
     private layerManager: ViewLayerManager | undefined,
@@ -140,6 +143,18 @@ export class Interpreter {
         this.rendererWebContents,
         layout ?? "inline"
       );
+
+      // Setup scroll position listener (works for both inline and full layouts)
+      this.setupScrollPositionListener(newView, id);
+
+      // Setup did-finish-load listener to inject scroll tracking and restore position
+      newView.webContents.on("did-finish-load", () => {
+        // Inject scroll tracking script
+        this.injectScrollTrackingScript(newView, id);
+
+        // Restore scroll position if we have one pending
+        this.restoreScrollPosition(newView, id);
+      });
 
       // Load URL
       log.debug(`Loading URL for blockId: ${id}: ${url}`, "Interpreter");
@@ -330,5 +345,137 @@ export class Interpreter {
         "Interpreter"
       );
     }
+  }
+
+  /**
+   * Set a pending scroll position to restore when the view finishes loading.
+   * Called from renderer when a block mounts with an existing scrollPercent.
+   */
+  setPendingScrollRestore(blockId: string, scrollPercent: number): void {
+    log.debug(
+      `Setting pending scroll restore for blockId: ${blockId}, scrollPercent: ${scrollPercent}`,
+      "Interpreter"
+    );
+    this.pendingScrollRestores.set(blockId, scrollPercent);
+  }
+
+  /**
+   * Inject script to track scroll position and send updates to main process.
+   */
+  private injectScrollTrackingScript(
+    view: WebContentsView,
+    blockId: string
+  ): void {
+    const scrollTrackingScript = `
+      (function() {
+        // Prevent multiple injections
+        if (window.__scrollTrackingInjected) {
+          return;
+        }
+        window.__scrollTrackingInjected = true;
+
+        window.addEventListener('scrollend', () => {
+          const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+          const scrollPercent = window.scrollY / maxScroll;
+
+          // Send to main process via console message (same pattern as scroll forwarding)
+          console.log('__DIGEST_SCROLL__' + JSON.stringify({
+            type: 'scroll-position',
+            blockId: '${blockId}',
+            scrollPercent: scrollPercent
+          }));
+        });
+      })();
+    `;
+
+    view.webContents
+      .executeJavaScript(scrollTrackingScript)
+      .catch((error) => {
+        log.debug(
+          `Failed to inject scroll tracking script for blockId: ${blockId}: ${error}`,
+          "Interpreter"
+        );
+      });
+  }
+
+  /**
+   * Setup listener for scroll position messages from a view.
+   */
+  private setupScrollPositionListener(
+    view: WebContentsView,
+    blockId: string
+  ): void {
+    const consoleListener = (event: any, level: number, message: string) => {
+      try {
+        if (
+          typeof message === "string" &&
+          message.startsWith("__DIGEST_SCROLL__")
+        ) {
+          const jsonStr = message.replace("__DIGEST_SCROLL__", "");
+          const parsed = JSON.parse(jsonStr);
+
+          if (parsed.type === "scroll-position" && parsed.blockId === blockId) {
+            const scrollPercent = parsed.scrollPercent;
+
+            log.debug(
+              `Received scroll position for blockId: ${blockId}, scrollPercent: ${scrollPercent}`,
+              "Interpreter"
+            );
+
+            // Send to renderer to persist in block props
+            this.rendererWebContents.send("browser:save-scroll-percent", {
+              blockId,
+              scrollPercent,
+            });
+          }
+        }
+      } catch (e) {
+        // Not a JSON message from our script, ignore
+      }
+    };
+
+    view.webContents.on("console-message", consoleListener);
+  }
+
+  /**
+   * Restore scroll position after page loads.
+   */
+  private restoreScrollPosition(view: WebContentsView, blockId: string): void {
+    const scrollPercent = this.pendingScrollRestores.get(blockId);
+
+    if (scrollPercent === undefined) {
+      return;
+    }
+
+    log.debug(
+      `Restoring scroll position for blockId: ${blockId}, scrollPercent: ${scrollPercent}`,
+      "Interpreter"
+    );
+
+    const restoreScript = `
+      (function() {
+        const scrollPercent = ${scrollPercent};
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        const scrollY = scrollPercent * Math.max(0, maxScroll);
+        window.scrollTo(0, scrollY);
+      })();
+    `;
+
+    view.webContents
+      .executeJavaScript(restoreScript)
+      .then(() => {
+        log.debug(
+          `Successfully restored scroll position for blockId: ${blockId}`,
+          "Interpreter"
+        );
+        // Clear the pending restore
+        this.pendingScrollRestores.delete(blockId);
+      })
+      .catch((error) => {
+        log.debug(
+          `Failed to restore scroll position for blockId: ${blockId}: ${error}`,
+          "Interpreter"
+        );
+      });
   }
 }

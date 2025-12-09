@@ -10,6 +10,7 @@ export function Page({
   blockId,
   url,
   layout = "inline",
+  scrollPercent,
 }: PageProps & { layout?: "inline" | "full" }) {
   const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
     useBrowserViewUpdater(blockId, layout);
@@ -50,6 +51,16 @@ export function Page({
       handleUrlChange(url);
     }
   }, [url, handleUrlChange]);
+
+  // Send scrollPercent to main process when component mounts or scrollPercent changes
+  useEffect(() => {
+    if (scrollPercent !== undefined) {
+      console.log(
+        `[Browser] Setting scroll percent for blockId: ${blockId}, scrollPercent: ${scrollPercent}`
+      );
+      window.electronAPI.browser.setScrollPercent(blockId, scrollPercent);
+    }
+  }, [blockId, scrollPercent]);
 
   // Cleanup when component unmounts
   useEffect(() => {

@@ -74,5 +74,15 @@ export function createBrowserHandlers(
         }
       },
     },
+    "browser:set-scroll-percent": {
+      type: "on",
+      fn: (_event, data: { blockId: string; scrollPercent: number }) => {
+        log.debug(
+          `Received browser:set-scroll-percent for block ${data.blockId}: ${data.scrollPercent}`,
+          "main"
+        );
+        viewStore.setScrollPercent(data.blockId, data.scrollPercent);
+      },
+    },
   };
 }

@@ -196,4 +196,16 @@ export class ViewStore {
   ): void {
     this.events.setLinkClickCallback(callback);
   }
+
+  /**
+   * Set a pending scroll position to restore when the view finishes loading.
+   * Called from renderer when a block mounts with an existing scrollPercent.
+   */
+  setScrollPercent(blockId: string, scrollPercent: number): void {
+    log.debug(
+      `[${blockId}] Setting scroll percent: ${scrollPercent}`,
+      "ViewStore"
+    );
+    this.interpreter.setPendingScrollRestore(blockId, scrollPercent);
+  }
 }

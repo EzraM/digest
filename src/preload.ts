@@ -48,6 +48,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
       );
       ipcRenderer.send("browser:create-block", { url, sourceBlockId });
     },
+    setScrollPercent: (blockId: string, scrollPercent: number) => {
+      log.debug(
+        `Setting scroll percent for block ${blockId}: ${scrollPercent}`,
+        "preload"
+      );
+      ipcRenderer.send("browser:set-scroll-percent", { blockId, scrollPercent });
+    },
   },
   addBlockEvent: (e: { type: "open" | "close" }) => {
     log.debug(`Sending event: block-menu:${e.type}`, "preload");
@@ -134,6 +141,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }) => void
   ) => {
     const channel = "browser:scroll-forward";
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  onBrowserScrollPercent: (
+    callback: (data: { blockId: string; scrollPercent: number }) => void
+  ) => {
+    const channel = "browser:save-scroll-percent";
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);

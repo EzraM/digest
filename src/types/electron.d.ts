@@ -26,6 +26,7 @@ interface ElectronAPI {
       blockId: string
     ) => Promise<{ success: boolean; canGoBack: boolean; error?: string }>;
     createBlock: (url: string, sourceBlockId?: string) => void;
+    setScrollPercent: (blockId: string, scrollPercent: number) => void;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
   startSlashCommand: () => void;
@@ -60,6 +61,9 @@ interface ElectronAPI {
       direction: "up" | "down";
       deltaY: number;
     }) => void
+  ) => () => void;
+  onBrowserScrollPercent: (
+    callback: (data: { blockId: string; scrollPercent: number }) => void
   ) => () => void;
   onNewBrowserBlock: (
     callback: (data: { url: string; sourceBlockId?: string }) => void
