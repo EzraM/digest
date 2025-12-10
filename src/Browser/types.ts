@@ -13,18 +13,6 @@ export type BrowserInitStatus =
   | { state: "initialized" }
   | { state: "error"; error: BrowserInitError };
 
-export interface BrowserSlotProps {
-  blockId: string;
-  onBoundsChange?: (bounds: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }) => void;
-  initStatus: BrowserInitStatus;
-  onRetry?: () => void;
-}
-
 export interface BrowserInitError {
   friendlyTitle: string;
   friendlySubtitle?: string;
