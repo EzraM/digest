@@ -144,6 +144,31 @@ interface ElectronAPI {
       callback: (data: { document: DocumentRecord | null }) => void
     ) => () => void;
   };
+  image: {
+    saveImage: (params: {
+      arrayBuffer: ArrayBuffer;
+      mimeType: string;
+      fileName: string;
+      width?: number;
+      height?: number;
+      documentId?: string;
+    }) => Promise<{
+      id: string;
+      url: string;
+      width: number | null;
+      height: number | null;
+    }>;
+    getImageInfo: (id: string) => Promise<{
+      id: string;
+      file_name: string;
+      mime_type: string;
+      byte_length: number;
+      width: number | null;
+      height: number | null;
+      created_at: number;
+      document_id: string | null;
+    } | null>;
+  };
 }
 
 declare global {

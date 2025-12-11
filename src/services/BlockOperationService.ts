@@ -427,6 +427,13 @@ export class BlockOperationService {
   }
 
   /**
+   * Get current blocks array (for external access)
+   */
+  getBlocks(): any[] {
+    return this.yBlocks.toArray();
+  }
+
+  /**
    * Seed initial content if database is empty
    */
   async seedInitialContent(initialBlocks: any[]): Promise<void> {

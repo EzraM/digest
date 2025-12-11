@@ -64,6 +64,58 @@ export const useRendererEditor = (
     schema,
     initialContent: undefined,
     pasteHandler: (context) => handleElectronPaste(context),
+    uploadFile: async (file: File): Promise<string> => {
+      // Read file as ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+
+      // Get image dimensions if it's an image
+      let width: number | undefined;
+      let height: number | undefined;
+
+      if (file.type.startsWith("image/")) {
+        try {
+          const img = new Image();
+          const objectUrl = URL.createObjectURL(file);
+          await new Promise((resolve, reject) => {
+            img.onload = () => {
+              width = img.naturalWidth;
+              height = img.naturalHeight;
+              URL.revokeObjectURL(objectUrl);
+              resolve(null);
+            };
+            img.onerror = reject;
+            img.src = objectUrl;
+          });
+        } catch {
+          // If we can't get dimensions, continue without them
+        }
+      }
+
+      // Get active document ID (optional, for cleanup later)
+      let documentId: string | undefined;
+      try {
+        const activeDoc = await window.electronAPI?.documents?.getActive();
+        documentId = activeDoc?.id;
+      } catch {
+        // If we can't get document ID, continue without it
+      }
+
+      // Save image via IPC
+      if (!window.electronAPI?.image?.saveImage) {
+        throw new Error("Image API not available");
+      }
+
+      const result = await window.electronAPI.image.saveImage({
+        arrayBuffer,
+        mimeType: file.type,
+        fileName: file.name,
+        width,
+        height,
+        documentId,
+      });
+
+      return result.url;
+    },
   }) as CustomBlockNoteEditor;
 
   useEffect(() => {

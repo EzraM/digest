@@ -1,17 +1,18 @@
-import Database from 'better-sqlite3';
-import { app } from 'electron';
-import path from 'path';
-import fs from 'fs';
-import { MigrationRunner } from './MigrationRunner';
-import { Migration } from './Migration.interface';
-import { log } from '../utils/mainLogger';
-import { isDevelopment } from '../config/development';
+import Database from "better-sqlite3";
+import { app } from "electron";
+import path from "path";
+import fs from "fs";
+import { MigrationRunner } from "./MigrationRunner";
+import { Migration } from "./Migration.interface";
+import { log } from "../utils/mainLogger";
+import { isDevelopment } from "../config/development";
 
 // Import all migrations
-import migration001 from './migrations/001_initial_operations_schema';
-import migration002 from './migrations/002_add_events_table';
-import migration003 from './migrations/003_add_batch_tracking_columns';
-import migration004 from './migrations/004_profiles_and_document_hierarchy';
+import migration001 from "./migrations/001_initial_operations_schema";
+import migration002 from "./migrations/002_add_events_table";
+import migration003 from "./migrations/003_add_batch_tracking_columns";
+import migration004 from "./migrations/004_profiles_and_document_hierarchy";
+import migration005 from "./migrations/005_add_images_table";
 
 /**
  * Singleton database manager that handles initialization and migrations
@@ -28,6 +29,7 @@ export class DatabaseManager {
     migration002,
     migration003,
     migration004,
+    migration005,
   ];
 
   private constructor() {
@@ -55,13 +57,16 @@ export class DatabaseManager {
     try {
       let dbPath: string;
       if (isDevelopment()) {
-        const devDbDir = path.join(process.cwd(), 'db');
+        const devDbDir = path.join(process.cwd(), "db");
         fs.mkdirSync(devDbDir, { recursive: true });
-        dbPath = path.join(devDbDir, 'digest.db');
-        log.debug(`Using development database path at: ${dbPath}`, 'DatabaseManager');
+        dbPath = path.join(devDbDir, "digest.db");
+        log.debug(
+          `Using development database path at: ${dbPath}`,
+          "DatabaseManager"
+        );
       } else {
-        const userDataPath = app.getPath('userData');
-        dbPath = path.join(userDataPath, 'digest.db');
+        const userDataPath = app.getPath("userData");
+        dbPath = path.join(userDataPath, "digest.db");
       }
 
       // Ensure directory exists
@@ -69,12 +74,12 @@ export class DatabaseManager {
 
       // Create database connection
       this.db = new Database(dbPath);
-      
+
       // Enable WAL mode for better concurrency
-      this.db.exec('PRAGMA journal_mode = WAL');
-      this.db.exec('PRAGMA synchronous = NORMAL');
-      this.db.exec('PRAGMA cache_size = 1000');
-      this.db.exec('PRAGMA foreign_keys = ON');
+      this.db.exec("PRAGMA journal_mode = WAL");
+      this.db.exec("PRAGMA synchronous = NORMAL");
+      this.db.exec("PRAGMA cache_size = 1000");
+      this.db.exec("PRAGMA foreign_keys = ON");
 
       // Initialize migration runner
       this.migrationRunner = new MigrationRunner(this.db);
@@ -83,9 +88,12 @@ export class DatabaseManager {
       await this.migrationRunner.runMigrations(this.migrations);
 
       this.isInitialized = true;
-      log.debug(`Database initialized successfully at: ${dbPath}`, 'DatabaseManager');
+      log.debug(
+        `Database initialized successfully at: ${dbPath}`,
+        "DatabaseManager"
+      );
     } catch (error) {
-      log.debug(`Failed to initialize database: ${error}`, 'DatabaseManager');
+      log.debug(`Failed to initialize database: ${error}`, "DatabaseManager");
       throw error;
     }
   }
@@ -95,7 +103,7 @@ export class DatabaseManager {
    */
   getDatabase(): Database.Database {
     if (!this.db) {
-      throw new Error('Database not initialized. Call initialize() first.');
+      throw new Error("Database not initialized. Call initialize() first.");
     }
     return this.db;
   }
@@ -105,7 +113,7 @@ export class DatabaseManager {
    */
   getMigrationStatus() {
     if (!this.migrationRunner) {
-      throw new Error('Migration runner not initialized');
+      throw new Error("Migration runner not initialized");
     }
     return this.migrationRunner.getMigrationStatus();
   }
@@ -115,10 +123,10 @@ export class DatabaseManager {
    */
   async rollbackMigration(version: number): Promise<void> {
     if (!this.migrationRunner) {
-      throw new Error('Migration runner not initialized');
+      throw new Error("Migration runner not initialized");
     }
 
-    const migration = this.migrations.find(m => m.version === version);
+    const migration = this.migrations.find((m) => m.version === version);
     if (!migration) {
       throw new Error(`Migration ${version} not found`);
     }
@@ -135,7 +143,7 @@ export class DatabaseManager {
       this.db = null;
       this.migrationRunner = null;
       this.isInitialized = false;
-      log.debug('Database connection closed', 'DatabaseManager');
+      log.debug("Database connection closed", "DatabaseManager");
     }
   }
 

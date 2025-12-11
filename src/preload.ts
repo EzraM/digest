@@ -349,4 +349,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
       };
     },
   },
+  image: {
+    saveImage: (params: {
+      arrayBuffer: ArrayBuffer;
+      mimeType: string;
+      fileName: string;
+      width?: number;
+      height?: number;
+      documentId?: string;
+    }) => ipcRenderer.invoke("image:saveImage", params),
+    getImageInfo: (id: string) => ipcRenderer.invoke("image:getImageInfo", id),
+  },
 });

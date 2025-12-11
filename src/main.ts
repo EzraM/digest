@@ -1,4 +1,11 @@
-import { app, BrowserWindow, WebContentsView, globalShortcut } from "electron";
+import {
+  app,
+  BrowserWindow,
+  WebContentsView,
+  globalShortcut,
+  protocol,
+  session,
+} from "electron";
 import path from "path";
 import { ViewStore } from "./services/ViewStore";
 import { viteConfig } from "./config/vite";
@@ -24,10 +31,24 @@ import { createRendererHandlers } from "./ipc/handlers/rendererHandlers";
 import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
 import { createBlockHandlers } from "./ipc/handlers/blockHandlers";
 import { IPCServiceBridge } from "./services/IPCServiceBridge";
+import { ImageProtocolService } from "./services/ImageProtocolService";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
 }
+
+// Register custom protocol scheme before app is ready
+// This must be called before app.on("ready")
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "digest-image",
+    privileges: {
+      bypassCSP: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
+  },
+]);
 
 const EVENTS = {
   BLOCK_MENU: {
@@ -110,7 +131,7 @@ const createWindow = async () => {
               "script-src 'self' 'unsafe-inline'; " + // Allow inline scripts for development
               "style-src 'self' 'unsafe-inline'; " + // Allow inline styles
               "connect-src 'self' https://example.com; " + // Allow connections to example.com
-              "img-src 'self' data: https:; " + // Allow images from https and data URLs
+              "img-src 'self' data: https: digest-image: blob:; " + // Allow images from https, data URLs, custom protocol, and blob URLs
               "font-src 'self' data:;", // Allow fonts from data URLs
           ],
         },
@@ -210,6 +231,25 @@ const createWindow = async () => {
     "profileManager",
     [{ method: "listProfiles", alias: "list" }],
     "profiles"
+  );
+
+  // Expose ImageService methods
+  ipcServiceBridge.exposeService(
+    "imageService",
+    [
+      { method: "saveImage", alias: "saveImage" },
+      { method: "getImageInfo", alias: "getImageInfo" },
+    ],
+    "image"
+  );
+
+  // Initialize and register the image protocol handler
+  // Register on the session used by the renderer (not the default protocol)
+  const rendererSession = session.fromPartition("persist:main-app");
+  const imageProtocolService = ImageProtocolService.getInstance();
+  imageProtocolService.initialize(
+    services.imageService,
+    rendererSession.protocol
   );
 
   // Document loading/seeding will happen when renderer signals it's ready
@@ -375,7 +415,9 @@ const setupIpcHandlers = (
 
   registerMap(createBrowserHandlers(viewStore, createBrowserBlock));
   registerMap(createSlashCommandHandlers(slashCommandManager));
-  registerMap(createBlockHandlers(documentManager, rendererView));
+  registerMap(
+    createBlockHandlers(documentManager, rendererView, services.imageService)
+  );
   registerMap(
     createProfileHandlers(
       profileManager,

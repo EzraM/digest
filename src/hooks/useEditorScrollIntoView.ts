@@ -19,5 +19,3 @@ export const useEditorScrollIntoView = (focusBlockId?: string | null): void => {
     return () => clearTimeout(timeoutId);
   }, [focusBlockId]);
 };
-
-
