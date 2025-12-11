@@ -40,36 +40,43 @@ export function createBlockHandlers(
           }
 
           // Clean up images for deleted blocks BEFORE applying operations
-          // Extract blocks before deletion to get image IDs
+          // Extract deletions from the changes array
           if (imageService && operations.length > 0) {
-            const deleteOperations = (operations as BlockOperation[]).filter(
-              (op) => op.type === "delete"
-            );
-            for (const deleteOp of deleteOperations) {
-              try {
-                // Get the block from Y.js before it's deleted
-                const blocks = blockOperationService.getBlocks();
-                const blockToDelete = blocks.find(
-                  (b: any) => b.id === deleteOp.blockId
-                );
-                if (blockToDelete) {
+            for (const op of operations) {
+              // Check for deletions in the changes array
+              const changes = (op as any).changes ?? [];
+              const deletions = changes.filter((c: any) => c.type === "delete");
+
+              for (const deletion of deletions) {
+                try {
+                  const deletedBlock = deletion.block;
+                  if (!deletedBlock) continue;
+
                   const imageIds =
-                    ImageService.extractImageIdsFromBlock(blockToDelete);
+                    ImageService.extractImageIdsFromBlock(deletedBlock);
+
                   for (const imageId of imageIds) {
-                    imageService.deleteImage(imageId);
+                    const deleted = imageService.deleteImage(imageId);
+                    if (deleted) {
+                      log.debug(
+                        `Cleaned up image ${imageId} for deleted block ${deletedBlock.id}`,
+                        "blockHandlers"
+                      );
+                    }
                   }
+
                   if (imageIds.length > 0) {
                     log.debug(
-                      `Cleaned up ${imageIds.length} images for deleted block ${deleteOp.blockId}`,
+                      `Cleaned up ${imageIds.length} image(s) for deleted block ${deletedBlock.id}`,
                       "blockHandlers"
                     );
                   }
+                } catch (error) {
+                  log.debug(
+                    `Error cleaning up images for deleted block: ${error}`,
+                    "blockHandlers"
+                  );
                 }
-              } catch (error) {
-                log.debug(
-                  `Error cleaning up images for block ${deleteOp.blockId}: ${error}`,
-                  "blockHandlers"
-                );
               }
             }
           }

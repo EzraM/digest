@@ -15,49 +15,56 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
   const expectingYjsSyncRef = useRef(false);
 
   // ROLE 1: Debounced function to save user operations for persistence
-  const saveUserOperation = useDebounced<any[]>((document: any[]) => {
-    const operation = {
-      id: `user-edit-${Date.now()}`,
-      type: "update" as const,
-      blockId: "document-root",
-      source: "user" as const,
-      timestamp: Date.now(),
-      block: null as any,
-      document: document,
-      userId: "local-user",
-      requestId: `user-edit-${Date.now()}`,
-    };
+  const saveUserOperation = useDebounced<{ document: any[]; changes: any[] }>(
+    ({ document, changes }) => {
+      const operation = {
+        id: `user-edit-${Date.now()}`,
+        type: "update" as const,
+        blockId: "document-root",
+        source: "user" as const,
+        timestamp: Date.now(),
+        block: null as any,
+        document: document,
+        changes: changes,
+        userId: "local-user",
+        requestId: `user-edit-${Date.now()}`,
+      };
 
-    const origin = {
-      source: "user" as const,
-      batchId: `user-batch-${Date.now()}`,
-      requestId: `user-edit-${Date.now()}`,
-      timestamp: Date.now(),
-    };
+      const origin = {
+        source: "user" as const,
+        batchId: `user-batch-${Date.now()}`,
+        requestId: `user-edit-${Date.now()}`,
+        timestamp: Date.now(),
+      };
 
-    log.debug(
-      `Saving user operation with ${document.length} blocks (after 2s delay)`,
-      "useDocumentSync"
-    );
+      log.debug(
+        `Saving user operation with ${document.length} blocks (after 2s delay)`,
+        "useDocumentSync"
+      );
 
-    (window.electronAPI as any)
-      ?.applyBlockOperations([operation], origin)
-      .then((result: any) => {
-        log.debug(
-          `User operation saved: ${result.operationsApplied} operations`,
-          "useDocumentSync"
-        );
-      })
-      .catch((error: any) => {
-        log.debug(`Error saving user operation: ${error}`, "useDocumentSync");
-      });
-  }, 2000);
+      (window.electronAPI as any)
+        ?.applyBlockOperations([operation], origin)
+        .then((result: any) => {
+          log.debug(
+            `User operation saved: ${result.operationsApplied} operations`,
+            "useDocumentSync"
+          );
+        })
+        .catch((error: any) => {
+          log.debug(`Error saving user operation: ${error}`, "useDocumentSync");
+        });
+    },
+    2000
+  );
 
   useEffect(() => {
     if (!editor || !window.electronAPI) return;
 
     // Handle document changes - but filter intelligently
-    const handleDocumentChange = (currentEditor: CustomBlockNoteEditor) => {
+    const handleDocumentChange = (
+      currentEditor: CustomBlockNoteEditor,
+      options?: { getChanges?: () => any[] }
+    ) => {
       const currentDocument = currentEditor.document;
 
       // Check if this change was expected from Y.js sync
@@ -84,7 +91,9 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
       // This is a genuine user edit - persist changes
       lastDocumentRef.current = currentDocument;
 
-      saveUserOperation(currentDocument);
+      // Extract changes if available from BlockNote's onChange callback
+      const changes = options?.getChanges?.() ?? [];
+      saveUserOperation({ document: currentDocument, changes });
 
       log.debug(
         `User edited document: ${currentDocument.length} blocks (queued for save)`,

@@ -30,6 +30,13 @@ export interface BlockOperation {
   // Enhanced provenance tracking
   requestId?: string; // Links back to original request
   batchId?: string; // Groups related operations
+  // BlockNote changes array for tracking deletions
+  changes?: Array<{
+    type: "insert" | "delete" | "update" | "move";
+    block: any;
+    prevBlock?: any; // For updates/moves
+    source?: { type: string };
+  }>;
 }
 
 /**
