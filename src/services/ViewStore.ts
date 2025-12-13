@@ -145,6 +145,13 @@ export class ViewStore {
     return this.handles;
   }
 
+  /**
+   * Get the renderer WebContents (for sending events to renderer)
+   */
+  getRendererWebContents(): WebContents {
+    return this.interpreter.getRendererWebContents();
+  }
+
   // Handle operations (direct queries/effects on views, no state change)
 
   /**

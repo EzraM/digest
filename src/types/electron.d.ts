@@ -64,6 +64,22 @@ interface ElectronAPI {
       deltaY: number;
     }) => void
   ) => () => void;
+  onBrowserSelection: (
+    callback: (data: {
+      blockId: string;
+      sourceUrl: string;
+      sourceTitle: string;
+      selectionText: string;
+      selectionHtml: string;
+      capturedAt: number;
+    }) => void
+  ) => () => void;
+  captureBrowserSelection: (blockId: string) => Promise<{
+    success: boolean;
+    selectionText?: string;
+    selectionHtml?: string;
+    error?: string;
+  }>;
   onBrowserScrollPercent: (
     callback: (data: { blockId: string; scrollPercent: number }) => void
   ) => () => void;

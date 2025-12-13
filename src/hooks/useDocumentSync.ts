@@ -110,6 +110,7 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
       // Use transaction metadata to determine if we should apply this update
       const isUserOriginated = origin?.source === "user";
       const isSystemOriginated = origin?.source === "system" || !origin;
+      const isClipOriginated = origin?.source === "clip";
 
       if (isUserOriginated) {
         // Skip user-originated Y.js updates to prevent loops
@@ -120,9 +121,11 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
         return;
       }
 
-      if (isSystemOriginated) {
+      // Apply clip insertions and system updates
+      if (isClipOriginated || isSystemOriginated) {
+        const sourceType = isClipOriginated ? "clip" : "system";
         log.debug(
-          `Applying Y.js sync from system: ${blocks.length} blocks${
+          `Applying Y.js sync from ${sourceType}: ${blocks.length} blocks${
             origin ? ` (${origin.batchId})` : ""
           }`,
           "useDocumentSync"

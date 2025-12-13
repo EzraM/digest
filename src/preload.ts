@@ -153,6 +153,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },
+  onBrowserSelection: (
+    callback: (data: {
+      blockId: string;
+      sourceUrl: string;
+      sourceTitle: string;
+      selectionText: string;
+      selectionHtml: string;
+      capturedAt: number;
+    }) => void
+  ) => {
+    const channel = "browser:selection";
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  captureBrowserSelection: (blockId: string) => {
+    log.debug(`Capturing selection for block ${blockId}`, "preload");
+    return ipcRenderer.invoke("browser:capture-selection", blockId);
+  },
   onBrowserScrollPercent: (
     callback: (data: { blockId: string; scrollPercent: number }) => void
   ) => {

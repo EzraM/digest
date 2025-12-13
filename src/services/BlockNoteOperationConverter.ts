@@ -30,7 +30,7 @@ export class BlockNoteOperationConverter {
    * Converts BlockNote changes to unified operations with enhanced provenance
    * Uses the BLOCKNOTE_SOURCE_MAP for consistent source mapping
    */
-  public convertBlockNotChanges(
+  public convertBlockNoteChanges(
     changes: BlockChange[],
     userId?: string,
     requestId?: string
@@ -76,6 +76,17 @@ export class BlockNoteOperationConverter {
           });
 
     return { operations, origin };
+  }
+
+  /**
+   * @deprecated Typo kept for backward compatibility; use convertBlockNoteChanges.
+   */
+  public convertBlockNotChanges(
+    changes: BlockChange[],
+    userId?: string,
+    requestId?: string
+  ): { operations: BlockOperation[]; origin: TransactionOrigin } {
+    return this.convertBlockNoteChanges(changes, userId, requestId);
   }
 
   /**

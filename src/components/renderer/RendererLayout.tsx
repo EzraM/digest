@@ -1,10 +1,12 @@
-import { ReactNode, useMemo, useContext, useRef } from "react";
+import { ReactNode, useMemo, useContext, useRef, useEffect } from "react";
 import { Box, Transition } from "@mantine/core";
 import { StatusBar } from "./StatusBar";
 import { useStatusBar } from "../../hooks/useStatusBar";
 import { SidebarToggleButton } from "./SidebarToggleButton";
 import { BlockNotificationContext } from "../../context/BlockNotificationContext";
+import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { ScrollContainerProvider } from "../../context/ScrollContainerContext";
+import { log } from "../../utils/rendererLogger";
 
 const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
@@ -46,6 +48,19 @@ export const RendererLayout = ({
     ? notificationContext.pendingBlockIds.length > 0
     : false;
 
+  // Get page tool slot content
+  const pageToolContext = useContext(PageToolSlotContext);
+  const pageToolContent = pageToolContext?.content ?? null;
+  const hasPageTool = pageToolContent !== null;
+  
+  useEffect(() => {
+    if (hasPageTool) {
+      log.debug("RendererLayout: Page tool content detected, hasPageTool=true", "RendererLayout");
+    } else {
+      log.debug("RendererLayout: No page tool content, hasPageTool=false", "RendererLayout");
+    }
+  }, [hasPageTool]);
+
   const { navWidth, asideWidth } = useMemo(
     () => ({
       navWidth: isNavbarOpened ? NAVBAR_WIDTH : 0,
@@ -56,17 +71,21 @@ export const RendererLayout = ({
 
   const scrollContainerRef = useRef<HTMLElement>(null);
 
+  // Build grid template rows and areas conditionally
+  const gridTemplateRows = `minmax(0, 1fr) ${FOOTER_HEIGHT}px${hasPageTool ? " auto" : ""}`;
+  const gridTemplateAreas = `"nav main aside" "footer footer footer"${hasPageTool ? ' "tool tool tool"' : ""}`;
+
   return (
     <Box
       style={{
         display: "grid",
         gridTemplateColumns: `${navWidth}px 1fr ${asideWidth}px`,
-        gridTemplateRows: `minmax(0, 1fr) ${FOOTER_HEIGHT}px`,
-        gridTemplateAreas: `"nav main aside" "footer footer footer"`,
+        gridTemplateRows,
+        gridTemplateAreas,
         height: "100vh",
         position: "relative",
         backgroundColor: "var(--mantine-color-body)",
-        transition: `grid-template-columns ${NAVBAR_TRANSITION_MS}ms ease`,
+        transition: `grid-template-columns ${NAVBAR_TRANSITION_MS}ms ease, grid-template-rows ${NAVBAR_TRANSITION_MS}ms ease`,
       }}
     >
       <Box
@@ -151,6 +170,19 @@ export const RendererLayout = ({
       >
         <StatusBar breadcrumbText={breadcrumbText} onClick={handleClick} />
       </Box>
+
+      {hasPageTool && (
+        <Box
+          style={{
+            gridArea: "tool",
+            backgroundColor: "var(--mantine-color-body)",
+            borderTop: "1px solid var(--mantine-color-default-border)",
+            overflow: "hidden",
+          }}
+        >
+          {pageToolContent}
+        </Box>
+      )}
 
       <SidebarToggleButton
         isOpen={isNavbarOpened}

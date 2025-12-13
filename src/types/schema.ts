@@ -12,6 +12,7 @@ import {
   URL,
   URLExtensionName,
 } from "../Search/URLBlock";
+import { clip } from "../components/clip/ClipBlock";
 
 export const schema = BlockNoteSchema.create({
   blockSpecs: {
@@ -20,6 +21,7 @@ export const schema = BlockNoteSchema.create({
     [GoogleSearchExtensionName]: GoogleSearch(),
     [ChatGPTExtensionName]: ChatGPT(),
     [URLExtensionName]: URL(),
+    clip: clip(),
   },
 });
 

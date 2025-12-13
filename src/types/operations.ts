@@ -5,7 +5,15 @@ import { CustomBlock } from "./schema";
  * This allows grouping operations and tracking their provenance
  */
 export interface TransactionOrigin {
-  source: "user" | "llm" | "sync" | "system" | "paste" | "drop" | "undo";
+  source:
+    | "user"
+    | "llm"
+    | "sync"
+    | "system"
+    | "paste"
+    | "drop"
+    | "undo"
+    | "clip";
   requestId?: string; // For LLM requests or user actions
   batchId?: string; // For grouping related operations
   userId?: string; // For collaboration
@@ -24,7 +32,7 @@ export interface BlockOperation {
   document?: CustomBlock[]; // For document-level updates
   prevBlock?: CustomBlock; // For update operations
   parentId?: string; // For nested operations
-  source: "user" | "llm" | "sync" | "system";
+  source: "user" | "llm" | "sync" | "system" | "clip";
   timestamp?: number;
   userId?: string; // For collaboration
   // Enhanced provenance tracking

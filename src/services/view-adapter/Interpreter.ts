@@ -348,6 +348,13 @@ export class Interpreter {
   }
 
   /**
+   * Get the renderer WebContents
+   */
+  getRendererWebContents(): Electron.WebContents {
+    return this.rendererWebContents;
+  }
+
+  /**
    * Set a pending scroll position to restore when the view finishes loading.
    * Called from renderer when a block mounts with an existing scrollPercent.
    */

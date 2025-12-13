@@ -27,6 +27,10 @@ import {
   BlockNotificationProvider,
   BlockNotificationContext,
 } from "./context/BlockNotificationContext";
+import { ClipDraftProvider } from "./context/ClipDraftContext";
+import { PageToolSlotProvider } from "./context/PageToolSlotContext";
+import { ClipInbox } from "./components/clip/ClipInbox";
+import { useBrowserSelection } from "./hooks/useBrowserSelection";
 
 const RendererAppContent = () => {
   const [isNavbarOpened, { toggle: toggleNavbar, close: closeNavbar }] =
@@ -44,6 +48,9 @@ const RendererAppContent = () => {
   const notificationContext = useContext(BlockNotificationContext);
   const triggerNotification = notificationContext?.triggerNotification;
   const editor = useRendererEditor(triggerNotification);
+
+  // Listen for browser selection events
+  useBrowserSelection();
   const {
     SlashCommandSyncMenu,
     handleSlashMenuItems,
@@ -347,6 +354,7 @@ const RendererAppContent = () => {
           onClose={closeDeleteProfileModal}
           onConfirm={handleConfirmDeleteProfile}
         />
+        <ClipInbox />
       </RendererRouteProvider>
     </MantineProvider>
   );
@@ -355,7 +363,11 @@ const RendererAppContent = () => {
 export const RendererApp = () => {
   return (
     <BlockNotificationProvider>
-      <RendererAppContent />
+      <ClipDraftProvider>
+        <PageToolSlotProvider>
+          <RendererAppContent />
+        </PageToolSlotProvider>
+      </ClipDraftProvider>
     </BlockNotificationProvider>
   );
 };

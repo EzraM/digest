@@ -1,11 +1,13 @@
 import { IPCHandlerMap } from "../IPCRouter";
 import { ViewStore } from "../../services/ViewStore";
+import { SelectionCaptureService } from "../../services/SelectionCaptureService";
 import { log } from "../../utils/mainLogger";
 
 export function createBrowserHandlers(
   viewStore: ViewStore,
   createBrowserBlockCallback?: (url: string, sourceBlockId?: string) => void
 ): IPCHandlerMap {
+  const selectionCaptureService = new SelectionCaptureService();
   return {
     "update-browser": {
       type: "on",
@@ -89,6 +91,91 @@ export function createBrowserHandlers(
           "main"
         );
         viewStore.setScrollPercent(data.blockId, data.scrollPercent);
+      },
+    },
+    "browser:capture-selection": {
+      type: "invoke",
+      fn: async (_event, viewId: string) => {
+        log.debug(
+          `Received browser:capture-selection request for view ${viewId}`,
+          "main"
+        );
+
+        try {
+          // Get the WebContentsView for this view
+          const handleRegistry = viewStore.getHandleRegistry();
+          const view = handleRegistry.get(viewId);
+
+          if (!view) {
+            return {
+              success: false,
+              error: `No view found for ${viewId}`,
+            };
+          }
+
+          const webContents = view.webContents;
+          if (webContents.isDestroyed()) {
+            return {
+              success: false,
+              error: "WebContents is destroyed",
+            };
+          }
+
+          // Get current URL and title
+          const url = webContents.getURL();
+          const title = await webContents
+            .executeJavaScript("document.title")
+            .catch(() => "");
+
+          // Capture selection
+          const result = await selectionCaptureService.captureSelection(
+            webContents,
+            url,
+            title || url
+          );
+
+          if (result.success) {
+            // Extract blockId from viewId if it's in the format `${blockId}:full`
+            const blockId = viewId.includes(":full")
+              ? viewId.replace(":full", "")
+              : viewId;
+
+            // Emit browser:selection event to renderer
+            const rendererWebContents = viewStore.getRendererWebContents();
+            if (rendererWebContents && !rendererWebContents.isDestroyed()) {
+              rendererWebContents.send("browser:selection", {
+                blockId,
+                sourceUrl: url,
+                sourceTitle: title || url,
+                selectionText: result.selectionText || "",
+                selectionHtml: result.selectionHtml || "",
+                capturedAt: Date.now(),
+              });
+            }
+
+            return {
+              success: true,
+              selectionText: result.selectionText,
+              selectionHtml: result.selectionHtml,
+            };
+          } else {
+            return {
+              success: false,
+              error: result.error || "Failed to capture selection",
+            };
+          }
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
+          log.debug(
+            `Error capturing selection for view ${viewId}: ${errorMessage}`,
+            "main"
+          );
+          return {
+            success: false,
+            error: errorMessage,
+          };
+        }
       },
     },
   };

@@ -18,3 +18,5 @@ export const isEditorViewAvailable = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (editor as any).view?.dom !== undefined;
 };
+
+
