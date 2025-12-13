@@ -14,7 +14,6 @@ export const handleElectronPaste = ({
   editor,
   defaultPasteHandler,
 }: PasteHandlerContext): boolean | undefined => {
-  const clipboardApi = window.electronAPI?.clipboard;
   const eventTypes = Array.from(event.clipboardData?.types ?? []);
 
   // Keep BlockNote's built-in handling for its own format and files
@@ -22,30 +21,28 @@ export const handleElectronPaste = ({
     return defaultPasteHandler();
   }
 
+  // If the clipboard event has HTML, let BlockNote's default handler process it
+  // This preserves inline content (bold, italic, links) better than calling pasteHTML directly
+  if (eventTypes.includes("text/html")) {
+    return defaultPasteHandler();
+  }
+
+  // For plain text, check if it looks like markdown
+  const clipboardApi = window.electronAPI?.clipboard;
   const hasElectronClipboard =
     (clipboardApi?.availableFormats?.() ?? []).length > 0;
 
   if (hasElectronClipboard) {
-    const html = clipboardApi.readHTML?.() ?? "";
     const text = clipboardApi.readText?.() ?? "";
-    const trimmedHtml = html.trim();
     const trimmedText = text.trim();
 
-    if (trimmedHtml) {
-      editor.pasteHTML(trimmedHtml);
-      return true;
-    }
-
-    if (trimmedText) {
-      if (looksLikeMarkdown(trimmedText)) {
-        editor.pasteMarkdown(trimmedText);
-      } else {
-        editor.pasteText(trimmedText);
-      }
+    if (trimmedText && looksLikeMarkdown(trimmedText)) {
+      editor.pasteMarkdown(trimmedText);
       return true;
     }
   }
 
+  // Fall back to default handler for all other cases
   return defaultPasteHandler();
 };
 
