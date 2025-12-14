@@ -2,11 +2,11 @@ import React, { useContext, useMemo } from "react";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
 import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
-import { useClipCapture } from "../../hooks/useClipCapture";
 import { Page } from "../../Browser/components/Page";
 import { useRendererRoute } from "../../context/RendererRouteContext";
 import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { DocumentProvider } from "../../context/DocumentContext";
+import { ClipButtons } from "../clip/ClipButtons";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
 
 type BlockRouteViewProps = {
@@ -49,12 +49,11 @@ export const BlockRouteView = ({
       onUrlChange,
     }
   );
-  const { isCapturing, captureSelection } = useClipCapture();
-
   // Get page tool slot content
   const pageToolContext = useContext(PageToolSlotContext);
   const pageToolContent = pageToolContext?.content ?? null;
-  const hasPageTool = pageToolContent !== null;
+  const isPageToolVisible = pageToolContext?.isVisible ?? false;
+  const hasPageTool = pageToolContent !== null && isPageToolVisible;
 
   // Build grid template rows conditionally (must be before conditional return)
   const gridTemplateRows = useMemo(() => {
@@ -73,14 +72,6 @@ export const BlockRouteView = ({
       navigateToDoc(docId, blockId);
     } else {
       window.history.back();
-    }
-  };
-
-  const handleClip = async () => {
-    const result = await captureSelection(viewId);
-    if (!result.success) {
-      // TODO: Show error to user (e.g., toast notification)
-      console.error("Failed to capture selection:", result.error);
     }
   };
 
@@ -274,7 +265,7 @@ export const BlockRouteView = ({
             borderTop: "1px solid #e0e0e0",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
+            gap: "8px",
             paddingLeft: "6px",
             paddingRight: "6px",
             fontSize: "11px",
@@ -282,34 +273,20 @@ export const BlockRouteView = ({
             color: "#666",
           }}
         >
-          <span style={{ userSelect: "none", color: "#666" }}>
+          <span
+            style={{
+              userSelect: "none",
+              color: "#666",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              minWidth: 0,
+              maxWidth: "60%",
+            }}
+          >
             {title || urlString}
           </span>
-          <button
-            type="button"
-            onClick={handleClip}
-            disabled={isCapturing}
-            style={{
-              border: "1px solid #d0d0d0",
-              backgroundColor: hasPageTool
-                ? "#e7f5ff"
-                : isCapturing
-                  ? "#f0f0f0"
-                  : "#fff",
-              color: hasPageTool ? "#1c7ed6" : isCapturing ? "#999" : "#111",
-              borderRadius: "4px",
-              padding: "2px 8px",
-              cursor: isCapturing ? "wait" : "pointer",
-              fontSize: "11px",
-              height: "20px",
-              lineHeight: "1",
-              minWidth: "60px",
-              fontWeight: hasPageTool ? 500 : 400,
-            }}
-            title="Clip selection to notebook"
-          >
-            {isCapturing ? "⏳ Clipping..." : "📎 Clip"}
-          </button>
+          <ClipButtons context="page" viewId={viewId} placement="toolbar" />
         </div>
 
         {/* Page tool slot (e.g., clip inbox) */}

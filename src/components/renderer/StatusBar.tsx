@@ -1,6 +1,7 @@
 import { Box, Text, Group } from "@mantine/core";
 import { useContext } from "react";
 import { ClipDraftContext } from "../../context/ClipDraftContext";
+import { ClipButtons } from "../clip/ClipButtons";
 
 type StatusBarProps = {
   breadcrumbText: string;
@@ -9,7 +10,9 @@ type StatusBarProps = {
 
 export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
   const clipDraftContext = useContext(ClipDraftContext);
-  const hasDrafts = clipDraftContext ? clipDraftContext.drafts.length > 0 : false;
+  const hasDrafts = clipDraftContext
+    ? clipDraftContext.drafts.length > 0
+    : false;
 
   return (
     <Box
@@ -26,25 +29,39 @@ export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
         color: "var(--mantine-color-dimmed)",
       }}
     >
-      <Box
-        onClick={onClick}
-        style={{
-          flex: 1,
-          cursor: "pointer",
-          transition: "background-color 0.15s ease",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor =
-            "var(--mantine-color-default-hover)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = "transparent";
-        }}
-      >
-        <Text size="xs" c="dimmed" style={{ userSelect: "none", lineHeight: 1 }}>
-          {breadcrumbText}
-        </Text>
-      </Box>
+      <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+        <Box
+          onClick={onClick}
+          style={{
+            minWidth: 0,
+            cursor: "pointer",
+            transition: "background-color 0.15s ease",
+            maxWidth: "60%",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor =
+              "var(--mantine-color-default-hover)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+          }}
+        >
+          <Text
+            size="xs"
+            c="dimmed"
+            style={{
+              userSelect: "none",
+              lineHeight: 1,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {breadcrumbText}
+          </Text>
+        </Box>
+        <ClipButtons context="notebook" placement="toolbar" />
+      </Group>
       {hasDrafts && (
         <Box
           style={{

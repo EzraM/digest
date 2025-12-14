@@ -13,6 +13,18 @@ import { handleElectronPaste } from "../clipboard/handleElectronPaste";
 let currentEditor: CustomBlockNoteEditor | null = null;
 let onBlockCreatedCallback: ((blockId: string) => void) | null = null;
 
+export const getCurrentEditor = (): CustomBlockNoteEditor | null =>
+  currentEditor;
+
+export const getCurrentCursorBlockId = (): string | null => {
+  try {
+    const block = currentEditor?.getTextCursorPosition?.().block;
+    return block?.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
 const createNewBrowserBlock = (url: string, sourceBlockId?: string): void => {
   if (!currentEditor) {
     return;

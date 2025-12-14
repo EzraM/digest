@@ -265,7 +265,44 @@ export class BlockOperationService {
     switch (operation.type) {
       case "insert":
         if (operation.block) {
-          const position = operation.position || this.yBlocks.length;
+          // Nested insert: insert into parent's children array (immutable replace)
+          if (operation.parentId) {
+            const parentIndex = this.findBlockIndex(operation.parentId);
+            if (parentIndex !== -1) {
+              const parentBlock = this.yBlocks.get(parentIndex) as any;
+              const existingChildren: any[] = Array.isArray(
+                parentBlock?.children
+              )
+                ? parentBlock.children
+                : [];
+              const childPos = operation.position ?? existingChildren.length;
+              const nextChildren = [
+                ...existingChildren.slice(0, childPos),
+                operation.block,
+                ...existingChildren.slice(childPos),
+              ];
+
+              const updatedParent = {
+                ...parentBlock,
+                children: nextChildren,
+              };
+
+              this.yBlocks.delete(parentIndex, 1);
+              this.yBlocks.insert(parentIndex, [updatedParent]);
+              break;
+            }
+            // If parent not found, fall through to root insert.
+          }
+
+          // Root insert: support "afterBlockId" convenience.
+          let position: number;
+          if (operation.afterBlockId) {
+            const afterIndex = this.findBlockIndex(operation.afterBlockId);
+            position = afterIndex !== -1 ? afterIndex + 1 : this.yBlocks.length;
+          } else {
+            position = operation.position ?? this.yBlocks.length;
+          }
+
           this.yBlocks.insert(position, [operation.block]);
         }
         break;

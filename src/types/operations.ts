@@ -18,7 +18,7 @@ export interface TransactionOrigin {
   batchId?: string; // For grouping related operations
   userId?: string; // For collaboration
   timestamp: number;
-  metadata?: Record<string, any>; // Extensible metadata
+  metadata?: Record<string, unknown>; // Extensible metadata
 }
 
 /**
@@ -28,6 +28,11 @@ export interface BlockOperation {
   type: "insert" | "update" | "delete" | "move";
   blockId: string;
   position?: number;
+  /**
+   * Insert relative to an existing block (root-level).
+   * If provided, the insert position is computed as: index(afterBlockId) + 1.
+   */
+  afterBlockId?: string;
   block?: CustomBlock;
   document?: CustomBlock[]; // For document-level updates
   prevBlock?: CustomBlock; // For update operations
@@ -41,8 +46,8 @@ export interface BlockOperation {
   // BlockNote changes array for tracking deletions
   changes?: Array<{
     type: "insert" | "delete" | "update" | "move";
-    block: any;
-    prevBlock?: any; // For updates/moves
+    block: unknown;
+    prevBlock?: unknown; // For updates/moves
     source?: { type: string };
   }>;
 }
@@ -149,7 +154,7 @@ export const BLOCKNOTE_SOURCE_MAP = {
 export function createUserTransactionOrigin(
   userId?: string,
   requestId?: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): TransactionOrigin {
   return {
     source: "user",
@@ -167,7 +172,7 @@ export function createLLMTransactionOrigin(
   requestId: string,
   userId?: string,
   batchId?: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): TransactionOrigin {
   return {
     source: "llm",

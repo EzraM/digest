@@ -37,7 +37,9 @@ export class ClipCommitService {
     }
 
     // Create the clip container block with inline content for the reference URL
+    const clipBlockId = `clip-${draft.id}`;
     const clipBlock = {
+      id: clipBlockId,
       type: "clip",
       props: {
         sourceUrl: draft.sourceUrl,
@@ -53,12 +55,11 @@ export class ClipCommitService {
     const operations: BlockOperation[] = [];
 
     // First, insert the clip container
-    const clipBlockId = `clip-${draft.id}`;
     operations.push({
       type: "insert",
       blockId: clipBlockId,
       block: clipBlock as any,
-      position: 0, // Will be calculated based on insertAfterBlockId
+      afterBlockId: insertAfterBlockId,
       source: "clip",
       timestamp: Date.now(),
     });
@@ -69,7 +70,7 @@ export class ClipCommitService {
       operations.push({
         type: "insert",
         blockId: childBlockId,
-        block: block as any,
+        block: { ...(block as any), id: childBlockId } as any,
         parentId: clipBlockId,
         position: index,
         source: "clip",
@@ -98,5 +99,3 @@ export class ClipCommitService {
     return { operations, origin };
   }
 }
-
-

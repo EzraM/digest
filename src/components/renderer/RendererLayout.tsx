@@ -51,13 +51,20 @@ export const RendererLayout = ({
   // Get page tool slot content
   const pageToolContext = useContext(PageToolSlotContext);
   const pageToolContent = pageToolContext?.content ?? null;
-  const hasPageTool = pageToolContent !== null;
-  
+  const isPageToolVisible = pageToolContext?.isVisible ?? false;
+  const hasPageTool = pageToolContent !== null && isPageToolVisible;
+
   useEffect(() => {
     if (hasPageTool) {
-      log.debug("RendererLayout: Page tool content detected, hasPageTool=true", "RendererLayout");
+      log.debug(
+        "RendererLayout: Page tool content detected, hasPageTool=true",
+        "RendererLayout"
+      );
     } else {
-      log.debug("RendererLayout: No page tool content, hasPageTool=false", "RendererLayout");
+      log.debug(
+        "RendererLayout: No page tool content, hasPageTool=false",
+        "RendererLayout"
+      );
     }
   }, [hasPageTool]);
 

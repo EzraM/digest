@@ -2,8 +2,11 @@ import { createContext, useContext, ReactNode, useState, useCallback } from "rea
 
 type PageToolSlotContextType = {
   content: ReactNode | null;
+  isVisible: boolean;
   registerTool: (content: ReactNode) => void;
   unregisterTool: () => void;
+  toggleVisibility: () => void;
+  setVisibility: (visible: boolean) => void;
 };
 
 export const PageToolSlotContext =
@@ -15,6 +18,7 @@ export const PageToolSlotProvider = ({
   children: ReactNode;
 }) => {
   const [content, setContent] = useState<ReactNode | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
 
   const registerTool = useCallback((toolContent: ReactNode) => {
     setContent(toolContent);
@@ -22,14 +26,26 @@ export const PageToolSlotProvider = ({
 
   const unregisterTool = useCallback(() => {
     setContent(null);
+    setIsVisible(false);
+  }, []);
+
+  const toggleVisibility = useCallback(() => {
+    setIsVisible((prev) => !prev);
+  }, []);
+
+  const setVisibility = useCallback((visible: boolean) => {
+    setIsVisible(visible);
   }, []);
 
   return (
     <PageToolSlotContext.Provider
       value={{
         content,
+        isVisible,
         registerTool,
         unregisterTool,
+        toggleVisibility,
+        setVisibility,
       }}
     >
       {children}
@@ -46,6 +62,3 @@ export const usePageToolSlot = (): PageToolSlotContextType => {
   }
   return context;
 };
-
-
-

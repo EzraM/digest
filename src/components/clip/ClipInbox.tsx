@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Box, Text, Stack } from "@mantine/core";
+import { Box, Stack } from "@mantine/core";
 import { useClipDraftContext } from "../../context/ClipDraftContext";
 import { usePageToolSlot } from "../../context/PageToolSlotContext";
 import { ClipDraftItem } from "./ClipDraftItem";
@@ -36,9 +36,6 @@ export const ClipInbox = (): null => {
         }}
       >
         <Stack gap="xs">
-          <Text size="sm" fw={500}>
-            Clip Drafts ({drafts.length})
-          </Text>
           {drafts.map((draft) => (
             <ClipDraftItem
               key={draft.id}
@@ -64,13 +61,15 @@ export const ClipInbox = (): null => {
       log.debug("ClipInbox: Unregistering tool", "ClipInbox");
       unregisterTool();
     }
+  }, [toolContent, registerTool, unregisterTool]);
 
-    // Cleanup: unregister on unmount
+  // Cleanup: unregister on unmount only (avoid resetting isVisible on every update)
+  useEffect(() => {
     return () => {
-      log.debug("ClipInbox: Cleanup - unregistering tool", "ClipInbox");
+      log.debug("ClipInbox: Unmount cleanup - unregistering tool", "ClipInbox");
       unregisterTool();
     };
-  }, [toolContent, registerTool, unregisterTool]);
+  }, [unregisterTool]);
 
   // This component doesn't render anything itself - it registers content via context
   return null;

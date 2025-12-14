@@ -3,6 +3,7 @@ import { ClipDraft } from "../../types/clip";
 import { ClipDraftEditor } from "./ClipDraftEditor";
 import { ClipCommitService } from "../../services/ClipCommitService";
 import { log } from "../../utils/rendererLogger";
+import { getCurrentCursorBlockId } from "../../hooks/useRendererEditor";
 
 type ClipDraftItemProps = {
   draft: ClipDraft;
@@ -19,10 +20,12 @@ export const ClipDraftItem = ({ draft, onRemove }: ClipDraftItemProps) => {
     try {
       log.debug(`Inserting clip draft ${draft.id}`, "ClipDraftItem");
 
-      // Create operations (will insert at end of document for now)
-      // TODO: Insert after focused block
-      const { operations, origin } =
-        await commitService.createClipOperations(draft);
+      // Insert after the currently selected block if available; otherwise append.
+      const insertAfterBlockId = getCurrentCursorBlockId() ?? undefined;
+      const { operations, origin } = await commitService.createClipOperations(
+        draft,
+        insertAfterBlockId
+      );
 
       // Apply operations via IPC
       const result = await window.electronAPI.applyBlockOperations(
