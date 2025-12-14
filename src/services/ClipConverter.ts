@@ -1,19 +1,36 @@
 import { ClipDraft } from "../types/clip";
-import { CustomPartialBlock } from "../types/schema";
+import { CustomPartialBlock, schema } from "../types/schema";
 import { log } from "../utils/rendererLogger";
+import { BlockNoteEditor } from "@blocknote/core";
 
 /**
  * Converts HTML/text selection into BlockNote blocks
- * Deterministic path (cheap, fast)
+ * Uses BlockNote's built-in HTML parser to preserve inline formatting (bold, italic, links, etc.)
  */
 export class ClipConverter {
   private static instance: ClipConverter;
+  private tempEditor: ReturnType<
+    typeof BlockNoteEditor.create<{ schema: typeof schema }>
+  > | null = null;
 
   public static getInstance(): ClipConverter {
     if (!ClipConverter.instance) {
       ClipConverter.instance = new ClipConverter();
     }
     return ClipConverter.instance;
+  }
+
+  /**
+   * Get or create a temporary editor instance for HTML parsing
+   * This editor is only used for parsing, not for editing
+   */
+  private getTempEditor() {
+    if (!this.tempEditor) {
+      this.tempEditor = BlockNoteEditor.create({
+        schema,
+      });
+    }
+    return this.tempEditor;
   }
 
   /**
@@ -33,9 +50,15 @@ export class ClipConverter {
 
       const blocks: CustomPartialBlock[] = [];
 
-      // If we have HTML, parse it; otherwise use text-only
+      // If we have HTML, parse it using BlockNote's HTML parser (preserves inline formatting)
+      // Otherwise use text-only conversion
       if (draft.selectionHtml && draft.selectionHtml.trim()) {
-        blocks.push(...this.convertHtmlToBlocks(draft.selectionHtml));
+        // Normalize relative URLs to absolute URLs based on the source domain
+        const normalizedHtml = this.normalizeUrlsInHtml(
+          draft.selectionHtml,
+          draft.sourceUrl
+        );
+        blocks.push(...this.convertHtmlToBlocks(normalizedHtml));
       } else if (draft.selectionText) {
         blocks.push(...this.convertTextToBlocks(draft.selectionText));
       }
@@ -74,23 +97,147 @@ export class ClipConverter {
   }
 
   /**
-   * Convert HTML string to BlockNote blocks
+   * Normalize relative URLs in HTML to absolute URLs based on the source URL
+   * Converts relative URLs (like /page.html, ../other.html) to absolute URLs
+   * (like https://example.com/page.html) so links work correctly when viewed later
+   */
+  private normalizeUrlsInHtml(html: string, sourceUrl: string): string {
+    try {
+      // Parse the HTML
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      // Create a base URL from the source URL for resolving relative URLs
+      const baseUrl = new URL(sourceUrl);
+
+      /**
+       * Helper to normalize a single URL
+       * Returns the absolute URL, or the original if normalization fails
+       */
+      const normalizeUrl = (url: string): string => {
+        // Skip if already absolute (starts with http:// or https://)
+        if (/^https?:\/\//i.test(url)) {
+          return url;
+        }
+        // Skip if it's a protocol-relative URL (starts with //)
+        if (url.startsWith("//")) {
+          return url;
+        }
+        // Skip if it's a fragment/anchor (starts with #)
+        if (url.startsWith("#")) {
+          return url;
+        }
+        // Skip if it's a data URI
+        if (url.startsWith("data:")) {
+          return url;
+        }
+        // Skip if it's a mailto: or tel: link
+        if (/^(mailto|tel):/i.test(url)) {
+          return url;
+        }
+        try {
+          // Resolve relative URL against the base URL
+          return new URL(url, baseUrl).href;
+        } catch (error) {
+          // If URL parsing fails (e.g., invalid URL), return original
+          log.debug(
+            `Failed to normalize URL: ${url}`,
+            "ClipConverter.normalizeUrlsInHtml"
+          );
+          return url;
+        }
+      };
+
+      // Find all anchor tags and convert relative hrefs to absolute
+      const links = doc.querySelectorAll("a[href]");
+      links.forEach((link) => {
+        const href = link.getAttribute("href");
+        if (href) {
+          const normalized = normalizeUrl(href);
+          if (normalized !== href) {
+            link.setAttribute("href", normalized);
+          }
+        }
+      });
+
+      // Normalize image src URLs
+      const images = doc.querySelectorAll("img[src]");
+      images.forEach((img) => {
+        const src = img.getAttribute("src");
+        if (src) {
+          const normalized = normalizeUrl(src);
+          if (normalized !== src) {
+            img.setAttribute("src", normalized);
+          }
+        }
+        // Also normalize srcset if present
+        const srcset = img.getAttribute("srcset");
+        if (srcset) {
+          // srcset format: "url1 1x, url2 2x" or "url1 100w, url2 200w"
+          const normalizedSrcset = srcset
+            .split(",")
+            .map((entry) => {
+              const parts = entry.trim().split(/\s+/);
+              if (parts.length > 0) {
+                const url = parts[0];
+                const normalized = normalizeUrl(url);
+                return (
+                  normalized +
+                  (parts.length > 1 ? " " + parts.slice(1).join(" ") : "")
+                );
+              }
+              return entry;
+            })
+            .join(", ");
+          if (normalizedSrcset !== srcset) {
+            img.setAttribute("srcset", normalizedSrcset);
+          }
+        }
+      });
+
+      // Normalize other elements that might have URL attributes
+      // (e.g., video, audio, source, iframe, etc.)
+      const urlAttributes = ["src", "href", "poster", "data-src", "data-href"];
+      urlAttributes.forEach((attr) => {
+        const elements = doc.querySelectorAll(`[${attr}]`);
+        elements.forEach((el) => {
+          const url = el.getAttribute(attr);
+          if (url) {
+            const normalized = normalizeUrl(url);
+            if (normalized !== url) {
+              el.setAttribute(attr, normalized);
+            }
+          }
+        });
+      });
+
+      // Return the normalized HTML
+      // Use body.innerHTML to get the content, or the entire document if body is empty
+      return doc.body.innerHTML || doc.documentElement.innerHTML;
+    } catch (error) {
+      // If HTML parsing fails, return original HTML
+      log.debug(
+        `Failed to normalize URLs in HTML: ${error}`,
+        "ClipConverter.normalizeUrlsInHtml"
+      );
+      return html;
+    }
+  }
+
+  /**
+   * Convert HTML string to BlockNote blocks using BlockNote's built-in parser
+   * This preserves inline formatting (bold, italic, links, lists, etc.)
+   * Uses the same conversion pipeline as paste operations
    */
   private convertHtmlToBlocks(html: string): CustomPartialBlock[] {
-    // Create a temporary DOM element to parse HTML
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
+    const editor = this.getTempEditor();
 
-    // Sanitize and normalize the DOM
-    this.sanitizeDom(doc.body);
+    // Use BlockNote's tryParseHTMLToBlocks which uses the same conversion
+    // pipeline as paste operations - this preserves all inline formatting
+    // (bold, italic, links, lists, etc.) through ProseMirror's schema parseDOM rules
+    const blocks = editor.tryParseHTMLToBlocks(html) as CustomPartialBlock[];
 
-    const blocks: CustomPartialBlock[] = [];
-
-    // Walk through the DOM and convert to blocks
-    this.walkDom(doc.body, blocks);
-
-    // Post-process: merge/split paragraphs, trim whitespace
-    return this.postProcessBlocks(blocks);
+    return blocks;
   }
 
   /**
@@ -104,195 +251,4 @@ export class ClipConverter {
       content: line.trim(),
     }));
   }
-
-  /**
-   * Sanitize DOM: remove scripts, styles, irrelevant attributes
-   */
-  private sanitizeDom(element: Element): void {
-    // Remove script and style elements
-    const scripts = element.querySelectorAll("script, style");
-    scripts.forEach((el) => el.remove());
-
-    // Remove irrelevant attributes (keep only essential ones)
-    const allElements = element.querySelectorAll("*");
-    allElements.forEach((el) => {
-      // Keep only essential attributes
-      const allowedAttrs = ["href", "src", "alt", "title"];
-      Array.from(el.attributes).forEach((attr) => {
-        if (!allowedAttrs.includes(attr.name.toLowerCase())) {
-          el.removeAttribute(attr.name);
-        }
-      });
-    });
-  }
-
-  /**
-   * Walk DOM tree and convert nodes to blocks
-   */
-  private walkDom(
-    element: Element | DocumentFragment,
-    blocks: CustomPartialBlock[]
-  ): void {
-    for (const node of Array.from(element.childNodes)) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent?.trim();
-        if (text && text.length > 0) {
-          // Add as paragraph if we don't have a current block
-          if (blocks.length === 0 || blocks[blocks.length - 1].type !== "paragraph") {
-            blocks.push({
-              type: "paragraph",
-              content: text,
-            });
-          } else {
-            // Append to last paragraph
-            const lastBlock = blocks[blocks.length - 1];
-            if (lastBlock.type === "paragraph") {
-              const currentContent =
-                typeof lastBlock.content === "string"
-                  ? lastBlock.content
-                  : "";
-              blocks[blocks.length - 1] = {
-                ...lastBlock,
-                content: currentContent ? `${currentContent} ${text}` : text,
-              };
-            }
-          }
-        }
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as Element;
-        const tagName = el.tagName.toLowerCase();
-
-        switch (tagName) {
-          case "h1":
-          case "h2":
-          case "h3":
-          case "h4":
-          case "h5":
-          case "h6":
-            const level = parseInt(tagName.charAt(1)) as 1 | 2 | 3 | 4 | 5 | 6;
-            blocks.push({
-              type: "heading",
-              props: { level },
-              content: el.textContent?.trim() || "",
-            });
-            break;
-
-          case "p":
-            const pText = el.textContent?.trim();
-            if (pText) {
-              blocks.push({
-                type: "paragraph",
-                content: pText,
-              });
-            }
-            break;
-
-          case "ul":
-          case "ol":
-            this.convertList(el, blocks, tagName === "ol");
-            break;
-
-          case "blockquote":
-            const quoteText = el.textContent?.trim();
-            if (quoteText) {
-              blocks.push({
-                type: "paragraph",
-                content: quoteText,
-                // Note: BlockNote doesn't have a native blockquote block,
-                // so we'll use paragraph for now
-              });
-            }
-            break;
-
-          case "img":
-            const src = el.getAttribute("src");
-            const alt = el.getAttribute("alt") || "";
-            if (src) {
-              blocks.push({
-                type: "image",
-                props: {
-                  url: src,
-                  caption: alt,
-                },
-              });
-            }
-            break;
-
-          case "pre":
-          case "code":
-            const codeText = el.textContent?.trim();
-            if (codeText) {
-              blocks.push({
-                type: "paragraph",
-                content: codeText,
-                // Note: We could use a code block if BlockNote supports it
-              });
-            }
-            break;
-
-          case "br":
-            // Force a new paragraph
-            blocks.push({
-              type: "paragraph",
-              content: "",
-            });
-            break;
-
-          default:
-            // Recursively process child nodes
-            this.walkDom(el, blocks);
-            break;
-        }
-      }
-    }
-  }
-
-  /**
-   * Convert list (ul/ol) to list item blocks
-   */
-  private convertList(
-    listElement: Element,
-    blocks: CustomPartialBlock[],
-    ordered: boolean
-  ): void {
-    const items = listElement.querySelectorAll("li");
-    items.forEach((item) => {
-      const text = item.textContent?.trim();
-      if (text) {
-        blocks.push({
-          type: ordered ? "numberedListItem" : "bulletListItem",
-          content: text,
-        });
-      }
-    });
-  }
-
-  /**
-   * Post-process blocks: merge/split paragraphs, trim whitespace, limit depth
-   */
-  private postProcessBlocks(blocks: CustomPartialBlock[]): CustomPartialBlock[] {
-    const processed: CustomPartialBlock[] = [];
-    const MAX_BLOCKS = 1000; // Safety limit
-
-    for (let i = 0; i < Math.min(blocks.length, MAX_BLOCKS); i++) {
-      const block = blocks[i];
-
-      // Trim content if it's a string
-      if (typeof block.content === "string") {
-        const trimmed = block.content.trim();
-        if (trimmed.length === 0 && block.type === "paragraph") {
-          // Skip empty paragraphs
-          continue;
-        }
-        block.content = trimmed;
-      }
-
-      processed.push(block);
-    }
-
-    return processed;
-  }
 }
-
-
-
