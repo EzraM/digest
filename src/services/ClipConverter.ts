@@ -123,9 +123,12 @@ export class ClipConverter {
         if (url.startsWith("//")) {
           return url;
         }
-        // Skip if it's a fragment/anchor (starts with #)
+        // Convert hash URLs to fully qualified URLs by appending to the base URL
         if (url.startsWith("#")) {
-          return url;
+          // Create a new URL from the base URL and append the hash fragment
+          const fullUrl = new URL(baseUrl);
+          fullUrl.hash = url;
+          return fullUrl.href;
         }
         // Skip if it's a data URI
         if (url.startsWith("data:")) {
