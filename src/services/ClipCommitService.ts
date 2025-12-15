@@ -1,7 +1,6 @@
 import { ClipDraft } from "../types/clip";
 import { CustomPartialBlock } from "../types/schema";
 import { BlockOperation } from "../types/operations";
-import { BlockNoteOperationConverter } from "./BlockNoteOperationConverter";
 import { log } from "../utils/rendererLogger";
 import { createClipReferenceInlineContent } from "../utils/clipInlineContent";
 
@@ -11,7 +10,6 @@ import { createClipReferenceInlineContent } from "../utils/clipInlineContent";
  */
 export class ClipCommitService {
   private static instance: ClipCommitService;
-  private converter = BlockNoteOperationConverter.getInstance();
 
   public static getInstance(): ClipCommitService {
     if (!ClipCommitService.instance) {
@@ -37,7 +35,15 @@ export class ClipCommitService {
     }
 
     // Create the clip container block with inline content for the reference URL
+    // BlockNote uses a children array, not parentId, so we include children directly
     const clipBlockId = `clip-${draft.id}`;
+
+    // Create child blocks with proper IDs
+    const children = draft.proposedBlocks.map((block, index) => ({
+      ...(block as any),
+      id: `${clipBlockId}-child-${index}`,
+    })) as any[];
+
     const clipBlock = {
       id: clipBlockId,
       type: "clip",
@@ -49,34 +55,20 @@ export class ClipCommitService {
         draft.sourceUrl,
         draft.sourceTitle
       ),
+      children: children,
     } as CustomPartialBlock;
 
-    // Create operations to insert the clip container and its children
-    const operations: BlockOperation[] = [];
-
-    // First, insert the clip container
-    operations.push({
-      type: "insert",
-      blockId: clipBlockId,
-      block: clipBlock as any,
-      afterBlockId: insertAfterBlockId,
-      source: "clip",
-      timestamp: Date.now(),
-    });
-
-    // Then insert children blocks as children of the clip container
-    draft.proposedBlocks.forEach((block, index) => {
-      const childBlockId = `${clipBlockId}-child-${index}`;
-      operations.push({
+    // Create operation to insert the clip container with its children
+    const operations: BlockOperation[] = [
+      {
         type: "insert",
-        blockId: childBlockId,
-        block: { ...(block as any), id: childBlockId } as any,
-        parentId: clipBlockId,
-        position: index,
+        blockId: clipBlockId,
+        block: clipBlock as any,
+        afterBlockId: insertAfterBlockId,
         source: "clip",
         timestamp: Date.now(),
-      });
-    });
+      },
+    ];
 
     // Create transaction origin
     // Use "clip" source so renderer applies the update (not skipped like "user" source)

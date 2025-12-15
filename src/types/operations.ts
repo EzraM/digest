@@ -36,7 +36,6 @@ export interface BlockOperation {
   block?: CustomBlock;
   document?: CustomBlock[]; // For document-level updates
   prevBlock?: CustomBlock; // For update operations
-  parentId?: string; // For nested operations
   source: "user" | "llm" | "sync" | "system" | "clip";
   timestamp?: number;
   userId?: string; // For collaboration
