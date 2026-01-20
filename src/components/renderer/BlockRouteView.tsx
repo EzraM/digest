@@ -8,6 +8,11 @@ import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { DocumentProvider } from "../../context/DocumentContext";
 import { ClipButtons } from "../clip/ClipButtons";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
+import { BlockNotificationContainer } from "./BlockNotificationContainer";
+import { CustomBlockNoteEditor } from "../../types/schema";
+import { BlockNotificationContext } from "../../context/BlockNotificationContext";
+
+const NOTIFICATION_HEIGHT = 120; // Top bar (~32px) + content (80px) + padding
 
 type BlockRouteViewProps = {
   blockId: string;
@@ -16,6 +21,7 @@ type BlockRouteViewProps = {
   url: string | null;
   title: string;
   viewId: string;
+  editor: CustomBlockNoteEditor;
   onUrlChange?: (url: string) => void;
   onReady?: (viewId: string) => void;
 };
@@ -27,6 +33,7 @@ export const BlockRouteView = ({
   url,
   title,
   viewId,
+  editor,
   onUrlChange,
   onReady,
 }: BlockRouteViewProps) => {
@@ -47,6 +54,7 @@ export const BlockRouteView = ({
     {
       blockIdForEditorSync: blockId,
       onUrlChange,
+      editor,
     }
   );
   // Get page tool slot content
@@ -54,6 +62,12 @@ export const BlockRouteView = ({
   const pageToolContent = pageToolContext?.content ?? null;
   const isPageToolVisible = pageToolContext?.isVisible ?? false;
   const hasPageTool = pageToolContent !== null && isPageToolVisible;
+
+  // Get notification state to add margin when notifications are active
+  const notificationContext = useContext(BlockNotificationContext);
+  const hasActiveNotifications = notificationContext
+    ? notificationContext.pendingBlockIds.length > 0
+    : false;
 
   // Build grid template rows conditionally (must be before conditional return)
   const gridTemplateRows = useMemo(() => {
@@ -246,6 +260,8 @@ export const BlockRouteView = ({
             minHeight: 0,
             backgroundColor: "#fff",
             overflow: "hidden",
+            marginBottom: hasActiveNotifications ? NOTIFICATION_HEIGHT : 0,
+            transition: "margin-bottom 0.3s ease-out",
           }}
         >
           <Page
@@ -302,6 +318,7 @@ export const BlockRouteView = ({
           </div>
         )}
       </div>
+      <BlockNotificationContainer editor={editor} />
     </DocumentProvider>
   );
 };

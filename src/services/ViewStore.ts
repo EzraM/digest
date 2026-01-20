@@ -23,6 +23,11 @@ export class ViewStore {
   private events: EventTranslator;
   private operations: HandleOperations;
 
+  // Rate limiting: track pending creates to prevent duplicate URL loads
+  // Maps viewId -> { url, timestamp } of pending create commands
+  private pendingCreates = new Map<string, { url: string; timestamp: number }>();
+  private static readonly CREATE_COOLDOWN_MS = 5000; // 5 second cooldown per URL
+
   constructor(
     baseWindow: BrowserWindow,
     layerManager: ViewLayerManager | undefined,
@@ -91,6 +96,24 @@ export class ViewStore {
     const existing = this.world.get(update.viewId);
 
     if (!existing) {
+      // Rate limiting: check if we recently requested to create this view with this URL
+      const pending = this.pendingCreates.get(update.viewId);
+      const now = Date.now();
+
+      if (pending) {
+        const elapsed = now - pending.timestamp;
+        if (pending.url === update.url && elapsed < ViewStore.CREATE_COOLDOWN_MS) {
+          log.debug(
+            `[${update.viewId}] Skipping duplicate create for ${update.url} (${elapsed}ms since last request)`,
+            "ViewStore"
+          );
+          return;
+        }
+      }
+
+      // Track this create request
+      this.pendingCreates.set(update.viewId, { url: update.url, timestamp: now });
+
       log.debug(
         `[${update.viewId}] Creating new view for ${update.url}`,
         "ViewStore"
@@ -130,6 +153,8 @@ export class ViewStore {
 
   handleRemoveView(viewId: string): void {
     log.debug(`[${viewId}] Removing view`, "ViewStore");
+    // Clean up rate limiting state
+    this.pendingCreates.delete(viewId);
     this.dispatch({ type: "remove", id: viewId });
   }
 

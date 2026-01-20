@@ -1,6 +1,7 @@
 import { WebContentsView } from 'electron';
 import { Command } from '../view-core/commands';
 import { log } from '../../utils/mainLogger';
+import { toBlockId } from '../../utils/viewId';
 
 type CommandDispatcher = (cmd: Command) => void;
 type LinkClickCallback = (url: string, sourceId: string) => void;
@@ -144,7 +145,7 @@ export class EventTranslator {
           'EventTranslator'
         );
         if (this.onLinkClick) {
-          this.onLinkClick(url, id);
+          this.onLinkClick(url, toBlockId(id));
         }
         return { action: 'deny' };
       }

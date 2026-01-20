@@ -4,6 +4,7 @@ import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
 import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
 import { useSize } from "../hooks/useSize";
 import { useScrollContainer } from "../../context/ScrollContainerContext";
+import { toFullViewId } from "../../utils/viewId";
 
 const NORMAL_HEIGHT = 800;
 
@@ -21,7 +22,7 @@ export function Page({
 }) {
   // Layout-qualified view ID: separates inline from fullscreen views
   const viewId =
-    explicitViewId ?? (layout === "full" ? `${blockId}:full` : blockId);
+    explicitViewId ?? (layout === "full" ? toFullViewId(blockId) : blockId);
 
   console.log(
     `[Page] Render: blockId=${blockId}, layout=${layout}, viewId=${viewId}`

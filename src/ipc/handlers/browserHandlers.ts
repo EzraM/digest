@@ -2,6 +2,7 @@ import { IPCHandlerMap } from "../IPCRouter";
 import { ViewStore } from "../../services/ViewStore";
 import { SelectionCaptureService } from "../../services/SelectionCaptureService";
 import { log } from "../../utils/mainLogger";
+import { toBlockId } from "../../utils/viewId";
 
 export function createBrowserHandlers(
   viewStore: ViewStore,
@@ -135,10 +136,7 @@ export function createBrowserHandlers(
           );
 
           if (result.success) {
-            // Extract blockId from viewId if it's in the format `${blockId}:full`
-            const blockId = viewId.includes(":full")
-              ? viewId.replace(":full", "")
-              : viewId;
+            const blockId = toBlockId(viewId);
 
             // Emit browser:selection event to renderer
             const rendererWebContents = viewStore.getRendererWebContents();

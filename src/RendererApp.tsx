@@ -28,6 +28,7 @@ import {
   BlockNotificationContext,
 } from "./context/BlockNotificationContext";
 import { ClipDraftProvider } from "./context/ClipDraftContext";
+import { toFullViewId } from "./utils/viewId";
 import { PageToolSlotProvider } from "./context/PageToolSlotContext";
 import { ClipInbox } from "./components/clip/ClipInbox";
 import { useBrowserSelection } from "./hooks/useBrowserSelection";
@@ -105,7 +106,7 @@ const RendererAppContent = () => {
       if (
         handoffTarget &&
         handoffTarget.kind === "block" &&
-        `${handoffTarget.blockId}:full` === viewId
+        toFullViewId(handoffTarget.blockId) === viewId
       ) {
         setDisplayedRoute(handoffTarget);
         setHandoffTarget(null);
@@ -269,7 +270,8 @@ const RendererAppContent = () => {
             profileId={activeDocument?.profileId ?? null}
             url={routeContext.blockRouteProps?.url ?? null}
             title={routeContext.blockRouteProps?.title ?? "Block"}
-            viewId={`${route.blockId}:full`}
+            viewId={toFullViewId(route.blockId)}
+            editor={editor}
             onUrlChange={(nextUrl) =>
               routeContext.updateCachedBlockUrl(route.blockId, nextUrl)
             }
