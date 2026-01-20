@@ -6,6 +6,7 @@ import { log } from "../../utils/rendererLogger";
 
 type BlockNotificationContainerProps = {
   editor: CustomBlockNoteEditor;
+  placement?: "inline" | "overlay";
 };
 
 /**
@@ -15,6 +16,7 @@ type BlockNotificationContainerProps = {
  */
 export const BlockNotificationContainer = ({
   editor,
+  placement = "overlay",
 }: BlockNotificationContainerProps) => {
   // Use useContext directly to avoid throwing if context isn't available
   const context = useContext(BlockNotificationContext);
@@ -60,6 +62,7 @@ export const BlockNotificationContainer = ({
               key={blockId}
               blockId={blockId}
               url={url}
+              inline={placement === "inline"}
               onAnimationComplete={() => removeNotification(blockId)}
             />
           );

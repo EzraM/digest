@@ -41,9 +41,14 @@
   /* Match SiteBlock styling */
 }
 
+.site-block-notification--inline {
+  position: relative;
+  bottom: auto;
+  max-width: 100%;
+}
+
 .site-block-notification-content {
   /* Inner content - simplified for testing visibility */
   height: 100%;
   width: 100%;
 }
-

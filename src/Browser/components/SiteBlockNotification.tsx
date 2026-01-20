@@ -8,6 +8,7 @@ import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
 type SiteBlockNotificationProps = {
   blockId: string;
   url: string;
+  inline?: boolean;
   onAnimationComplete: () => void;
 };
 
@@ -20,6 +21,7 @@ type SiteBlockNotificationProps = {
 export const SiteBlockNotification = ({
   blockId,
   url,
+  inline = false,
   onAnimationComplete,
 }: SiteBlockNotificationProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,36 +111,42 @@ export const SiteBlockNotification = ({
     };
   }, [blockId, onAnimationComplete]);
 
-  // Find the block group to match its width and position - same as site blocks
-  const blockGroup = document.querySelector(".bn-block-group");
-  const blockGroupRect = blockGroup?.getBoundingClientRect();
-  const blockGroupWidth = blockGroupRect?.width ?? "100%";
-  const blockGroupLeft = blockGroupRect?.left ?? null;
-
-  const portalRoot = document.body;
-
-  // Calculate positioning: align with block group if available, otherwise center
-  const positionStyle: React.CSSProperties & { "--center-x"?: string } = {
-    width:
-      typeof blockGroupWidth === "number"
-        ? `${blockGroupWidth}px`
-        : blockGroupWidth,
+  let positionStyle: React.CSSProperties & { "--center-x"?: string } = {
+    width: "100%",
   };
 
-  if (blockGroupLeft !== null) {
-    // Align with block group
-    positionStyle.left = `${blockGroupLeft}px`;
-  } else {
-    // Fallback: center if block group position not available
-    positionStyle.left = "50%";
-    // Use CSS variable to tell animation to include translateX(-50%)
-    positionStyle["--center-x"] = "-50%";
+  if (!inline) {
+    // Find the block group to match its width and position - same as site blocks
+    const blockGroup = document.querySelector(".bn-block-group");
+    const blockGroupRect = blockGroup?.getBoundingClientRect();
+    const blockGroupWidth = blockGroupRect?.width ?? "100%";
+    const blockGroupLeft = blockGroupRect?.left ?? null;
+
+    // Calculate positioning: align with block group if available, otherwise center
+    positionStyle = {
+      width:
+        typeof blockGroupWidth === "number"
+          ? `${blockGroupWidth}px`
+          : blockGroupWidth,
+    };
+
+    if (blockGroupLeft !== null) {
+      // Align with block group
+      positionStyle.left = `${blockGroupLeft}px`;
+    } else {
+      // Fallback: center if block group position not available
+      positionStyle.left = "50%";
+      // Use CSS variable to tell animation to include translateX(-50%)
+      positionStyle["--center-x"] = "-50%";
+    }
   }
 
-  return createPortal(
+  const notification = (
     <div
       ref={containerRef}
-      className="site-block-notification"
+      className={`site-block-notification${
+        inline ? " site-block-notification--inline" : ""
+      }`}
       style={positionStyle}
     >
       {/* Top bar matching SiteBlock styling */}
@@ -184,7 +192,13 @@ export const SiteBlockNotification = ({
       >
         {/* Browser view will be positioned here by the main process */}
       </div>
-    </div>,
-    portalRoot
+      </div>
   );
+
+  if (inline) {
+    return notification;
+  }
+
+  const portalRoot = document.body;
+  return createPortal(notification, portalRoot);
 };
