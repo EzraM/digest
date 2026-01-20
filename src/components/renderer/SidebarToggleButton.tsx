@@ -1,41 +1,53 @@
-import { ActionIcon, Box } from "@mantine/core";
-import { Chevron } from "./Chevron";
-
-const TOGGLE_OFFSET = 12;
-const TOGGLE_TOP = "25%";
-const TOGGLE_SIZE = 30;
-
 type SidebarToggleButtonProps = {
   isOpen: boolean;
-  navWidth: number;
   onToggle: () => void;
 };
 
 export const SidebarToggleButton = ({
   isOpen,
-  navWidth,
   onToggle,
 }: SidebarToggleButtonProps) => (
-  <Box
+  <button
+    type="button"
+    onClick={onToggle}
     style={{
-      position: "fixed",
-      left: isOpen ? `${navWidth - TOGGLE_SIZE / 2}px` : `${TOGGLE_OFFSET}px`,
-      top: TOGGLE_TOP,
-      zIndex: 500,
+      position: "absolute",
+      left: 0,
+      top: 0,
+      width: "2rem",
+      height: "100%",
+      border: "none",
+      borderRight: "1px solid #e0e0e0",
+      backgroundColor: "#e7f5ff",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 0,
+      transition: "background-color 150ms ease",
+    }}
+    title={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+    aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.backgroundColor = "#d0ebff";
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.backgroundColor = "#e7f5ff";
     }}
   >
-    <ActionIcon
-      variant="default"
-      radius="xl"
-      size={TOGGLE_SIZE}
-      aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
-      onClick={onToggle}
+    <span
       style={{
-        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-        transition: "transform 0.15s ease",
+        color: "#1c7ed6",
+        fontSize: "14px",
+        fontWeight: 600,
+        writingMode: "vertical-rl",
+        textOrientation: "mixed",
+        transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+        userSelect: "none",
+        transition: "transform 180ms ease",
       }}
     >
-      <Chevron direction={isOpen ? "left" : "right"} />
-    </ActionIcon>
-  </Box>
+      ‹
+    </span>
+  </button>
 );

@@ -11,7 +11,7 @@ import { log } from "../../utils/rendererLogger";
 const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
 const FOOTER_HEIGHT = 28;
-const TOGGLE_SAFE_SPACE = 56;
+const TOGGLE_BAR_WIDTH = 32; // 2rem in pixels
 const NOTIFICATION_HEIGHT = 120; // Top bar (~32px) + content (80px) + padding
 const NAVBAR_TRANSITION_MS = 180;
 
@@ -78,17 +78,16 @@ export const RendererLayout = ({
 
   const scrollContainerRef = useRef<HTMLElement>(null);
 
-  // Build grid template rows and areas conditionally
+  // Build grid template rows conditionally
   const gridTemplateRows = `minmax(0, 1fr) ${FOOTER_HEIGHT}px${hasPageTool ? " auto" : ""}`;
-  const gridTemplateAreas = `"nav main aside" "footer footer footer"${hasPageTool ? ' "tool tool tool"' : ""}`;
 
   return (
     <Box
       style={{
         display: "grid",
-        gridTemplateColumns: `${navWidth}px 1fr ${asideWidth}px`,
+        gridTemplateColumns: `${TOGGLE_BAR_WIDTH}px ${navWidth}px 1fr ${asideWidth}px`,
         gridTemplateRows,
-        gridTemplateAreas,
+        gridTemplateAreas: `"toggle nav main aside" "toggle footer footer footer"${hasPageTool ? ' "toggle tool tool tool"' : ""}`,
         height: "100vh",
         position: "relative",
         backgroundColor: "var(--mantine-color-body)",
@@ -135,10 +134,9 @@ export const RendererLayout = ({
             position: "relative",
             zIndex: 0,
             paddingBottom: FOOTER_HEIGHT + 8,
-            paddingLeft: isNavbarOpened ? 0 : TOGGLE_SAFE_SPACE,
             marginBottom: hasActiveNotifications ? NOTIFICATION_HEIGHT : 0,
             overflow: "auto",
-            transition: `margin-bottom 0.3s ease-out, padding-left ${NAVBAR_TRANSITION_MS}ms ease`,
+            transition: `margin-bottom 0.3s ease-out`,
           }}
         >
           {main}
@@ -191,11 +189,14 @@ export const RendererLayout = ({
         </Box>
       )}
 
-      <SidebarToggleButton
-        isOpen={isNavbarOpened}
-        navWidth={navWidth || NAVBAR_WIDTH}
-        onToggle={onNavbarToggle}
-      />
+      <Box
+        style={{
+          gridArea: "toggle",
+          position: "relative",
+        }}
+      >
+        <SidebarToggleButton isOpen={isNavbarOpened} onToggle={onNavbarToggle} />
+      </Box>
     </Box>
   );
 };
