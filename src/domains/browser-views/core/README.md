@@ -62,7 +62,7 @@ Comprehensive tests for the reducer including:
 ## Usage
 
 ```typescript
-import { emptyWorld, reduce } from './view-core';
+import { emptyWorld, reduce } from '@/domains/browser-views/core';
 
 // Start with empty world
 let world = emptyWorld;

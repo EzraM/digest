@@ -1,5 +1,3 @@
-// Adapter layer exports
-export * from './HandleRegistry';
-export * from './Interpreter';
-export * from './EventTranslator';
-export * from './NotificationLayer';
+// Re-export from new location for backwards compatibility
+// TODO: Update imports to use 'src/domains/browser-views/adapter' directly
+export * from '../../domains/browser-views/adapter';
