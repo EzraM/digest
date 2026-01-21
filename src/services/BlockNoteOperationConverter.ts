@@ -1,11 +1,13 @@
 import {
   BlockOperation,
-  BlockChange,
   LLMOperationRequest,
+  TransactionOrigin,
+} from "../domains/blocks/core";
+import {
+  BlockChange,
   BLOCKNOTE_SOURCE_MAP,
   createUserTransactionOrigin,
   createLLMTransactionOrigin,
-  TransactionOrigin,
 } from "../types/operations";
 import { CustomBlock } from "../types/schema";
 import { log } from "../utils/rendererLogger";

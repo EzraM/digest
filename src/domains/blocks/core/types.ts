@@ -67,13 +67,14 @@ export interface TransactionOrigin {
 
 /**
  * Result of applying operations
+ * Note: Mutable to allow services to build up the result
  */
 export interface OperationResult {
-  readonly success: boolean;
-  readonly operationsApplied: number;
-  readonly errors?: readonly string[];
-  readonly conflicts?: readonly BlockOperation[];
-  readonly batchId?: string;
+  success: boolean;
+  operationsApplied: number;
+  errors?: string[];
+  conflicts?: BlockOperation[];
+  batchId?: string;
 }
 
 /**
@@ -111,6 +112,41 @@ export interface Snapshot {
   readonly data: Uint8Array;
   readonly createdAt: number;
   readonly operationCount: number;
+}
+
+/**
+ * Enhanced document update event for Y.js synchronization
+ */
+export interface DocumentUpdate {
+  readonly operations: BlockOperation[];
+  readonly origin?: TransactionOrigin;
+  readonly ydocState?: Uint8Array;
+}
+
+/**
+ * Batch operation for applying multiple related changes atomically
+ */
+export interface BatchOperation {
+  readonly id: string;
+  readonly operations: BlockOperation[];
+  readonly origin: TransactionOrigin;
+  readonly createdAt: number;
+}
+
+/**
+ * LLM operation request with rich metadata
+ * Allows tracking from request through to applied operations
+ */
+export interface LLMOperationRequest {
+  readonly requestId: string;
+  readonly userId?: string;
+  readonly prompt?: string;
+  readonly context?: {
+    readonly cursorPosition?: number;
+    readonly selectedBlocks?: readonly string[];
+    readonly nearbyBlocks?: readonly Block[];
+  };
+  readonly timestamp: number;
 }
 
 // ============================================================================

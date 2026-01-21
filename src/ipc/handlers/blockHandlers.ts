@@ -3,7 +3,7 @@ import { DocumentManager } from "../../services/DocumentManager";
 import { WebContentsView } from "electron";
 import { log } from "../../utils/mainLogger";
 import { ImageService } from "../../services/ImageService";
-import { BlockOperation } from "../../types/operations";
+import { BlockOperation } from "../../domains/blocks/core";
 
 export function createBlockHandlers(
   documentManager: DocumentManager,

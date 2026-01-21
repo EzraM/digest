@@ -6,7 +6,7 @@ import {
   OperationRecord,
   TransactionOrigin,
   BatchOperation,
-} from "../types/operations";
+} from "../domains/blocks/core";
 import { log } from "../utils/mainLogger";
 import { getEventLogger } from "./EventLogger";
 // Simple ID generator to replace uuid dependency

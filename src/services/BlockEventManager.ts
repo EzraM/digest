@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { log } from '../utils/mainLogger';
 import { BlockOperationService } from './BlockOperationService';
-import { BlockOperation, TransactionOrigin } from '../types/operations';
+import { BlockOperation, TransactionOrigin } from '../domains/blocks/core';
 
 // Event types for block operations
 export interface BlockEvents {
