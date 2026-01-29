@@ -147,7 +147,7 @@ export const useRendererEditor = (
 
   useEffect(() => {
     if (!window.electronAPI?.onNewBrowserBlock) {
-      return;
+      return () => {}; // Return empty cleanup function
     }
 
     const unsubscribe = window.electronAPI.onNewBrowserBlock((data) => {
@@ -159,10 +159,80 @@ export const useRendererEditor = (
     return unsubscribe;
   }, []);
 
+  // Handle inline link insertion from cmd+click in page context
+  useEffect(() => {
+    if (!window.electronAPI?.onInsertLink) {
+      console.warn("[useRendererEditor] onInsertLink API not available");
+      return () => {}; // Return empty cleanup function
+    }
+
+    console.log("[useRendererEditor] Registering onInsertLink handler");
+
+    const unsubscribe = window.electronAPI.onInsertLink((data) => {
+      console.log("[useRendererEditor] onInsertLink event received:", data);
+
+      if (!currentEditor) {
+        console.warn("[useRendererEditor] No currentEditor available");
+        return;
+      }
+
+      if (!data?.url || !data?.title) {
+        console.warn("[useRendererEditor] Invalid data - missing url or title:", data);
+        return;
+      }
+
+      try {
+        // Get current cursor position
+        const cursorPosition = currentEditor.getTextCursorPosition();
+        console.log("[useRendererEditor] Current cursor position:", cursorPosition);
+
+        if (!cursorPosition) {
+          console.warn("[useRendererEditor] No cursor position available for link insertion");
+          return;
+        }
+
+        console.log("[useRendererEditor] Inserting link block after current block");
+
+        // Insert a paragraph with the link at the cursor position
+        // We insert after the current block
+        // BlockNote link format: { type: "link", href: string, content: [{ type: "text", text: string }] }
+        currentEditor.insertBlocks(
+          [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "link",
+                  href: data.url,
+                  content: [
+                    {
+                      type: "text",
+                      text: data.title,
+                      styles: {},
+                    },
+                  ],
+                },
+              ],
+            } as any,
+          ],
+          cursorPosition.block,
+          "after"
+        );
+
+        console.log("[useRendererEditor] Link block inserted successfully");
+        console.log(`[useRendererEditor] ✓ Link captured: "${data.title}" → ${data.url}`);
+      } catch (error) {
+        console.error("[useRendererEditor] Failed to insert inline link:", error);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
   // Handle scroll position updates from main process
   useEffect(() => {
     if (!window.electronAPI?.onBrowserScrollPercent || !currentEditor) {
-      return;
+      return () => {}; // Return empty cleanup function
     }
 
     const unsubscribe = window.electronAPI.onBrowserScrollPercent((data) => {

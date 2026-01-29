@@ -1,6 +1,6 @@
 // Props interfaces
 export interface PageProps {
-  blockId: string;
+  blockId?: string; // Optional for ephemeral URL pages
   url: string;
   heightMode?: "normal" | "expanded";
   layout?: "inline" | "full";

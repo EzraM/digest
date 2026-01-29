@@ -238,6 +238,16 @@ export class ViewStore {
   }
 
   /**
+   * Set callback for background link clicks (cmd+click) that should insert inline links.
+   * This is external coordination with main.ts, not a state change.
+   */
+  setBackgroundLinkClickCallback(
+    callback: (url: string, sourceBlockId: string, title: string) => void
+  ): void {
+    this.events.setBackgroundLinkClickCallback(callback);
+  }
+
+  /**
    * Set a pending scroll position to restore when the view finishes loading.
    * Called from renderer when a block mounts with an existing scrollPercent.
    */

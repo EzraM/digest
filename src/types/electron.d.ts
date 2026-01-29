@@ -86,6 +86,16 @@ interface ElectronAPI {
   onNewBrowserBlock: (
     callback: (data: { url: string; sourceBlockId?: string }) => void
   ) => () => void;
+  onInsertLink: (
+    callback: (data: { url: string; title: string; sourceBlockId?: string }) => void
+  ) => () => void;
+  onLinkCaptured: (
+    callback: (data: {
+      url: string;
+      title: string;
+      capturedAt: number;
+    }) => void
+  ) => () => void;
   applyBlockOperations: (
     operations: BlockOperation[],
     origin?: import("./operations").TransactionOrigin

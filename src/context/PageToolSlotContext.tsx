@@ -3,8 +3,8 @@ import { createContext, useContext, ReactNode, useState, useCallback } from "rea
 type PageToolSlotContextType = {
   content: ReactNode | null;
   isVisible: boolean;
-  registerTool: (content: ReactNode) => void;
-  unregisterTool: () => void;
+  registerTool: (id: string, content: ReactNode) => void;
+  unregisterTool: (id: string) => void;
   toggleVisibility: () => void;
   setVisibility: (visible: boolean) => void;
 };
@@ -17,16 +17,30 @@ export const PageToolSlotProvider = ({
 }: {
   children: ReactNode;
 }) => {
-  const [content, setContent] = useState<ReactNode | null>(null);
+  const [tools, setTools] = useState<Map<string, ReactNode>>(new Map());
   const [isVisible, setIsVisible] = useState(false);
 
-  const registerTool = useCallback((toolContent: ReactNode) => {
-    setContent(toolContent);
+  const registerTool = useCallback((id: string, toolContent: ReactNode) => {
+    setTools((prev) => {
+      const next = new Map(prev);
+      next.set(id, toolContent);
+      return next;
+    });
   }, []);
 
-  const unregisterTool = useCallback(() => {
-    setContent(null);
-    setIsVisible(false);
+  const unregisterTool = useCallback((id: string) => {
+    setTools((prev) => {
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+    // Reset visibility if no tools remain
+    setTools((current) => {
+      if (current.size === 0) {
+        setIsVisible(false);
+      }
+      return current;
+    });
   }, []);
 
   const toggleVisibility = useCallback(() => {
@@ -36,6 +50,9 @@ export const PageToolSlotProvider = ({
   const setVisibility = useCallback((visible: boolean) => {
     setIsVisible(visible);
   }, []);
+
+  // Compose all registered tools into a single content node
+  const content = tools.size > 0 ? <>{Array.from(tools.values())}</> : null;
 
   return (
     <PageToolSlotContext.Provider

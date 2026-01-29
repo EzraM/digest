@@ -10,7 +10,8 @@ import { CustomBlockNoteEditor } from "../types/schema";
 
 export type RendererRoute =
   | { kind: "doc"; docId: string | null; focusBlockId?: string | null }
-  | { kind: "block"; blockId: string; docId?: string | null };
+  | { kind: "block"; blockId: string; docId?: string | null }
+  | { kind: "url"; url: string; docId?: string | null };
 
 export type BlockRouteProps = {
   blockId: string;
@@ -41,6 +42,7 @@ export type RouterHelpers =
       blockRouteProps: null;
       navigateToDoc: (docId: string, focusBlockId?: string | null) => void;
       navigateToBlock: (blockId: string, docId?: string | null) => void;
+      navigateToUrl: (url: string, docId?: string | null) => void;
       updateCachedBlockUrl: (blockId: string, url: string) => void;
     }
   | {
@@ -48,6 +50,15 @@ export type RouterHelpers =
       blockRouteProps: BlockRouteProps | null;
       navigateToDoc: (docId: string, focusBlockId?: string | null) => void;
       navigateToBlock: (blockId: string, docId?: string | null) => void;
+      navigateToUrl: (url: string, docId?: string | null) => void;
+      updateCachedBlockUrl: (blockId: string, url: string) => void;
+    }
+  | {
+      route: { kind: "url"; url: string; docId?: string | null };
+      blockRouteProps: null;
+      navigateToDoc: (docId: string, focusBlockId?: string | null) => void;
+      navigateToBlock: (blockId: string, docId?: string | null) => void;
+      navigateToUrl: (url: string, docId?: string | null) => void;
       updateCachedBlockUrl: (blockId: string, url: string) => void;
     };
 
@@ -71,6 +82,11 @@ const buildBlockPath = (blockId: string, docId?: string | null) => {
   return `/block/${encodeURIComponent(blockId)}${query}`;
 };
 
+const buildUrlPath = (url: string, docId?: string | null) => {
+  const query = docId ? `?doc=${encodeURIComponent(docId)}` : "";
+  return `/url/${encodeURIComponent(url)}${query}`;
+};
+
 const parseRoute = (
   hash: string,
   fallbackDocId: string | null
@@ -87,6 +103,16 @@ const parseRoute = (
     return {
       kind: "block",
       blockId,
+      docId: docIdParam ? decodeURIComponent(docIdParam) : fallbackDocId,
+    };
+  }
+
+  if (segments[0] === "url" && segments[1]) {
+    const urlParam = decodeURIComponent(segments[1]);
+    const docIdParam = url.searchParams.get("doc");
+    return {
+      kind: "url",
+      url: urlParam,
       docId: docIdParam ? decodeURIComponent(docIdParam) : fallbackDocId,
     };
   }
@@ -166,6 +192,7 @@ const routerReducer = (
       return {
         ...state,
         route: action.route,
+        // Only block routes have blockRouteProps, url routes don't need them
         blockRouteProps: action.route.kind === "block" ? cached : null,
       };
     }
@@ -282,6 +309,8 @@ export const useRendererRouter = (
     const targetDocId =
       state.route.kind === "doc"
         ? state.route.docId
+        : state.route.kind === "url"
+        ? (state.route.docId ?? fallbackDocId ?? activeDocumentId)
         : (state.route.docId ?? fallbackDocId ?? activeDocumentId);
 
     if (!targetDocId) {
@@ -338,6 +367,26 @@ export const useRendererRouter = (
     [fallbackDocId]
   );
 
+  const navigateToUrl = useCallback(
+    (url: string, docId?: string | null) => {
+      const target = `#${buildUrlPath(
+        url,
+        docId ?? fallbackDocId ?? undefined
+      )}`;
+      if (window.location.hash === target) {
+        startTransition(() => {
+          dispatch({
+            type: "ROUTE_CHANGED",
+            route: { kind: "url", url, docId: docId ?? fallbackDocId },
+          });
+        });
+      } else {
+        window.location.hash = target;
+      }
+    },
+    [fallbackDocId]
+  );
+
   // Derive block metadata once per route change
   useEffect(() => {
     if (state.route.kind !== "block") {
@@ -379,11 +428,12 @@ export const useRendererRouter = (
         state.route.kind === "block" ? state.blockRouteProps : null,
       navigateToDoc,
       navigateToBlock,
+      navigateToUrl,
       updateCachedBlockUrl,
     } as RouterHelpers;
-  }, [state, navigateToDoc, navigateToBlock, updateCachedBlockUrl]);
+  }, [state, navigateToDoc, navigateToBlock, navigateToUrl, updateCachedBlockUrl]);
 
   return helpers;
 };
 
-export { buildDocPath, buildBlockPath };
+export { buildDocPath, buildBlockPath, buildUrlPath };

@@ -16,6 +16,8 @@ const EVENTS = {
     INITIALIZED: "browser:initialized",
     NEW_BLOCK: "browser:new-block",
     NAVIGATION: "browser:navigation-state",
+    INSERT_LINK: "browser:insert-link",
+    LINK_CAPTURED: "browser:link-captured",
   },
 } as const;
 
@@ -204,6 +206,55 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
     return () => {
       ipcRenderer.removeListener(EVENTS.BROWSER.NEW_BLOCK, subscription);
+    };
+  },
+  onInsertLink: (
+    callback: (data: { url: string; title: string; sourceBlockId?: string }) => void
+  ) => {
+    console.log("[preload] Setting up onInsertLink IPC listener for event:", EVENTS.BROWSER.INSERT_LINK);
+
+    const subscription = (_: any, data: any) => {
+      console.log("[preload] Received browser:insert-link IPC event with data:", data);
+
+      const { url, title, sourceBlockId } = data;
+
+      if (!url || !title) {
+        console.error("[preload] Invalid data format for browser:insert-link event:", data);
+        return;
+      }
+
+      log.debug(
+        `Received request to insert inline link: ${title} (${url}), sourceBlockId: ${sourceBlockId}`,
+        "preload"
+      );
+      console.log("[preload] Calling renderer callback with link data");
+      callback({ url, title, sourceBlockId });
+    };
+
+    ipcRenderer.on(EVENTS.BROWSER.INSERT_LINK, subscription);
+
+    return () => {
+      console.log("[preload] Cleaning up onInsertLink IPC listener");
+      ipcRenderer.removeListener(EVENTS.BROWSER.INSERT_LINK, subscription);
+    };
+  },
+  onLinkCaptured: (
+    callback: (data: {
+      url: string;
+      title: string;
+      capturedAt: number;
+    }) => void
+  ) => {
+    const subscription = (_: any, data: any) => {
+      log.debug(
+        `Received link captured notification: ${data.title} (${data.url})`,
+        "preload"
+      );
+      callback(data);
+    };
+    ipcRenderer.on(EVENTS.BROWSER.LINK_CAPTURED, subscription);
+    return () => {
+      ipcRenderer.removeListener(EVENTS.BROWSER.LINK_CAPTURED, subscription);
     };
   },
   // Block operations for unified processing with transaction metadata

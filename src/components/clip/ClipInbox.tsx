@@ -56,10 +56,10 @@ export const ClipInbox = (): null => {
     );
     if (toolContent !== null) {
       log.debug("ClipInbox: Registering tool content", "ClipInbox");
-      registerTool(toolContent);
+      registerTool('clip-inbox', toolContent);
     } else {
       log.debug("ClipInbox: Unregistering tool", "ClipInbox");
-      unregisterTool();
+      unregisterTool('clip-inbox');
     }
   }, [toolContent, registerTool, unregisterTool]);
 
@@ -67,7 +67,7 @@ export const ClipInbox = (): null => {
   useEffect(() => {
     return () => {
       log.debug("ClipInbox: Unmount cleanup - unregistering tool", "ClipInbox");
-      unregisterTool();
+      unregisterTool('clip-inbox');
     };
   }, [unregisterTool]);
 

@@ -9,7 +9,7 @@ import { toFullViewId } from "../../utils/viewId";
 const NORMAL_HEIGHT = 800;
 
 export function Page({
-  blockId,
+  blockId: providedBlockId,
   url,
   layout = "inline",
   scrollPercent,
@@ -20,6 +20,9 @@ export function Page({
   viewId?: string;
   onReady?: (viewId: string) => void;
 }) {
+  // For ephemeral URL pages (no blockId), generate a synthetic ID based on URL
+  const blockId = providedBlockId ?? `ephemeral-${btoa(url).replace(/[^a-zA-Z0-9]/g, '')}`;
+
   // Layout-qualified view ID: separates inline from fullscreen views
   const viewId =
     explicitViewId ?? (layout === "full" ? toFullViewId(blockId) : blockId);

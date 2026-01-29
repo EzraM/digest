@@ -15,7 +15,7 @@ import { CustomBlockNoteEditor } from "../../types/schema";
 import { BlockNotificationContext } from "../../context/BlockNotificationContext";
 
 type BlockRouteViewContentProps = {
-  blockId: string;
+  blockId: string | undefined; // undefined for ephemeral URL routes
   docId: string | null;
   profileId: string | null;
   url: string;
@@ -51,7 +51,7 @@ export const BlockRouteViewContent = ({
     viewId,
     urlString,
     {
-      blockIdForEditorSync: blockId,
+      blockIdForEditorSync: blockId ?? undefined, // Only sync if blockId exists
       onUrlChange,
       editor,
     }

@@ -32,6 +32,7 @@ import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
 import { createBlockHandlers } from "./ipc/handlers/blockHandlers";
 import { IPCServiceBridge } from "./services/IPCServiceBridge";
 import { ImageProtocolService } from "./services/ImageProtocolService";
+import { fetchPageTitle } from "./utils/fetchPageTitle";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -59,6 +60,8 @@ const EVENTS = {
   BROWSER: {
     INITIALIZED: "browser:initialized",
     NEW_BLOCK: "browser:new-block",
+    INSERT_LINK: "browser:insert-link",
+    LINK_CAPTURED: "browser:link-captured",
     NAVIGATION: "browser:navigation-state",
   },
 } as const;
@@ -182,7 +185,7 @@ const createWindow = async () => {
     globalAppView
   );
 
-  // Shared helper to create a new browser block
+  // Shared helper to create a new browser block (used by EventTranslator for page context)
   const createBrowserBlock = (url: string, sourceBlockId?: string) => {
     log.debug(
       `Creating new browser block: ${url}, sourceBlockId: ${sourceBlockId}`,
@@ -199,11 +202,60 @@ const createWindow = async () => {
     }
   };
 
-  // Set up the link click callback for ViewStore to properly target the correct WebContents
+  // Helper to navigate to URL route (used by LinkInterceptionService for notebook context)
+  const navigateToUrl = (url: string) => {
+    log.debug(`Navigating to URL route: ${url}`, "main");
+
+    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
+      // Use executeJavaScript to navigate by setting window.location.hash
+      const encodedUrl = encodeURIComponent(url);
+      globalAppView.webContents.executeJavaScript(
+        `window.location.hash = '#/url/${encodedUrl}';`
+      ).catch(err => {
+        log.debug(`Failed to navigate to URL: ${err}`, "main");
+      });
+    } else {
+      log.debug("Cannot navigate to URL - appView not available", "main");
+    }
+  };
+
+  // Helper to insert inline link (used by EventTranslator for page background clicks)
+  const insertInlineLink = async (url: string, sourceBlockId: string, _unusedTitle: string) => {
+    log.debug(`[main] Inserting inline link: ${url}, sourceBlockId: ${sourceBlockId}`, "main");
+    log.debug(`[main] Fetching title for target URL: ${url}`, "main");
+
+    // Fetch the title from the target URL (not the source page)
+    const title = await fetchPageTitle(url);
+    log.debug(`[main] Title fetched: "${title}"`, "main");
+
+    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
+      log.debug(`[main] Sending INSERT_LINK event to renderer with title: "${title}"`, "main");
+      globalAppView.webContents.send(EVENTS.BROWSER.INSERT_LINK, {
+        url,
+        title,
+        sourceBlockId,
+      });
+
+      // Emit link capture notification event for UI feedback
+      log.debug(`[main] Sending LINK_CAPTURED event to renderer for UI feedback`, "main");
+      globalAppView.webContents.send(EVENTS.BROWSER.LINK_CAPTURED, {
+        url,
+        title,
+        capturedAt: Date.now(),
+      });
+    } else {
+      log.debug("[main] Cannot insert inline link - appView not available", "main");
+    }
+  };
+
+  // Set up the link click callback for ViewStore (page context - still creates blocks for now)
   viewStore.setLinkClickCallback(createBrowserBlock);
 
-  // Set up the link click callback for LinkInterceptionService
-  linkInterceptionService.setLinkClickCallback(createBrowserBlock);
+  // Set up background link click callback for ViewStore (page context - inserts inline links)
+  viewStore.setBackgroundLinkClickCallback(insertInlineLink);
+
+  // Set up the link click callback for LinkInterceptionService (notebook context - navigates to URL)
+  linkInterceptionService.setLinkClickCallback(navigateToUrl);
 
   // Store global references (baseWindow and viewManager are kept alive by their usage)
 

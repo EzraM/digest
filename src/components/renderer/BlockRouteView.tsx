@@ -5,7 +5,7 @@ import { MissingUrlView } from "./MissingUrlView";
 import { CustomBlockNoteEditor } from "../../types/schema";
 
 type BlockRouteViewProps = {
-  blockId: string;
+  blockId: string | undefined; // undefined for ephemeral URL routes
   docId: string | null;
   profileId: string | null;
   url: string | null;
@@ -29,8 +29,8 @@ export const BlockRouteView = ({
 }: BlockRouteViewProps) => {
   const routeContext = useRendererRoute();
 
-  // Type guard: ensure we're on a block route
-  if (routeContext.route.kind !== "block") {
+  // Type guard: ensure we're on a block or url route
+  if (routeContext.route.kind !== "block" && routeContext.route.kind !== "url") {
     return null;
   }
 
@@ -38,7 +38,7 @@ export const BlockRouteView = ({
 
   const handleMinimize = () => {
     if (docId) {
-      navigateToDoc(docId, blockId);
+      navigateToDoc(docId, blockId ?? null);
     } else {
       window.history.back();
     }

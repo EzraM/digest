@@ -32,6 +32,9 @@ import { toFullViewId } from "./utils/viewId";
 import { PageToolSlotProvider } from "./context/PageToolSlotContext";
 import { ClipInbox } from "./components/clip/ClipInbox";
 import { useBrowserSelection } from "./hooks/useBrowserSelection";
+import { LinkCaptureProvider } from "./context/LinkCaptureContext";
+import { LinkCaptureNotification } from "./components/linkCapture/LinkCaptureNotification";
+import { useLinkCaptureNotification } from "./hooks/useLinkCaptureNotification";
 
 const RendererAppContent = () => {
   const [isNavbarOpened, { toggle: toggleNavbar, close: closeNavbar }] =
@@ -52,6 +55,10 @@ const RendererAppContent = () => {
 
   // Listen for browser selection events
   useBrowserSelection();
+
+  // Listen for link capture events
+  useLinkCaptureNotification();
+
   const {
     SlashCommandSyncMenu,
     handleSlashMenuItems,
@@ -86,8 +93,8 @@ const RendererAppContent = () => {
   );
 
   useEffect(() => {
-    if (route.kind === "block") {
-      // Entering block view; keep doc visible until full view ready
+    if (route.kind === "block" || route.kind === "url") {
+      // Entering block/url view; keep doc visible until full view ready
       if (displayedRoute.kind === "doc") {
         setHandoffTarget(route);
       } else {
@@ -103,11 +110,18 @@ const RendererAppContent = () => {
 
   const handleFullscreenReady = useCallback(
     (viewId: string) => {
-      if (
-        handoffTarget &&
+      if (!handoffTarget) return;
+
+      const isBlockHandoff =
         handoffTarget.kind === "block" &&
-        toFullViewId(handoffTarget.blockId) === viewId
-      ) {
+        toFullViewId(handoffTarget.blockId) === viewId;
+
+      // For URL routes, generate synthetic blockId for comparison
+      const isUrlHandoff =
+        handoffTarget.kind === "url" &&
+        toFullViewId(`ephemeral-${btoa(handoffTarget.url).replace(/[^a-zA-Z0-9]/g, '')}`) === viewId;
+
+      if (isBlockHandoff || isUrlHandoff) {
         setDisplayedRoute(handoffTarget);
         setHandoffTarget(null);
       }
@@ -191,9 +205,9 @@ const RendererAppContent = () => {
   const activeDocumentTitle = activeDocument?.title ?? null;
   const isHandoff =
     handoffTarget !== null &&
-    handoffTarget.kind === "block" &&
+    (handoffTarget.kind === "block" || handoffTarget.kind === "url") &&
     displayedRoute.kind === "doc" &&
-    route.kind === "block";
+    (route.kind === "block" || route.kind === "url");
 
   const showDebug = useCallback(async () => {
     setIsDebugSidebarVisible(true);
@@ -278,6 +292,19 @@ const RendererAppContent = () => {
             onReady={handleFullscreenReady}
           />
         )}
+        {route.kind === "url" && (
+          <BlockRouteView
+            blockId={undefined}
+            docId={route.docId ?? activeDocumentId}
+            profileId={activeDocument?.profileId ?? null}
+            url={route.url}
+            title={route.url}
+            viewId={toFullViewId(`ephemeral-${btoa(route.url).replace(/[^a-zA-Z0-9]/g, '')}`)}
+            editor={editor}
+            onUrlChange={() => {}} // Ephemeral pages don't update block state
+            onReady={handleFullscreenReady}
+          />
+        )}
         {(displayedRoute.kind === "doc" || isHandoff) && (
           <RendererLayout
             isNavbarOpened={isNavbarOpened}
@@ -357,6 +384,7 @@ const RendererAppContent = () => {
           onConfirm={handleConfirmDeleteProfile}
         />
         <ClipInbox />
+        <LinkCaptureNotification />
       </RendererRouteProvider>
     </MantineProvider>
   );
@@ -366,9 +394,11 @@ export const RendererApp = () => {
   return (
     <BlockNotificationProvider>
       <ClipDraftProvider>
-        <PageToolSlotProvider>
-          <RendererAppContent />
-        </PageToolSlotProvider>
+        <LinkCaptureProvider>
+          <PageToolSlotProvider>
+            <RendererAppContent />
+          </PageToolSlotProvider>
+        </LinkCaptureProvider>
       </ClipDraftProvider>
     </BlockNotificationProvider>
   );
