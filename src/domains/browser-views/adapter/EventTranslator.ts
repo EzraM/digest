@@ -5,7 +5,7 @@ import { toBlockId } from '../../../utils/viewId';
 
 type CommandDispatcher = (cmd: Command) => void;
 type LinkClickCallback = (url: string, sourceId: string) => void;
-type BackgroundLinkCallback = (url: string, sourceId: string, title: string) => void;
+type BackgroundLinkCallback = (url: string, sourceId: string, title: string, profileId: string) => void;
 
 /**
  * Translates Electron WebContents events into commands.
@@ -24,7 +24,7 @@ export class EventTranslator {
     this.onBackgroundLinkClick = callback;
   }
 
-  attach(id: string, view: WebContentsView, dispatch: CommandDispatcher): void {
+  attach(id: string, view: WebContentsView, dispatch: CommandDispatcher, profileId: string): void {
     const { webContents } = view;
 
     // Track if we've seen an error for this load
@@ -154,10 +154,10 @@ export class EventTranslator {
           // Pass source page title as placeholder - the callback will fetch the target page's title
           const sourcePageTitle = webContents.getTitle() || url;
           log.debug(
-            `[EventTranslator] [${id}] Calling onBackgroundLinkClick callback`,
+            `[EventTranslator] [${id}] Calling onBackgroundLinkClick callback with profileId: ${profileId}`,
             'EventTranslator'
           );
-          this.onBackgroundLinkClick(url, toBlockId(id), sourcePageTitle);
+          this.onBackgroundLinkClick(url, toBlockId(id), sourcePageTitle, profileId);
         } else {
           log.debug(
             `[EventTranslator] [${id}] No background link click callback registered`,

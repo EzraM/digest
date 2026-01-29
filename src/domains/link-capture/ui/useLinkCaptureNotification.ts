@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useLinkCaptureContext } from "../context/LinkCaptureContext";
+import { useLinkCaptureContext } from "./LinkCaptureContext";
 
 /**
  * Hook to listen for link capture IPC events and add them to the notification state

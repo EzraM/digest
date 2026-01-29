@@ -32,7 +32,7 @@ import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
 import { createBlockHandlers } from "./ipc/handlers/blockHandlers";
 import { IPCServiceBridge } from "./services/IPCServiceBridge";
 import { ImageProtocolService } from "./services/ImageProtocolService";
-import { fetchPageTitle } from "./utils/fetchPageTitle";
+import { fetchPageTitle } from "./domains/link-capture/adapter/fetchPageTitle";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -220,12 +220,12 @@ const createWindow = async () => {
   };
 
   // Helper to insert inline link (used by EventTranslator for page background clicks)
-  const insertInlineLink = async (url: string, sourceBlockId: string, _unusedTitle: string) => {
-    log.debug(`[main] Inserting inline link: ${url}, sourceBlockId: ${sourceBlockId}`, "main");
-    log.debug(`[main] Fetching title for target URL: ${url}`, "main");
+  const insertInlineLink = async (url: string, sourceBlockId: string, _unusedTitle: string, profileId: string) => {
+    log.debug(`[main] Inserting inline link: ${url}, sourceBlockId: ${sourceBlockId}, profileId: ${profileId}`, "main");
+    log.debug(`[main] Fetching title for target URL: ${url} using profile: ${profileId}`, "main");
 
-    // Fetch the title from the target URL (not the source page)
-    const title = await fetchPageTitle(url);
+    // Fetch the title from the target URL (not the source page) using the source profile's session
+    const title = await fetchPageTitle(url, { profileId });
     log.debug(`[main] Title fetched: "${title}"`, "main");
 
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {

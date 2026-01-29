@@ -1,5 +1,14 @@
-import { net } from 'electron';
-import { log } from './mainLogger';
+import { net, session } from 'electron';
+import { log } from '../../../utils/mainLogger';
+import { getProfilePartition } from '../../../config/profiles';
+
+/**
+ * Options for fetching page titles
+ */
+export interface FetchPageTitleOptions {
+  timeoutMs?: number;
+  profileId?: string;
+}
 
 /**
  * Fetches the title of a page from its URL.
@@ -7,16 +16,29 @@ import { log } from './mainLogger';
  * Falls back to the URL if the request fails or no title is found.
  *
  * @param url The URL to fetch the title from
- * @param timeoutMs Timeout in milliseconds (default: 5000)
+ * @param options Options including timeout and profileId for session isolation
  * @returns Promise resolving to the page title or URL as fallback
  */
-export async function fetchPageTitle(url: string, timeoutMs: number = 5000): Promise<string> {
-  log.debug(`[fetchPageTitle] Starting title fetch for: ${url}`, 'fetchPageTitle');
+export async function fetchPageTitle(url: string, options: FetchPageTitleOptions = {}): Promise<string> {
+  const { timeoutMs = 5000, profileId } = options;
+
+  log.debug(
+    `[fetchPageTitle] Starting title fetch for: ${url}${profileId ? ` (profile: ${profileId})` : ''}`,
+    'fetchPageTitle'
+  );
 
   try {
     // Create a promise that will timeout
     const fetchPromise = new Promise<string>((resolve, reject) => {
-      const request = net.request(url);
+      // Use profile-specific session if profileId is provided
+      let request;
+      if (profileId) {
+        const partition = getProfilePartition(profileId);
+        const profileSession = session.fromPartition(partition);
+        request = net.request({ url, session: profileSession });
+      } else {
+        request = net.request(url);
+      }
 
       // Set a timeout
       const timeoutId = setTimeout(() => {
@@ -27,13 +49,13 @@ export async function fetchPageTitle(url: string, timeoutMs: number = 5000): Pro
       let htmlData = '';
       let statusCode: number | undefined;
 
-      request.on('response', (response) => {
+      request.on('response', (response: Electron.IncomingMessage) => {
         statusCode = response.statusCode;
         log.debug(`[fetchPageTitle] Response received: status=${statusCode}`, 'fetchPageTitle');
 
         // Only process successful responses
         if (statusCode && statusCode >= 200 && statusCode < 300) {
-          response.on('data', (chunk) => {
+          response.on('data', (chunk: Buffer) => {
             // Only accumulate first ~10KB to avoid memory issues
             if (htmlData.length < 10240) {
               htmlData += chunk.toString();
@@ -72,7 +94,7 @@ export async function fetchPageTitle(url: string, timeoutMs: number = 5000): Pro
         }
       });
 
-      request.on('error', (error) => {
+      request.on('error', (error: Error) => {
         clearTimeout(timeoutId);
         log.debug(`[fetchPageTitle] Request error: ${error.message}`, 'fetchPageTitle');
         reject(error);

@@ -41,9 +41,9 @@ export class ViewStore {
       layerManager,
       this.handles,
       rendererWebContents,
-      (id, view) => {
+      (id, view, profileId) => {
         // When a view is created, attach event listeners
-        this.events.attach(id, view, (cmd) => this.dispatch(cmd));
+        this.events.attach(id, view, (cmd) => this.dispatch(cmd), profileId);
       }
     );
 

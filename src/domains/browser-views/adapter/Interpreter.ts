@@ -23,7 +23,7 @@ export class Interpreter {
     private layerManager: ViewLayerManager | undefined,
     private handles: HandleRegistry,
     private rendererWebContents: Electron.WebContents,
-    private onViewCreated: (id: string, view: WebContentsView) => void
+    private onViewCreated: (id: string, view: WebContentsView, profileId: string) => void
   ) {}
 
   /**
@@ -134,7 +134,7 @@ export class Interpreter {
       this.handles.set(id, newView);
 
       // Notify that view was created (this will attach event listeners)
-      this.onViewCreated(id, newView);
+      this.onViewCreated(id, newView, profile);
 
       // Inject scroll forwarding for inline layout (set once at creation)
       injectScrollForwardingScript(

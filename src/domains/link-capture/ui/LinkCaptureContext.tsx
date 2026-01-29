@@ -1,38 +1,44 @@
-import { createContext, useContext, ReactNode, useState, useCallback } from "react";
-import { LinkCaptureNotification } from "../types/linkCapture";
+import { createContext, useContext, ReactNode, useReducer, useCallback } from "react";
+import { LinkCaptureNotification } from "../core/types";
+import { linkCaptureReducer, initialState } from "../core/reducer";
+import * as commands from "../core/commands";
+import * as selectors from "../core/selectors";
 
 interface LinkCaptureContextType {
   notifications: LinkCaptureNotification[];
   addNotification: (url: string, title: string) => void;
   removeNotification: (id: string) => void;
+  removeAllNotifications: () => void;
+  notificationCount: number;
+  hasNotifications: boolean;
 }
 
 const LinkCaptureContext = createContext<LinkCaptureContextType | null>(null);
 
 export const LinkCaptureProvider = ({ children }: { children: ReactNode }) => {
-  const [notifications, setNotifications] = useState<LinkCaptureNotification[]>([]);
+  const [state, dispatch] = useReducer(linkCaptureReducer, initialState);
 
   const addNotification = useCallback((url: string, title: string) => {
-    const notification: LinkCaptureNotification = {
-      id: `link-capture-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      url,
-      title,
-      capturedAt: Date.now(),
-    };
-
-    setNotifications((prev) => [...prev, notification]);
+    dispatch(commands.capture(url, title));
   }, []);
 
   const removeNotification = useCallback((id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    dispatch(commands.dismiss(id));
+  }, []);
+
+  const removeAllNotifications = useCallback(() => {
+    dispatch(commands.dismissAll());
   }, []);
 
   return (
     <LinkCaptureContext.Provider
       value={{
-        notifications,
+        notifications: selectors.getNotifications(state),
         addNotification,
         removeNotification,
+        removeAllNotifications,
+        notificationCount: selectors.getNotificationCount(state),
+        hasNotifications: selectors.hasNotifications(state),
       }}
     >
       {children}

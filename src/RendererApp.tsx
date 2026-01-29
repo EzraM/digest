@@ -32,9 +32,9 @@ import { toFullViewId } from "./utils/viewId";
 import { PageToolSlotProvider } from "./context/PageToolSlotContext";
 import { ClipInbox } from "./components/clip/ClipInbox";
 import { useBrowserSelection } from "./hooks/useBrowserSelection";
-import { LinkCaptureProvider } from "./context/LinkCaptureContext";
-import { LinkCaptureNotification } from "./components/linkCapture/LinkCaptureNotification";
-import { useLinkCaptureNotification } from "./hooks/useLinkCaptureNotification";
+import { LinkCaptureProvider } from "./domains/link-capture/ui/LinkCaptureContext";
+import { LinkCaptureNotification } from "./domains/link-capture/ui/LinkCaptureNotification";
+import { useLinkCaptureNotification } from "./domains/link-capture/ui/useLinkCaptureNotification";
 
 const RendererAppContent = () => {
   const [isNavbarOpened, { toggle: toggleNavbar, close: closeNavbar }] =
