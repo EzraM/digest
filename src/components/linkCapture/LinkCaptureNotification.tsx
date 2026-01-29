@@ -26,6 +26,7 @@ export const LinkCaptureNotification = (): null => {
   }, [notifications, removeNotification]);
 
   // Register with PageToolSlot using unique ID
+  // Visibility is automatically managed by PageToolSlotContext
   useEffect(() => {
     if (notifications.length > 0) {
       const latest = notifications[0];

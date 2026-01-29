@@ -26,20 +26,19 @@ export const PageToolSlotProvider = ({
       next.set(id, toolContent);
       return next;
     });
+    // Automatically show the tool slot when a tool is registered
+    setIsVisible(true);
   }, []);
 
   const unregisterTool = useCallback((id: string) => {
     setTools((prev) => {
       const next = new Map(prev);
       next.delete(id);
-      return next;
-    });
-    // Reset visibility if no tools remain
-    setTools((current) => {
-      if (current.size === 0) {
+      // Reset visibility if no tools remain
+      if (next.size === 0) {
         setIsVisible(false);
       }
-      return current;
+      return next;
     });
   }, []);
 

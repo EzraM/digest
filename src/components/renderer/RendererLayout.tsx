@@ -54,20 +54,6 @@ export const RendererLayout = ({
   const isPageToolVisible = pageToolContext?.isVisible ?? false;
   const hasPageTool = pageToolContent !== null && isPageToolVisible;
 
-  useEffect(() => {
-    if (hasPageTool) {
-      log.debug(
-        "RendererLayout: Page tool content detected, hasPageTool=true",
-        "RendererLayout"
-      );
-    } else {
-      log.debug(
-        "RendererLayout: No page tool content, hasPageTool=false",
-        "RendererLayout"
-      );
-    }
-  }, [hasPageTool]);
-
   const { navWidth, asideWidth } = useMemo(
     () => ({
       navWidth: isNavbarOpened ? NAVBAR_WIDTH : 0,
