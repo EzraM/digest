@@ -1,6 +1,5 @@
 html,
 body {
-  height: 100%;
   background-color: var(--mantine-color-body);
   color: var(--mantine-color-text);
   transition: background-color 0.2s ease, color 0.2s ease;
@@ -17,8 +16,6 @@ body {
 #root {
   background-color: var(--mantine-color-body);
   color: var(--mantine-color-text);
-  min-height: 100vh;
-  height: 100%;
 }
 
 .bn-editor.bn-editor {

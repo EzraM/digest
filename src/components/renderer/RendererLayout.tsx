@@ -1,12 +1,12 @@
-import { ReactNode, useMemo, useContext, useRef } from "react";
+import { ReactNode, useMemo, useContext, useRef, useEffect } from "react";
 import { Box, Transition } from "@mantine/core";
+import { useElementScrollRestoration } from "@tanstack/react-router";
 import { StatusBar } from "./StatusBar";
 import { useStatusBar } from "../../hooks/useStatusBar";
 import { SidebarToggleButton } from "./SidebarToggleButton";
 import { BlockNotificationContext } from "../../context/BlockNotificationContext";
 import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { ScrollContainerProvider } from "../../context/ScrollContainerContext";
-import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 
 const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
@@ -64,17 +64,25 @@ export const RendererLayout = ({
 
   const scrollContainerRef = useRef<HTMLElement>(null);
 
-  // Custom scroll restoration for container-based scrolling
-  useScrollRestoration(scrollContainerRef, {
-    // Use doc ID from path for scroll position key
-    getKey: (pathname) => {
-      // Extract doc ID from /doc/{docId} paths, otherwise use pathname
-      const docMatch = pathname.match(/^\/doc\/([^/]+)/);
-      return docMatch ? `doc:${docMatch[1]}` : pathname;
-    },
-    // Small delay to allow content to render before restoring
-    restoreDelay: 50,
+  // Check what TanStack's scroll restoration returns
+  const scrollEntry = useElementScrollRestoration({
+    id: "renderer-main-scroll-container",
   });
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !scrollEntry || typeof scrollEntry.scrollY !== "number") {
+      return;
+    }
+
+    if (Math.abs(container.scrollTop - scrollEntry.scrollY) < 1) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      container.scrollTop = scrollEntry.scrollY ?? 0;
+    });
+  }, [scrollEntry?.scrollY]);
 
   // Build grid template rows conditionally
   const gridTemplateRows = `minmax(0, 1fr) ${FOOTER_HEIGHT}px${hasPageTool ? " auto" : ""}`;
@@ -127,6 +135,7 @@ export const RendererLayout = ({
           component="main"
           ref={scrollContainerRef}
           id="renderer-main-scroll-container"
+          data-scroll-restoration-id="renderer-main-scroll-container"
           style={{
             gridArea: "main",
             position: "relative",

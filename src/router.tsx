@@ -46,8 +46,8 @@ export const router = createRouter({
   routeTree,
   history: createHashHistory(),
   defaultPreload: "intent",
-  // Disable default scroll restoration - we use custom container-based restoration
-  defaultScrollRestoration: false,
+  // Enable scroll restoration for custom containers via useElementScrollRestoration
+  scrollRestoration: true,
 });
 
 // Type registration for type-safe hooks

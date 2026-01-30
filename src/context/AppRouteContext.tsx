@@ -18,6 +18,8 @@ export type AppRouteContextValue = {
   navigateToDoc: (docId: string, focusBlockId?: string | null) => void;
   navigateToBlock: (blockId: string, docId?: string | null) => void;
   navigateToUrl: (url: string, docId?: string | null) => void;
+  /** Navigate back in history - triggers scroll restoration */
+  goBack: () => void;
 };
 
 const AppRouteContext = createContext<AppRouteContextValue | null>(null);
@@ -29,24 +31,6 @@ export function useAppRoute(): AppRouteContextValue {
   }
   return context;
 }
-
-// Path building helpers (same as old router)
-const buildDocPath = (docId: string, focusBlockId?: string | null) => {
-  const query = focusBlockId
-    ? `?focus=${encodeURIComponent(focusBlockId)}`
-    : "";
-  return `/doc/${encodeURIComponent(docId)}${query}`;
-};
-
-const buildBlockPath = (blockId: string, docId?: string | null) => {
-  const query = docId ? `?doc=${encodeURIComponent(docId)}` : "";
-  return `/block/${encodeURIComponent(blockId)}${query}`;
-};
-
-const buildUrlPath = (url: string, docId?: string | null) => {
-  const query = docId ? `?doc=${encodeURIComponent(docId)}` : "";
-  return `/url/${encodeURIComponent(url)}${query}`;
-};
 
 type AppRouteProviderProps = {
   children: React.ReactNode;
@@ -108,30 +92,47 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
     };
   }, [location.pathname, location.searchStr, fallbackDocId]);
 
-  // Navigate using hash - TanStack Router's hash history will pick it up
+  // Navigate via TanStack Router so history state includes scroll restoration keys
   const navigateToDoc = useCallback(
     (docId: string, focusBlockId?: string | null) => {
-      const path = buildDocPath(docId, focusBlockId);
-      window.location.hash = `#${path}`;
+      router.navigate({
+        to: "/doc/$docId",
+        params: { docId },
+        search: focusBlockId ? { focus: focusBlockId } : undefined,
+      });
     },
-    []
+    [router]
   );
 
   const navigateToBlock = useCallback(
     (blockId: string, docId?: string | null) => {
-      const path = buildBlockPath(blockId, docId);
-      window.location.hash = `#${path}`;
+      router.navigate({
+        to: "/block/$blockId",
+        params: { blockId },
+        search: docId ? { doc: docId } : undefined,
+      });
     },
-    []
+    [router]
   );
 
   const navigateToUrl = useCallback(
     (url: string, docId?: string | null) => {
-      const path = buildUrlPath(url, docId);
-      window.location.hash = `#${path}`;
+      router.navigate({
+        to: "/url/$url",
+        params: { url },
+        search: docId ? { doc: docId } : undefined,
+      });
     },
-    []
+    [router]
   );
+
+  const goBack = useCallback(() => {
+    console.log('[goBack] calling router.history.back()', {
+      currentPath: location.pathname,
+      historyLength: window.history.length,
+    });
+    router.history.back();
+  }, [router, location.pathname]);
 
   const value = useMemo(
     (): AppRouteContextValue => ({
@@ -139,8 +140,9 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
       navigateToDoc,
       navigateToBlock,
       navigateToUrl,
+      goBack,
     }),
-    [route, navigateToDoc, navigateToBlock, navigateToUrl]
+    [route, navigateToDoc, navigateToBlock, navigateToUrl, goBack]
   );
 
   return (

@@ -27,20 +27,15 @@ export const BlockRouteView = ({
   onUrlChange,
   onReady,
 }: BlockRouteViewProps) => {
-  const { route, navigateToDoc } = useAppRoute();
+  const { route, goBack } = useAppRoute();
 
   // Type guard: ensure we're on a block or url route
   if (route.kind !== "block" && route.kind !== "url") {
     return null;
   }
 
-  const handleMinimize = () => {
-    if (docId) {
-      navigateToDoc(docId, blockId ?? null);
-    } else {
-      window.history.back();
-    }
-  };
+  // Use history.back() to trigger scroll restoration
+  const handleMinimize = goBack;
 
   if (!url) {
     return <MissingUrlView title={title} onBack={handleMinimize} />;
