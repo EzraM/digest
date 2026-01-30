@@ -1,6 +1,6 @@
 /**
  * Convert a URL and title to BlockNote inline content format
- * Creates inline content with "Clipped from " prefix and a clickable link
+ * Creates inline content with a clickable link
  * Returns an array compatible with BlockNote's inline content schema
  */
 export function createClipReferenceInlineContent(
@@ -21,11 +21,6 @@ export function createClipReferenceInlineContent(
 
   return [
     {
-      type: "text",
-      text: "Clipped from ",
-      styles: {},
-    },
-    {
       type: "link",
       href: sourceUrl || "",
       content: [
@@ -38,5 +33,4 @@ export function createClipReferenceInlineContent(
     },
   ];
 }
-
 

@@ -34,41 +34,51 @@ export class ClipCommitService {
       throw new Error("No proposed blocks to insert");
     }
 
-    // Create the clip container block with inline content for the reference URL
-    // BlockNote uses a children array, not parentId, so we include children directly
-    const clipBlockId = `clip-${draft.id}`;
+    const baseBlockId = `clip-${draft.id}`;
+    let blockCounter = 0;
 
-    // Create child blocks with proper IDs
-    const children = draft.proposedBlocks.map((block, index) => ({
-      ...(block as any),
-      id: `${clipBlockId}-child-${index}`,
-    })) as any[];
+    const assignIds = (block: CustomPartialBlock): CustomPartialBlock => {
+      const id = (block as any).id || `${baseBlockId}-block-${blockCounter++}`;
+      const withId = { ...(block as any), id } as CustomPartialBlock;
 
-    const clipBlock = {
-      id: clipBlockId,
-      type: "clip",
-      props: {
-        sourceUrl: draft.sourceUrl,
-        title: draft.sourceTitle,
-      },
-      content: createClipReferenceInlineContent(
-        draft.sourceUrl,
-        draft.sourceTitle
-      ),
-      children: children,
-    } as CustomPartialBlock;
+      if (Array.isArray((block as any).children)) {
+        (withId as any).children = (block as any).children.map(
+          (child: CustomPartialBlock) => assignIds(child)
+        );
+      }
 
-    // Create operation to insert the clip container with its children
-    const operations: BlockOperation[] = [
-      {
+      return withId;
+    };
+
+    const blocksToInsert: CustomPartialBlock[] = [
+      ...(draft.proposedBlocks as CustomPartialBlock[]),
+    ];
+
+    if (draft.sourceUrl || draft.sourceTitle) {
+      blocksToInsert.push({
+        type: "paragraph",
+        content: createClipReferenceInlineContent(
+          draft.sourceUrl,
+          draft.sourceTitle
+        ),
+      } as CustomPartialBlock);
+    }
+
+    const operations: BlockOperation[] = [];
+    let afterBlockId = insertAfterBlockId;
+
+    for (const block of blocksToInsert) {
+      const blockWithId = assignIds(block);
+      operations.push({
         type: "insert",
-        blockId: clipBlockId,
-        block: clipBlock as any,
-        afterBlockId: insertAfterBlockId,
+        blockId: (blockWithId as any).id,
+        block: blockWithId as any,
+        afterBlockId,
         source: "clip",
         timestamp: Date.now(),
-      },
-    ];
+      });
+      afterBlockId = (blockWithId as any).id;
+    }
 
     // Create transaction origin
     // Use "clip" source so renderer applies the update (not skipped like "user" source)
@@ -79,7 +89,7 @@ export class ClipCommitService {
       metadata: {
         clipId: draft.id,
         sourceUrl: draft.sourceUrl,
-        blockCount: draft.proposedBlocks.length + 1,
+        blockCount: operations.length,
       },
     };
 
