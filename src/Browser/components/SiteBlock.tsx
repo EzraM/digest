@@ -1,7 +1,7 @@
 import { createReactBlockSpec } from "@blocknote/react";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useDocumentContext } from "../../context/DocumentContext";
-import { useRendererRoute } from "../../context/RendererRouteContext";
+import { useAppRoute } from "../../context/AppRouteContext";
 
 // Define the prop schema with proper typing
 const sitePropSchema = {
@@ -26,7 +26,7 @@ export const site = createReactBlockSpec(
       const { url } = block.props;
       const { copied, copy: handleCopy } = useCopyToClipboard(url);
       const { documentId } = useDocumentContext();
-      const { navigateToBlock } = useRendererRoute();
+      const { navigateToBlock } = useAppRoute();
 
       const openInFullView = () => {
         navigateToBlock(block.id, documentId ?? undefined);

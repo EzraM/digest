@@ -1,44 +1,28 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { log } from "../utils/rendererLogger";
 
 type UseDocumentActionsParams = {
   activeDocumentId: string | null;
   onPendingDocumentRemoved: (documentId: string) => void;
+  navigateToDoc?: (docId: string) => void;
 };
 
 export const useDocumentActions = ({
   activeDocumentId,
   onPendingDocumentRemoved,
+  navigateToDoc,
 }: UseDocumentActionsParams) => {
-  // Track switching state with a ref to avoid stale closure issues
-  const switchingRef = useRef<string | null>(null);
-
   const handleDocumentSelect = useCallback(
-    async (documentId: string) => {
-      if (!window.electronAPI?.documents) {
+    (documentId: string) => {
+      // Skip if already on this document
+      if (documentId === activeDocumentId) {
         return;
       }
 
-      // Prevent duplicate switches: skip if already switching to this document
-      // or if we're already on this document
-      if (switchingRef.current === documentId || documentId === activeDocumentId) {
-        return;
-      }
-
-      switchingRef.current = documentId;
-
-      try {
-        await window.electronAPI.documents.switch(documentId);
-      } catch (error) {
-        log.debug(`Failed to switch document: ${error}`, "renderer");
-      } finally {
-        // Clear switching state only if it still matches (prevents race conditions)
-        if (switchingRef.current === documentId) {
-          switchingRef.current = null;
-        }
-      }
+      // Navigate to the doc route - the effect in RendererApp will sync Electron state
+      navigateToDoc?.(documentId);
     },
-    [activeDocumentId]
+    [activeDocumentId, navigateToDoc]
   );
 
   const handleRenameDocument = useCallback(

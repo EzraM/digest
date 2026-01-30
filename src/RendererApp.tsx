@@ -10,7 +10,7 @@ import { useProfileRenameModal } from "./hooks/useProfileRenameModal";
 import { useProfileDeleteModal } from "./hooks/useProfileDeleteModal";
 import { useRendererEditor } from "./hooks/useRendererEditor";
 import { useDocumentActions } from "./hooks/useDocumentActions";
-import { useRendererRouter } from "./hooks/useRendererRouter";
+import { useBlockRouteProps } from "./hooks/useBlockRouteProps";
 import { RendererLayout } from "./components/renderer/RendererLayout";
 import { BlockRouteView } from "./components/renderer/BlockRouteView";
 import { FileTreePane } from "./components/renderer/FileTreePane";
@@ -21,8 +21,7 @@ import { ProfileDeleteModal } from "./components/renderer/ProfileDeleteModal";
 import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
-import { RendererRouteProvider } from "./context/RendererRouteContext";
-import { RendererRoute } from "./hooks/useRendererRouter";
+import { AppRouteProvider, useAppRoute, AppRoute } from "./context/AppRouteContext";
 import {
   BlockNotificationProvider,
   BlockNotificationContext,
@@ -81,16 +80,47 @@ const RendererAppContent = () => {
   });
 
   const activeDocumentId = activeDocument?.id ?? null;
-  const routeContext = useRendererRouter(
-    activeDocumentId,
-    activeDocumentId,
+
+  // Get route from TanStack Router context
+  const { route, navigateToDoc } = useAppRoute();
+
+  // Get block route props for block routes
+  const { blockRouteProps, updateCachedBlockUrl } = useBlockRouteProps(
+    route.kind === "block" ? route.blockId : undefined,
+    route.kind === "block" ? (route.docId ?? activeDocumentId) : null,
     editor
   );
-  const { route } = routeContext;
-  const [displayedRoute, setDisplayedRoute] = useState<RendererRoute>(route);
-  const [handoffTarget, setHandoffTarget] = useState<RendererRoute | null>(
-    null
-  );
+
+  const [displayedRoute, setDisplayedRoute] = useState<AppRoute>(route);
+  const [handoffTarget, setHandoffTarget] = useState<AppRoute | null>(null);
+
+  // Sync route with hash on initial load and when activeDocumentId becomes available
+  useEffect(() => {
+    if (route.kind === "doc" && !route.docId && activeDocumentId) {
+      // Use hash navigation - TanStack Router's hash history will pick it up
+      window.location.hash = `#/doc/${encodeURIComponent(activeDocumentId)}`;
+    }
+  }, [route.kind, route.docId, activeDocumentId]);
+
+  // Keep Electron's active document in sync with route doc id
+  useEffect(() => {
+    if (!window.electronAPI?.documents?.switch) {
+      return;
+    }
+
+    const targetDocId =
+      route.kind === "doc"
+        ? route.docId
+        : route.docId ?? activeDocumentId;
+
+    if (!targetDocId || targetDocId === activeDocumentId) {
+      return;
+    }
+
+    window.electronAPI.documents.switch(targetDocId).catch(() => {
+      // Ignore errors; renderer state will stay as-is
+    });
+  }, [route, activeDocumentId]);
 
   useEffect(() => {
     if (route.kind === "block" || route.kind === "url") {
@@ -138,6 +168,7 @@ const RendererAppContent = () => {
   } = useDocumentActions({
     activeDocumentId,
     onPendingDocumentRemoved: handlePendingDocumentRemoved,
+    navigateToDoc,
   });
 
   const handleSidebarDocumentSelect = useCallback(
@@ -272,121 +303,134 @@ const RendererAppContent = () => {
 
   return (
     <MantineProvider theme={theme} defaultColorScheme="auto">
-      <RendererRouteProvider value={routeContext}>
-        {route.kind === "block" && (
-          <BlockRouteView
-            blockId={route.blockId}
-            docId={
-              routeContext.blockRouteProps?.docId ??
-              route.docId ??
-              activeDocumentId
-            }
-            profileId={activeDocument?.profileId ?? null}
-            url={routeContext.blockRouteProps?.url ?? null}
-            title={routeContext.blockRouteProps?.title ?? "Block"}
-            viewId={toFullViewId(route.blockId)}
-            editor={editor}
-            onUrlChange={(nextUrl) =>
-              routeContext.updateCachedBlockUrl(route.blockId, nextUrl)
-            }
-            onReady={handleFullscreenReady}
-          />
-        )}
-        {route.kind === "url" && (
-          <BlockRouteView
-            blockId={undefined}
-            docId={route.docId ?? activeDocumentId}
-            profileId={activeDocument?.profileId ?? null}
-            url={route.url}
-            title={route.url}
-            viewId={toFullViewId(`ephemeral-${btoa(route.url).replace(/[^a-zA-Z0-9]/g, '')}`)}
-            editor={editor}
-            onUrlChange={() => {}} // Ephemeral pages don't update block state
-            onReady={handleFullscreenReady}
-          />
-        )}
-        {(displayedRoute.kind === "doc" || isHandoff) && (
-          <RendererLayout
-            isNavbarOpened={isNavbarOpened}
-            onNavbarToggle={toggleNavbar}
-            isDebugSidebarVisible={isDebugSidebarVisible}
-            profileName={activeProfileName}
-            documentTitle={activeDocumentTitle}
-            navbar={
-              <FileTreePane
-                profiles={profiles}
-                activeProfileId={activeProfileId}
-                onSelectProfile={handleProfileSelect}
-                onCreateProfile={handleOpenCreateProfileModal}
-                onRenameProfile={handleRenameProfile}
-                onDeleteProfile={handleDeleteProfile}
-                documentTree={activeProfileTree}
-                activeDocumentId={activeDocumentId}
-                onSelectDocument={handleSidebarDocumentSelect}
-                onCreateDocument={handleCreateDocument}
-                onRenameDocument={handleRenameDocument}
-                onDeleteDocument={handleDeleteDocument}
-                onMoveDocumentToProfile={handleMoveDocumentToProfile}
-                onMoveDocument={handleMoveDocumentWithinTree}
-                pendingEditDocumentId={pendingRenameDocumentId}
-                onPendingEditConsumed={handlePendingRenameConsumed}
-                onPendingDocumentNamed={handlePendingDocumentNamed}
+      {route.kind === "block" && (
+        <BlockRouteView
+          blockId={route.blockId}
+          docId={
+            blockRouteProps?.docId ??
+            route.docId ??
+            activeDocumentId
+          }
+          profileId={activeDocument?.profileId ?? null}
+          url={blockRouteProps?.url ?? null}
+          title={blockRouteProps?.title ?? "Block"}
+          viewId={toFullViewId(route.blockId)}
+          editor={editor}
+          onUrlChange={(nextUrl) =>
+            updateCachedBlockUrl(route.blockId, nextUrl)
+          }
+          onReady={handleFullscreenReady}
+        />
+      )}
+      {route.kind === "url" && (
+        <BlockRouteView
+          blockId={undefined}
+          docId={route.docId ?? activeDocumentId}
+          profileId={activeDocument?.profileId ?? null}
+          url={route.url}
+          title={route.url}
+          viewId={toFullViewId(`ephemeral-${btoa(route.url).replace(/[^a-zA-Z0-9]/g, '')}`)}
+          editor={editor}
+          onUrlChange={() => {}} // Ephemeral pages don't update block state
+          onReady={handleFullscreenReady}
+        />
+      )}
+      {(displayedRoute.kind === "doc" || isHandoff) && (
+        <RendererLayout
+          isNavbarOpened={isNavbarOpened}
+          onNavbarToggle={toggleNavbar}
+          isDebugSidebarVisible={isDebugSidebarVisible}
+          profileName={activeProfileName}
+          documentTitle={activeDocumentTitle}
+          navbar={
+            <FileTreePane
+              profiles={profiles}
+              activeProfileId={activeProfileId}
+              onSelectProfile={handleProfileSelect}
+              onCreateProfile={handleOpenCreateProfileModal}
+              onRenameProfile={handleRenameProfile}
+              onDeleteProfile={handleDeleteProfile}
+              documentTree={activeProfileTree}
+              activeDocumentId={activeDocumentId}
+              onSelectDocument={handleSidebarDocumentSelect}
+              onCreateDocument={handleCreateDocument}
+              onRenameDocument={handleRenameDocument}
+              onDeleteDocument={handleDeleteDocument}
+              onMoveDocumentToProfile={handleMoveDocumentToProfile}
+              onMoveDocument={handleMoveDocumentWithinTree}
+              pendingEditDocumentId={pendingRenameDocumentId}
+              onPendingEditConsumed={handlePendingRenameConsumed}
+              onPendingDocumentNamed={handlePendingDocumentNamed}
+            />
+          }
+          main={
+            <DocumentProvider
+              profileId={activeDocument?.profileId ?? DEFAULT_PROFILE_ID}
+              documentId={activeDocumentId}
+            >
+              <EditorPane
+                editor={editor}
+                SlashCommandSyncMenu={SlashCommandSyncMenu}
+                onSlashMenuItems={handleSlashMenuItems}
+                onSlashMenuItemClick={handleSlashMenuItemClick}
+                focusBlockId={
+                  route.kind === "doc" ? (route.focusBlockId ?? null) : null
+                }
               />
-            }
-            main={
-              <DocumentProvider
-                profileId={activeDocument?.profileId ?? DEFAULT_PROFILE_ID}
-                documentId={activeDocumentId}
-              >
-                <EditorPane
-                  editor={editor}
-                  SlashCommandSyncMenu={SlashCommandSyncMenu}
-                  onSlashMenuItems={handleSlashMenuItems}
-                  onSlashMenuItemClick={handleSlashMenuItemClick}
-                  focusBlockId={
-                    route.kind === "doc" ? (route.focusBlockId ?? null) : null
-                  }
-                />
-              </DocumentProvider>
-            }
-            aside={
-              <DebugPane
-                isVisible={isDebugSidebarVisible}
-                onClose={() => setIsDebugSidebarVisible(false)}
-              />
-            }
-          />
-        )}
-        <ProfileModal
-          opened={isCreateProfileModalOpen}
-          profileName={profileModalName}
-          error={profileModalError}
-          isCreating={isCreatingProfile}
-          onNameChange={handleProfileModalNameChange}
-          onClose={handleCloseCreateProfileModal}
-          onConfirm={handleConfirmCreateProfile}
+            </DocumentProvider>
+          }
+          aside={
+            <DebugPane
+              isVisible={isDebugSidebarVisible}
+              onClose={() => setIsDebugSidebarVisible(false)}
+            />
+          }
         />
-        <ProfileModal
-          opened={isRenameProfileModalOpen}
-          title="Rename profile"
-          profileName={renameProfileModalName}
-          error={renameProfileModalError}
-          isCreating={isRenamingProfile}
-          onNameChange={handleRenameProfileModalNameChange}
-          onClose={closeRenameProfileModal}
-          onConfirm={handleConfirmRenameProfile}
-        />
-        <ProfileDeleteModal
-          opened={isDeleteProfileModalOpen}
-          profileName={profileToDelete?.name ?? ""}
-          pageCount={pageCount}
-          onClose={closeDeleteProfileModal}
-          onConfirm={handleConfirmDeleteProfile}
-        />
-        <ClipInbox />
-        <LinkCaptureNotification />
-      </RendererRouteProvider>
+      )}
+      <ProfileModal
+        opened={isCreateProfileModalOpen}
+        profileName={profileModalName}
+        error={profileModalError}
+        isCreating={isCreatingProfile}
+        onNameChange={handleProfileModalNameChange}
+        onClose={handleCloseCreateProfileModal}
+        onConfirm={handleConfirmCreateProfile}
+      />
+      <ProfileModal
+        opened={isRenameProfileModalOpen}
+        title="Rename profile"
+        profileName={renameProfileModalName}
+        error={renameProfileModalError}
+        isCreating={isRenamingProfile}
+        onNameChange={handleRenameProfileModalNameChange}
+        onClose={closeRenameProfileModal}
+        onConfirm={handleConfirmRenameProfile}
+      />
+      <ProfileDeleteModal
+        opened={isDeleteProfileModalOpen}
+        profileName={profileToDelete?.name ?? ""}
+        pageCount={pageCount}
+        onClose={closeDeleteProfileModal}
+        onConfirm={handleConfirmDeleteProfile}
+      />
+      <ClipInbox />
+      <LinkCaptureNotification />
     </MantineProvider>
+  );
+};
+
+// Inner component that has access to router context
+const RendererAppWithRouteContext = () => {
+  const {
+    activeDocument,
+  } = useRendererDocuments();
+
+  const activeDocumentId = activeDocument?.id ?? null;
+
+  return (
+    <AppRouteProvider fallbackDocId={activeDocumentId}>
+      <RendererAppContent />
+    </AppRouteProvider>
   );
 };
 
@@ -396,7 +440,7 @@ export const RendererApp = () => {
       <ClipDraftProvider>
         <LinkCaptureProvider>
           <PageToolSlotProvider>
-            <RendererAppContent />
+            <RendererAppWithRouteContext />
           </PageToolSlotProvider>
         </LinkCaptureProvider>
       </ClipDraftProvider>

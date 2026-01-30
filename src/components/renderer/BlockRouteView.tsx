@@ -1,5 +1,5 @@
 import React from "react";
-import { useRendererRoute } from "../../context/RendererRouteContext";
+import { useAppRoute } from "../../context/AppRouteContext";
 import { BlockRouteViewContent } from "./BlockRouteViewContent";
 import { MissingUrlView } from "./MissingUrlView";
 import { CustomBlockNoteEditor } from "../../types/schema";
@@ -27,14 +27,12 @@ export const BlockRouteView = ({
   onUrlChange,
   onReady,
 }: BlockRouteViewProps) => {
-  const routeContext = useRendererRoute();
+  const { route, navigateToDoc } = useAppRoute();
 
   // Type guard: ensure we're on a block or url route
-  if (routeContext.route.kind !== "block" && routeContext.route.kind !== "url") {
+  if (route.kind !== "block" && route.kind !== "url") {
     return null;
   }
-
-  const { navigateToDoc } = routeContext;
 
   const handleMinimize = () => {
     if (docId) {

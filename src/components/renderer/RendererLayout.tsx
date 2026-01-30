@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useContext, useRef, useEffect } from "react";
+import { ReactNode, useMemo, useContext, useRef } from "react";
 import { Box, Transition } from "@mantine/core";
 import { StatusBar } from "./StatusBar";
 import { useStatusBar } from "../../hooks/useStatusBar";
@@ -6,7 +6,7 @@ import { SidebarToggleButton } from "./SidebarToggleButton";
 import { BlockNotificationContext } from "../../context/BlockNotificationContext";
 import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { ScrollContainerProvider } from "../../context/ScrollContainerContext";
-import { log } from "../../utils/rendererLogger";
+import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 
 const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
@@ -63,6 +63,18 @@ export const RendererLayout = ({
   );
 
   const scrollContainerRef = useRef<HTMLElement>(null);
+
+  // Custom scroll restoration for container-based scrolling
+  useScrollRestoration(scrollContainerRef, {
+    // Use doc ID from path for scroll position key
+    getKey: (pathname) => {
+      // Extract doc ID from /doc/{docId} paths, otherwise use pathname
+      const docMatch = pathname.match(/^\/doc\/([^/]+)/);
+      return docMatch ? `doc:${docMatch[1]}` : pathname;
+    },
+    // Small delay to allow content to render before restoring
+    restoreDelay: 50,
+  });
 
   // Build grid template rows conditionally
   const gridTemplateRows = `minmax(0, 1fr) ${FOOTER_HEIGHT}px${hasPageTool ? " auto" : ""}`;
