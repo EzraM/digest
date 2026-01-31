@@ -39,7 +39,6 @@ export class BlockEventManager extends EventEmitter {
     try {
       const blockId = block.id || `block-${Date.now()}`;
       const operation: BlockOperation = {
-        id: `op-${Date.now()}`,
         type: 'insert',
         blockId,
         source: 'user',
@@ -74,7 +73,6 @@ export class BlockEventManager extends EventEmitter {
   async handleUserBlockUpdate(blockId: string, block: any): Promise<void> {
     try {
       const operation: BlockOperation = {
-        id: `op-${Date.now()}`,
         type: 'update',
         blockId,
         source: 'user',
@@ -108,7 +106,6 @@ export class BlockEventManager extends EventEmitter {
   async handleUserBlockDeletion(blockId: string): Promise<void> {
     try {
       const operation: BlockOperation = {
-        id: `op-${Date.now()}`,
         type: 'delete',
         blockId,
         source: 'user',
