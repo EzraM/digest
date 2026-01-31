@@ -4,10 +4,14 @@
 
 Replace the current slash command overlay (HUD) with an **inline workspace** that opens at the cursor. Instead of memorizing discrete commands, users type naturally and the system retrieves, reasons, and assists.
 
-### Current State (to be replaced)
+### Current State (Phase 3.0 Complete)
 ```
-User types "/" → Overlay appears → User selects block type → Block inserted
+User types "/" → Ephemeral workspace block inserted at cursor
+              → User filters/selects block type → Block replaces workspace
+              → Or user presses Escape → Workspace removed
 ```
+
+The inline workspace UI is now working. Next steps: add note retrieval, web search, and conversation.
 
 ### Target State
 ```
@@ -206,11 +210,33 @@ interface WorkspaceActions {
 - [ ] Create `SearchIndexService`
 - [ ] Index existing blocks on startup
 
-### Phase 3: Inline Workspace UI
-- [ ] Remove AppOverlay/HUD system
-- [ ] Create inline workspace component
-- [ ] Position at cursor
-- [ ] Basic query → note retrieval flow
+### Phase 3: Inline Workspace UI ✅ (Phase 3.0 Complete)
+- [x] Create inline workspace component (`WorkspaceBlock.tsx`)
+- [x] Position at cursor (ephemeral block approach)
+- [x] Wire `/` trigger to insert workspace block
+- [x] Keyboard navigation (↑↓ Enter Escape Tab)
+- [x] Block type selection and insertion
+- [ ] Remove AppOverlay/HUD system (old files still exist, can be deleted)
+- [ ] Note retrieval integration (pending Phase 2)
+
+#### Phase 3.0 Implementation Notes
+
+The workspace is now an **ephemeral block** that:
+1. Inserts at cursor when `/` is typed
+2. Pushes content down (doesn't obscure)
+3. Can grow to any size needed
+4. Replaces itself with selected block type
+5. Removes itself on Escape
+
+**Key files:**
+- `src/domains/workspace/WorkspaceBlock.tsx` - The ephemeral block component
+- `src/hooks/useSlashCommandBridge.tsx` - Simplified to just insert workspace block
+- `src/types/schema.ts` - Workspace block registered in editor schema
+
+**Old overlay files (can be removed):**
+- `app-overlay/` - No longer used
+- `src/services/AppOverlay.ts` - No longer used
+- `src/services/SlashCommandManager.ts` - No longer used
 
 ### Phase 4: Context Assembly
 - [ ] Implement `IContextAssembler`
@@ -247,7 +273,7 @@ interface WorkspaceActions {
 
 ## Open Questions
 
-1. **Workspace size/positioning** - Fixed size? Expandable? Full-width?
+1. ~~**Workspace size/positioning**~~ - Resolved: Ephemeral block that grows with content, pushes document down
 2. **Conversation persistence** - Save conversation history per document?
 3. **Embedding updates** - Real-time or batch? On edit or on save?
 4. **Offline mode** - Local embeddings? Cached results?
