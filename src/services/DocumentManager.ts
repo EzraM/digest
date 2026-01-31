@@ -4,7 +4,7 @@ import { DEFAULT_PROFILE_ID } from "../config/profiles";
 import { DocumentRecord, DocumentTreeNode } from "../types/documents";
 import { log } from "../utils/mainLogger";
 import { ProfileManager } from "./ProfileManager";
-import { BlockOperationService } from "./BlockOperationService";
+import { BlockOperationService } from "../domains/blocks/services";
 import { MAX_DOCUMENT_DEPTH } from "../config/documents";
 
 export interface CreateDocumentOptions {

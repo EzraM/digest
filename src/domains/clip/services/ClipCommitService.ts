@@ -1,6 +1,6 @@
 import { ClipDraft } from "../core/types";
 import { CustomPartialBlock } from "../../../types/schema";
-import { BlockOperation } from "../../../types/operations";
+import { BlockOperation } from "../../blocks/core";
 import { log } from "../../../utils/rendererLogger";
 import { createClipReferenceInlineContent } from "../../../utils/clipInlineContent";
 

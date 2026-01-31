@@ -1,9 +1,9 @@
 import { Container } from "./Container";
 import { DatabaseManager } from "../database/DatabaseManager";
 import { initializeEventLogger } from "./EventLogger";
-import { BlockOperationService } from "./BlockOperationService";
+import { BlockOperationService } from "../domains/blocks/services";
 import { getDebugEventService, DebugEventService } from "./DebugEventService";
-import { BlockEventManager } from "./BlockEventManager";
+import { BlockEventManager } from "../domains/blocks/services";
 import { log } from "../utils/mainLogger";
 import { ProfileManager } from "./ProfileManager";
 import { DocumentManager } from "./DocumentManager";

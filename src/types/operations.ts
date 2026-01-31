@@ -1,154 +1,50 @@
-import { CustomBlock } from "./schema";
-
 /**
- * Enhanced transaction origin metadata for Y.js transactions
- * This allows grouping operations and tracking their provenance
+ * Operations Types - Compatibility Layer
+ *
+ * This file re-exports types from the blocks domain for backward compatibility.
+ *
+ * DEPRECATED: New code should import directly from:
+ * - Pure types: import { BlockOperation } from '../domains/blocks/core'
+ * - BlockNote types: import { BlockChange } from '../domains/blocks/adapters'
  */
-export interface TransactionOrigin {
-  source:
-    | "user"
-    | "llm"
-    | "sync"
-    | "system"
-    | "paste"
-    | "drop"
-    | "undo"
-    | "clip";
-  requestId?: string; // For LLM requests or user actions
-  batchId?: string; // For grouping related operations
-  userId?: string; // For collaboration
-  timestamp: number;
-  metadata?: Record<string, unknown>; // Extensible metadata
-}
 
-/**
- * Unified block operation interface for both user and LLM edits
- */
-export interface BlockOperation {
-  type: "insert" | "update" | "delete" | "move";
-  blockId: string;
-  position?: number;
-  /**
-   * Insert relative to an existing block (root-level).
-   * If provided, the insert position is computed as: index(afterBlockId) + 1.
-   */
-  afterBlockId?: string;
-  block?: CustomBlock;
-  document?: CustomBlock[]; // For document-level updates
-  prevBlock?: CustomBlock; // For update operations
-  source: "user" | "llm" | "sync" | "system" | "clip";
-  timestamp?: number;
-  userId?: string; // For collaboration
-  // Enhanced provenance tracking
-  requestId?: string; // Links back to original request
-  batchId?: string; // Groups related operations
-  // BlockNote changes array for tracking deletions
-  changes?: Array<{
-    type: "insert" | "delete" | "update" | "move";
-    block: unknown;
-    prevBlock?: unknown; // For updates/moves
-    source?: { type: string };
-  }>;
-}
+// ============================================================================
+// Re-export pure domain types from core
+// ============================================================================
 
-/**
- * Block change from BlockNote's onChange event
- * Maps to BlockNote 0.14.1's getChanges() API
- */
-export interface BlockChange {
-  block: CustomBlock;
-  source: {
-    type:
-      | "local"
-      | "paste"
-      | "drop"
-      | "undo"
-      | "redo"
-      | "undo-redo"
-      | "yjs-remote";
-  };
-  type: "insert" | "delete" | "update";
-  prevBlock?: CustomBlock;
-}
+export type {
+  OperationSource,
+  TransactionSource,
+  BlockOperation,
+  TransactionOrigin,
+  OperationResult,
+  Block,
+  OperationRecord,
+  Snapshot,
+  DocumentUpdate,
+  BatchOperation,
+  LLMOperationRequest,
+  BlockSearchManifest,
+  SearchableField,
+  SearchableBlock,
+} from '../domains/blocks/core';
 
-/**
- * Enhanced document update event for Y.js synchronization
- * Now includes full transaction origin metadata
- */
-export interface DocumentUpdate {
-  operations: BlockOperation[];
-  origin?: TransactionOrigin; // Rich transaction metadata
-  ydocState?: Uint8Array; // Y.js document state for sync
-}
+// ============================================================================
+// Re-export BlockNote-specific types from adapters
+// ============================================================================
 
-/**
- * Batch operation for applying multiple related changes atomically
- * Uses Y.js transaction metadata for provenance tracking
- */
-export interface BatchOperation {
-  id: string; // batchId
-  operations: BlockOperation[];
-  origin: TransactionOrigin;
-  createdAt: number;
-}
+export type { BlockChange } from '../domains/blocks/adapters';
+export { BLOCKNOTE_SOURCE_MAP } from '../domains/blocks/adapters';
 
-/**
- * LLM operation request with rich metadata
- * Allows tracking from request through to applied operations
- */
-export interface LLMOperationRequest {
-  requestId: string;
-  userId?: string;
-  prompt?: string;
-  context?: {
-    cursorPosition?: number;
-    selectedBlocks?: string[];
-    nearbyBlocks?: CustomBlock[];
-  };
-  timestamp: number;
-}
+// ============================================================================
+// Helper Functions (kept here for backward compatibility)
+// ============================================================================
 
-/**
- * Database persistence record
- */
-export interface OperationRecord {
-  id: string;
-  documentId: string;
-  operation: BlockOperation;
-  appliedAt: number;
-  checksum?: string;
-  // Enhanced with transaction metadata
-  batchId?: string;
-  requestId?: string;
-  origin?: TransactionOrigin;
-}
-
-/**
- * Result of applying operations
- */
-export interface OperationResult {
-  success: boolean;
-  operationsApplied: number;
-  errors?: string[];
-  conflicts?: BlockOperation[];
-  batchId?: string; // If operations were batched
-}
-
-/**
- * Maps BlockNote source types to our unified source types
- */
-export const BLOCKNOTE_SOURCE_MAP = {
-  local: "user",
-  paste: "user",
-  drop: "user",
-  undo: "user",
-  redo: "user",
-  "undo-redo": "user",
-  "yjs-remote": "sync",
-} as const;
+import type { TransactionOrigin } from '../domains/blocks/core';
 
 /**
  * Creates a transaction origin for user operations
+ * @deprecated Import BlockNoteAdapter and use its methods instead
  */
 export function createUserTransactionOrigin(
   userId?: string,
@@ -166,6 +62,7 @@ export function createUserTransactionOrigin(
 
 /**
  * Creates a transaction origin for LLM operations
+ * @deprecated Import BlockNoteAdapter and use its methods instead
  */
 export function createLLMTransactionOrigin(
   requestId: string,
