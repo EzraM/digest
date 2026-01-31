@@ -225,11 +225,11 @@ interface WorkspaceActions {
 - [ ] Wire up indexing on block changes (integration point ready)
 - [ ] Bootstrap indexing on startup (API ready: `manager.bootstrapIndex()`)
 
-### Phase 3: Inline Workspace UI
+### Phase 3: Inline Workspace UI ✅
 - [x] Create inline workspace component (`WorkspaceBlock.tsx` exists)
-- [ ] Connect workspace to search service
-- [ ] Display search results in workspace
-- [ ] Basic query → note retrieval flow
+- [x] Connect workspace to search service (IPC handlers + preload API)
+- [x] Display search results in workspace (with debounced search)
+- [x] Basic query → note retrieval flow (search results show alongside slash commands)
 
 ### Phase 4: Context Assembly
 - [ ] Implement `IContextAssembler`

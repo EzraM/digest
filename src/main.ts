@@ -30,6 +30,7 @@ import { createSlashCommandHandlers } from "./ipc/handlers/slashCommandHandlers"
 import { createRendererHandlers } from "./ipc/handlers/rendererHandlers";
 import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
 import { createBlockHandlers } from "./ipc/handlers/blockHandlers";
+import { createSearchHandlers } from "./ipc/handlers/searchHandlers";
 import { IPCServiceBridge } from "./services/IPCServiceBridge";
 import { ImageProtocolService } from "./services/ImageProtocolService";
 import { fetchPageTitle } from "./domains/link-capture/adapter/fetchPageTitle";
@@ -486,6 +487,7 @@ const setupIpcHandlers = (
       loadDocumentIntoRenderer
     )
   );
+  registerMap(createSearchHandlers(services.searchIndexManager));
 };
 
 app.on("ready", async () => {

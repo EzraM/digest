@@ -195,6 +195,28 @@ interface ElectronAPI {
       document_id: string | null;
     } | null>;
   };
+  search: {
+    execute: (
+      query: string,
+      context?: {
+        documentId?: string;
+        excludeBlockIds?: string[];
+        minScore?: number;
+      },
+      limit?: number
+    ) => Promise<Array<{
+      blockId: string;
+      documentId: string;
+      blockType: string;
+      content: string;
+      score: number;
+      metadata: Record<string, unknown>;
+    }>>;
+    getStats: () => Promise<{
+      indexedBlocks: number;
+      lastIndexedAt?: number;
+    }>;
+  };
 }
 
 declare global {

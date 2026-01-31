@@ -2,7 +2,7 @@
  * SearchIndexManager
  *
  * Main process service that manages the search index lifecycle:
- * - Initializes vector store and embedding provider
+ * - Initializes vector store and embedding provider (or FTS5)
  * - Subscribes to block changes and indexes them
  * - Provides bootstrap indexing for existing documents
  *
@@ -17,8 +17,10 @@ import {
   type EmbeddingProviderType,
 } from "./EmbeddingProvider";
 import { SearchIndexService } from "./SearchIndexService";
+import { Fts5SearchService } from "./Fts5SearchService";
 import type {
   IEmbeddingProvider,
+  ISearchIndexService,
   IndexEvent,
   RetrievalContext,
   RetrievedNote,
@@ -27,12 +29,17 @@ import type { Block } from "../../blocks/core/types";
 import { log } from "../../../utils/mainLogger";
 
 /**
+ * Search provider type - either embedding-based or FTS5
+ */
+export type SearchProviderType = EmbeddingProviderType | "fts5";
+
+/**
  * Configuration for SearchIndexManager
  */
 export interface SearchIndexManagerConfig {
-  /** Embedding provider type */
-  embeddingProvider: EmbeddingProviderType;
-  /** API key for cloud embedding providers */
+  /** Search provider type */
+  searchProvider: SearchProviderType;
+  /** API key for cloud embedding providers (not needed for fts5 or mock) */
   apiKey?: string;
   /** Custom embedding model name */
   model?: string;
@@ -47,55 +54,66 @@ export class SearchIndexManager {
   private static instance: SearchIndexManager | null = null;
 
   private db: Database.Database;
-  private vectorStore: SqliteVectorStore;
-  private embeddingProvider: IEmbeddingProvider;
-  private searchService: SearchIndexService;
+  private vectorStore: SqliteVectorStore | null = null;
+  private embeddingProvider: IEmbeddingProvider | null = null;
+  private searchService: ISearchIndexService;
   private initialized = false;
+  private providerType: SearchProviderType;
 
   private constructor(
     db: Database.Database,
     config: SearchIndexManagerConfig
   ) {
     this.db = db;
+    this.providerType = config.searchProvider;
 
-    // Create embedding provider based on config
-    if (config.embeddingProvider === "mock") {
-      this.embeddingProvider = new MockEmbeddingProvider(
-        config.mockDimensions ?? 384
+    if (config.searchProvider === "fts5") {
+      // Use FTS5 full-text search
+      this.searchService = new Fts5SearchService(db);
+      log.debug(
+        "SearchIndexManager created with FTS5 provider",
+        "SearchIndexManager"
       );
     } else {
-      if (!config.apiKey) {
-        log.debug(
-          `No API key for ${config.embeddingProvider}, falling back to mock provider`,
-          "SearchIndexManager"
+      // Use embedding-based search
+      if (config.searchProvider === "mock") {
+        this.embeddingProvider = new MockEmbeddingProvider(
+          config.mockDimensions ?? 384
         );
-        this.embeddingProvider = new MockEmbeddingProvider(384);
       } else {
-        this.embeddingProvider = createEmbeddingProvider({
-          type: config.embeddingProvider,
-          apiKey: config.apiKey,
-          model: config.model,
-        });
+        if (!config.apiKey) {
+          log.debug(
+            `No API key for ${config.searchProvider}, falling back to mock provider`,
+            "SearchIndexManager"
+          );
+          this.embeddingProvider = new MockEmbeddingProvider(384);
+        } else {
+          this.embeddingProvider = createEmbeddingProvider({
+            type: config.searchProvider,
+            apiKey: config.apiKey,
+            model: config.model,
+          });
+        }
       }
+
+      // Create vector store
+      const vectorConfig: VectorStoreConfig = {
+        dimensions: this.embeddingProvider.dimensions,
+        modelName: this.embeddingProvider.providerName,
+      };
+      this.vectorStore = new SqliteVectorStore(db, vectorConfig);
+
+      // Create search service
+      this.searchService = new SearchIndexService(
+        this.embeddingProvider,
+        this.vectorStore
+      );
+
+      log.debug(
+        `SearchIndexManager created with ${this.embeddingProvider.providerName} provider (${this.embeddingProvider.dimensions} dimensions)`,
+        "SearchIndexManager"
+      );
     }
-
-    // Create vector store
-    const vectorConfig: VectorStoreConfig = {
-      dimensions: this.embeddingProvider.dimensions,
-      modelName: this.embeddingProvider.providerName,
-    };
-    this.vectorStore = new SqliteVectorStore(db, vectorConfig);
-
-    // Create search service
-    this.searchService = new SearchIndexService(
-      this.embeddingProvider,
-      this.vectorStore
-    );
-
-    log.debug(
-      `SearchIndexManager created with ${this.embeddingProvider.providerName} provider (${this.embeddingProvider.dimensions} dimensions)`,
-      "SearchIndexManager"
-    );
   }
 
   /**
@@ -129,8 +147,10 @@ export class SearchIndexManager {
   private async init(): Promise<void> {
     if (this.initialized) return;
 
-    // Initialize vector store (creates tables, loads extension)
-    await this.vectorStore.initialize();
+    // Initialize vector store if using embedding-based search
+    if (this.vectorStore) {
+      await this.vectorStore.initialize();
+    }
 
     // Subscribe to search service events
     this.searchService.events$.subscribe((event: IndexEvent) => {
