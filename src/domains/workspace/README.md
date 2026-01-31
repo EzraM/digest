@@ -108,21 +108,38 @@ interface SearchableField {
 
 ### Layer 2: Search Index Contract
 
-To be defined in `domains/search/core/`:
+Implemented in `domains/search/`:
 
 ```typescript
+// domains/search/core/types.ts
 interface IEmbeddingProvider {
   embed(text: string): Promise<number[]>;
   batchEmbed(texts: string[]): Promise<number[][]>;
-  dimensions: number;
+  readonly dimensions: number;
+  readonly providerName: string;
 }
 
 interface IVectorStore {
-  upsert(id: string, vector: number[], metadata: BlockMetadata): Promise<void>;
-  search(query: number[], limit: number): Promise<SearchResult[]>;
+  upsert(id: string, vector: number[], metadata: VectorMetadata): Promise<void>;
+  search(queryVector: number[], limit: number): Promise<VectorSearchResult[]>;
   delete(id: string): Promise<void>;
+  deleteByDocument(documentId: string): Promise<void>;
+  count(): Promise<number>;
+}
+
+interface ISearchIndexService {
+  indexBlock(block: Block, documentId: string): Promise<void>;
+  removeBlock(blockId: string): Promise<void>;
+  reindexDocument(documentId: string, blocks: Block[]): Promise<void>;
+  search(query: string, context?: RetrievalContext, limit?: number): Promise<RetrievedNote[]>;
 }
 ```
+
+Implementations:
+- `SqliteVectorStore` - Uses sqlite-vec for similarity search
+- `OpenAIEmbeddingProvider` / `VoyageEmbeddingProvider` / `MockEmbeddingProvider`
+- `SearchIndexService` - Coordinates embedding + storage with debouncing
+- `SearchIndexManager` - Main process singleton for integration
 
 ### Layer 3: Retrieval + Agent Contracts
 
@@ -195,21 +212,23 @@ interface WorkspaceActions {
 
 ## Implementation Phases
 
-### Phase 1: Block Search Manifests
-- [ ] Add manifests to existing block types (paragraph, heading, site, clip)
-- [ ] Create manifest registry
-- [ ] Text extraction from blocks
+### Phase 1: Block Search Manifests ✅
+- [x] Add manifests to existing block types (paragraph, heading, site, clip)
+- [x] Create manifest registry (`domains/search/core/manifests.ts`)
+- [x] Text extraction from blocks (`domains/search/core/textExtractor.ts`)
 
-### Phase 2: Search Index Foundation
-- [ ] Implement `IEmbeddingProvider` (start with OpenAI/Anthropic)
-- [ ] Implement `IVectorStore` (SQLite-based)
-- [ ] Create `SearchIndexService`
-- [ ] Index existing blocks on startup
+### Phase 2: Search Index Foundation ✅
+- [x] Implement `IEmbeddingProvider` (OpenAI, Voyage, Mock)
+- [x] Implement `IVectorStore` (sqlite-vec based)
+- [x] Create `SearchIndexService` with debounced batching
+- [x] Create `SearchIndexManager` for main process integration
+- [ ] Wire up indexing on block changes (integration point ready)
+- [ ] Bootstrap indexing on startup (API ready: `manager.bootstrapIndex()`)
 
 ### Phase 3: Inline Workspace UI
-- [ ] Remove AppOverlay/HUD system
-- [ ] Create inline workspace component
-- [ ] Position at cursor
+- [x] Create inline workspace component (`WorkspaceBlock.tsx` exists)
+- [ ] Connect workspace to search service
+- [ ] Display search results in workspace
 - [ ] Basic query → note retrieval flow
 
 ### Phase 4: Context Assembly
@@ -255,5 +274,5 @@ interface WorkspaceActions {
 ## Related Domains
 
 - `domains/blocks/` - Block types and operations
-- `domains/search/` - Embedding and retrieval (to be created)
+- `domains/search/` - Embedding, vector storage, and retrieval
 - `domains/clip/` - Web clipping (integrates with workspace)
