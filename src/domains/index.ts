@@ -12,8 +12,8 @@
 export * as blocks from './blocks';
 export * as browserViews from './browser-views';
 export * as clip from './clip';
+export * as search from './search';
 
 // Future domains (stubs):
 // export * as documents from './documents';
 // export * as workspace from './workspace';
-// export * as search from './search';

@@ -13,6 +13,7 @@ import migration002 from "./migrations/002_add_events_table";
 import migration003 from "./migrations/003_add_batch_tracking_columns";
 import migration004 from "./migrations/004_profiles_and_document_hierarchy";
 import migration005 from "./migrations/005_add_images_table";
+import migration006 from "./migrations/006_add_vector_search";
 
 /**
  * Singleton database manager that handles initialization and migrations
@@ -30,6 +31,7 @@ export class DatabaseManager {
     migration003,
     migration004,
     migration005,
+    migration006,
   ];
 
   private constructor() {
