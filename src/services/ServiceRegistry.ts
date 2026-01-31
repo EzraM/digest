@@ -8,6 +8,7 @@ import { log } from "../utils/mainLogger";
 import { ProfileManager } from "./ProfileManager";
 import { DocumentManager } from "./DocumentManager";
 import { ImageService } from "./ImageService";
+import { SearchIndexManager } from "../domains/search/services/SearchIndexManager";
 
 /**
  * Service registry that defines all application services and their dependencies
@@ -105,6 +106,22 @@ export function registerServices(container: Container): void {
       return ImageService.getInstance(database);
     },
   });
+
+  // SearchIndexManager - depends on database
+  container.register("searchIndexManager", {
+    version: "1.0.0",
+    dependencies: ["database"],
+    factory: async (c) => {
+      log.debug("Initializing SearchIndexManager", "ServiceRegistry");
+      const database = await c.resolve("database");
+      // Use mock provider by default for now (no API key required)
+      // Can be configured later to use OpenAI or Voyage with API keys
+      return SearchIndexManager.initialize(database, {
+        embeddingProvider: "mock",
+        mockDimensions: 384,
+      });
+    },
+  });
 }
 
 /**
@@ -126,6 +143,7 @@ export async function initializeAllServices(
   await container.resolve("debugEventService");
   await container.resolve("blockEventManager");
   await container.resolve("imageService");
+  await container.resolve("searchIndexManager");
 
   log.debug("All services initialized successfully", "ServiceRegistry");
 }
@@ -145,5 +163,6 @@ export function getServices(container: Container) {
     profileManager: container.get("profileManager") as ProfileManager,
     documentManager: container.get("documentManager") as DocumentManager,
     imageService: container.get("imageService") as ImageService,
+    searchIndexManager: container.get("searchIndexManager") as SearchIndexManager,
   };
 }

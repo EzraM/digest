@@ -430,4 +430,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }) => ipcRenderer.invoke("image:saveImage", params),
     getImageInfo: (id: string) => ipcRenderer.invoke("image:getImageInfo", id),
   },
+  search: {
+    execute: (
+      query: string,
+      context?: {
+        documentId?: string;
+        excludeBlockIds?: string[];
+        minScore?: number;
+      },
+      limit?: number
+    ) => ipcRenderer.invoke("search:execute", query, context, limit),
+    getStats: () => ipcRenderer.invoke("search:get-stats"),
+  },
 });

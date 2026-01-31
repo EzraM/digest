@@ -1,14 +1,23 @@
 import { createReactBlockSpec } from "@blocknote/react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   slashCommandOptions,
   filterSlashCommandOptions,
 } from "../../data/slashCommandOptions";
 import { SlashCommandOption } from "../../types/slashCommand";
-import { insertOrUpdateBlock } from "@blocknote/core";
 import { GoogleSearchExtensionName } from "../../Search/GoogleSearchBlock";
 import { ChatGPTExtensionName } from "../../Search/ChatGPTBlock";
 import { URLExtensionName } from "../../Search/URLBlock";
+
+/** Search result from the vector store */
+interface SearchResult {
+  blockId: string;
+  documentId: string;
+  blockType: string;
+  content: string;
+  score: number;
+  metadata: Record<string, unknown>;
+}
 
 const workspacePropSchema = {
   initialQuery: {
@@ -67,15 +76,64 @@ export const workspace = createReactBlockSpec(
       const { block, editor } = props;
       const [query, setQuery] = useState(block.props.initialQuery || "");
       const [selectedIndex, setSelectedIndex] = useState(0);
+      const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+      const [isSearching, setIsSearching] = useState(false);
       const inputRef = useRef<HTMLInputElement>(null);
       const containerRef = useRef<HTMLDivElement>(null);
+      const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
       const filteredOptions = filterSlashCommandOptions(query, slashCommandOptions);
 
-      // Reset selection when filtered options change
+      // Debounced search - only search if query is at least 2 characters and not a slash command trigger
+      useEffect(() => {
+        // Clear any pending search
+        if (searchTimeoutRef.current) {
+          clearTimeout(searchTimeoutRef.current);
+        }
+
+        // Don't search for very short queries or if query starts with special characters
+        const trimmedQuery = query.trim();
+        if (trimmedQuery.length < 2 || trimmedQuery.startsWith("/")) {
+          setSearchResults([]);
+          setIsSearching(false);
+          return;
+        }
+
+        setIsSearching(true);
+
+        // Debounce search by 300ms
+        searchTimeoutRef.current = setTimeout(async () => {
+          try {
+            const results = await window.electronAPI.search.execute(
+              trimmedQuery,
+              { minScore: 0.1 },
+              5  // Limit to 5 results
+            );
+            setSearchResults(results);
+          } catch (error) {
+            console.error("Search failed:", error);
+            setSearchResults([]);
+          } finally {
+            setIsSearching(false);
+          }
+        }, 300);
+
+        return () => {
+          if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+          }
+        };
+      }, [query]);
+
+      // Compute total items: slash commands + search results
+      const totalItems = useMemo(() => {
+        return filteredOptions.length + searchResults.length;
+      }, [filteredOptions.length, searchResults.length]);
+
+      // Reset selection when options/results change
       useEffect(() => {
         setSelectedIndex(0);
-      }, [query]);
+      }, [query, searchResults.length]);
 
       // Focus input on mount
       useEffect(() => {
@@ -105,12 +163,36 @@ export const workspace = createReactBlockSpec(
         editor.focus();
       }, [editor, block.id, dismiss]);
 
+      const selectSearchResult = useCallback((result: SearchResult) => {
+        // For now, insert the search result content as a paragraph
+        // In the future, this could navigate to the block or do something more sophisticated
+        editor.updateBlock(block.id, {
+          type: "paragraph",
+          content: result.content,
+        });
+        editor.focus();
+      }, [editor, block.id]);
+
+      // Unified selection handler that picks between slash commands and search results
+      const handleSelect = useCallback((index: number) => {
+        if (index < filteredOptions.length) {
+          // It's a slash command option
+          selectOption(filteredOptions[index]);
+        } else {
+          // It's a search result
+          const searchIndex = index - filteredOptions.length;
+          if (searchResults[searchIndex]) {
+            selectSearchResult(searchResults[searchIndex]);
+          }
+        }
+      }, [filteredOptions, searchResults, selectOption, selectSearchResult]);
+
       const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
         switch (e.key) {
           case "ArrowDown":
             e.preventDefault();
             setSelectedIndex((prev) =>
-              prev < filteredOptions.length - 1 ? prev + 1 : prev
+              prev < totalItems - 1 ? prev + 1 : prev
             );
             break;
           case "ArrowUp":
@@ -119,8 +201,8 @@ export const workspace = createReactBlockSpec(
             break;
           case "Enter":
             e.preventDefault();
-            if (filteredOptions[selectedIndex]) {
-              selectOption(filteredOptions[selectedIndex]);
+            if (totalItems > 0) {
+              handleSelect(selectedIndex);
             }
             break;
           case "Escape":
@@ -133,12 +215,12 @@ export const workspace = createReactBlockSpec(
               setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
             } else {
               setSelectedIndex((prev) =>
-                prev < filteredOptions.length - 1 ? prev + 1 : prev
+                prev < totalItems - 1 ? prev + 1 : prev
               );
             }
             break;
         }
-      }, [filteredOptions, selectedIndex, selectOption, dismiss]);
+      }, [totalItems, selectedIndex, handleSelect, dismiss]);
 
       // Scroll selected item into view
       useEffect(() => {
@@ -183,7 +265,7 @@ export const workspace = createReactBlockSpec(
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type to filter..."
+              placeholder="Search notes or type to insert..."
               style={{
                 width: "100%",
                 padding: "8px 12px",
@@ -197,7 +279,7 @@ export const workspace = createReactBlockSpec(
             />
           </div>
 
-          {/* Options list */}
+          {/* Options and results list */}
           <div
             ref={containerRef}
             style={{
@@ -206,7 +288,93 @@ export const workspace = createReactBlockSpec(
               padding: "4px 0",
             }}
           >
-            {filteredOptions.length === 0 ? (
+            {/* Search results section */}
+            {searchResults.length > 0 && (
+              <div>
+                <div
+                  style={{
+                    padding: "6px 12px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#228be6",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span style={{ fontSize: "12px" }}>🔍</span>
+                  Notes
+                </div>
+                {searchResults.map((result, idx) => {
+                  const currentIndex = idx;
+                  const isSelected = currentIndex === selectedIndex;
+                  return (
+                    <div
+                      key={result.blockId}
+                      data-index={currentIndex}
+                      onClick={() => selectSearchResult(result)}
+                      onMouseEnter={() => setSelectedIndex(currentIndex)}
+                      style={{
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        backgroundColor: isSelected ? "#e7f5ff" : "transparent",
+                        borderLeft: isSelected ? "2px solid #228be6" : "2px solid transparent",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: 500,
+                          color: "#212529",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {result.content.slice(0, 60)}{result.content.length > 60 ? "..." : ""}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          color: "#868e96",
+                          marginTop: "2px",
+                          display: "flex",
+                          gap: "8px",
+                        }}
+                      >
+                        <span style={{ textTransform: "capitalize" }}>{result.blockType}</span>
+                        <span>·</span>
+                        <span>{Math.round(result.score * 100)}% match</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Loading indicator */}
+            {isSearching && searchResults.length === 0 && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  fontSize: "12px",
+                  color: "#868e96",
+                  fontStyle: "italic",
+                }}
+              >
+                Searching...
+              </div>
+            )}
+
+            {/* Divider between search results and slash commands */}
+            {searchResults.length > 0 && filteredOptions.length > 0 && (
+              <div style={{ borderTop: "1px solid #f0f0f0", margin: "4px 0" }} />
+            )}
+
+            {/* Slash command options */}
+            {filteredOptions.length === 0 && searchResults.length === 0 && !isSearching ? (
               <div
                 style={{
                   padding: "12px 16px",
@@ -214,7 +382,7 @@ export const workspace = createReactBlockSpec(
                   fontSize: "13px",
                 }}
               >
-                No matching blocks
+                No matching blocks or notes
               </div>
             ) : (
               Object.entries(groupedOptions).map(([groupName, options]) => (
@@ -232,7 +400,8 @@ export const workspace = createReactBlockSpec(
                     {groupName}
                   </div>
                   {options.map((option) => {
-                    const currentIndex = flatIndex++;
+                    // Offset by search results length
+                    const currentIndex = searchResults.length + flatIndex++;
                     const isSelected = currentIndex === selectedIndex;
                     return (
                       <div
