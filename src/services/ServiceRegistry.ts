@@ -114,11 +114,9 @@ export function registerServices(container: Container): void {
     factory: async (c) => {
       log.debug("Initializing SearchIndexManager", "ServiceRegistry");
       const database = await c.resolve("database");
-      // Use mock provider by default for now (no API key required)
-      // Can be configured later to use OpenAI or Voyage with API keys
+      // Use FTS5 for full-text search (works offline, no API key required)
       return SearchIndexManager.initialize(database, {
-        embeddingProvider: "mock",
-        mockDimensions: 384,
+        searchProvider: "fts5",
       });
     },
   });
