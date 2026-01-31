@@ -6,9 +6,9 @@ import {
   OperationRecord,
   TransactionOrigin,
   BatchOperation,
-} from "../domains/blocks/core";
-import { log } from "../utils/mainLogger";
-import { getEventLogger } from "./EventLogger";
+} from "../core";
+import { log } from "../../../utils/mainLogger";
+import { getEventLogger } from "../../../services/EventLogger";
 // Simple ID generator to replace uuid dependency
 const generateId = () =>
   `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

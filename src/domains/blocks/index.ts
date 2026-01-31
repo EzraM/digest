@@ -8,3 +8,4 @@
 //   hooks/     - React hooks for renderer
 
 export * from './core';
+export * from './services';
