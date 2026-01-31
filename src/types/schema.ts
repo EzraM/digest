@@ -13,6 +13,7 @@ import {
   URLExtensionName,
 } from "../Search/URLBlock";
 import { clip } from "../components/clip/ClipBlock";
+import { workspace } from "../domains/workspace/WorkspaceBlock";
 
 export const schema = BlockNoteSchema.create({
   blockSpecs: {
@@ -22,6 +23,7 @@ export const schema = BlockNoteSchema.create({
     [ChatGPTExtensionName]: ChatGPT(),
     [URLExtensionName]: URL(),
     clip: clip(),
+    workspace: workspace(),
   },
 });
 
