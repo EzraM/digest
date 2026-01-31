@@ -1,13 +1,12 @@
 /**
- * Operations Types - BlockNote Integration Layer
+ * Operations Types - Compatibility Layer
  *
- * This file re-exports pure domain types from domains/blocks/core
- * and adds BlockNote-specific extensions.
+ * This file re-exports types from the blocks domain for backward compatibility.
  *
- * Over time, imports should migrate to use domains/blocks/core directly.
+ * DEPRECATED: New code should import directly from:
+ * - Pure types: import { BlockOperation } from '../domains/blocks/core'
+ * - BlockNote types: import { BlockChange } from '../domains/blocks/adapters'
  */
-
-import { CustomBlock } from "./schema";
 
 // ============================================================================
 // Re-export pure domain types from core
@@ -31,55 +30,27 @@ export type {
 } from '../domains/blocks/core';
 
 // ============================================================================
-// BlockNote-specific types (not in pure core)
+// Re-export BlockNote-specific types from adapters
 // ============================================================================
 
-/**
- * Block change from BlockNote's onChange event
- * Maps to BlockNote 0.14.1's getChanges() API
- * This is BlockNote-specific and uses CustomBlock
- */
-export interface BlockChange {
-  block: CustomBlock;
-  source: {
-    type:
-      | "local"
-      | "paste"
-      | "drop"
-      | "undo"
-      | "redo"
-      | "undo-redo"
-      | "yjs-remote";
-  };
-  type: "insert" | "delete" | "update";
-  prevBlock?: CustomBlock;
-}
+export type { BlockChange } from '../domains/blocks/adapters';
+export { BLOCKNOTE_SOURCE_MAP } from '../domains/blocks/adapters';
 
 // ============================================================================
-// BlockNote Integration Utilities
+// Helper Functions (kept here for backward compatibility)
 // ============================================================================
 
-/**
- * Maps BlockNote source types to our unified source types
- */
-export const BLOCKNOTE_SOURCE_MAP = {
-  local: "user",
-  paste: "user",
-  drop: "user",
-  undo: "user",
-  redo: "user",
-  "undo-redo": "user",
-  "yjs-remote": "sync",
-} as const;
+import type { TransactionOrigin } from '../domains/blocks/core';
 
 /**
  * Creates a transaction origin for user operations
+ * @deprecated Import BlockNoteAdapter and use its methods instead
  */
 export function createUserTransactionOrigin(
   userId?: string,
   requestId?: string,
   metadata?: Record<string, unknown>
-): import('../domains/blocks/core').TransactionOrigin {
+): TransactionOrigin {
   return {
     source: "user",
     userId,
@@ -91,13 +62,14 @@ export function createUserTransactionOrigin(
 
 /**
  * Creates a transaction origin for LLM operations
+ * @deprecated Import BlockNoteAdapter and use its methods instead
  */
 export function createLLMTransactionOrigin(
   requestId: string,
   userId?: string,
   batchId?: string,
   metadata?: Record<string, unknown>
-): import('../domains/blocks/core').TransactionOrigin {
+): TransactionOrigin {
   return {
     source: "llm",
     requestId,

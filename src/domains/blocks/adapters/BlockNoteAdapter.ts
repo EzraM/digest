@@ -2,30 +2,64 @@ import {
   BlockOperation,
   LLMOperationRequest,
   TransactionOrigin,
-} from "../domains/blocks/core";
+} from "../core";
 import {
   BlockChange,
   BLOCKNOTE_SOURCE_MAP,
-  createUserTransactionOrigin,
-  createLLMTransactionOrigin,
-} from "../types/operations";
-import { CustomBlock } from "../types/schema";
-import { log } from "../utils/rendererLogger";
+} from "./blocknote-types";
+import { CustomBlock } from "../../../types/schema";
+import { log } from "../../../utils/rendererLogger";
+
+/**
+ * Helper function to create a transaction origin for user operations
+ */
+function createUserTransactionOrigin(
+  userId?: string,
+  requestId?: string,
+  metadata?: Record<string, unknown>
+): TransactionOrigin {
+  return {
+    source: "user",
+    userId,
+    requestId,
+    timestamp: Date.now(),
+    metadata,
+  };
+}
+
+/**
+ * Helper function to create a transaction origin for LLM operations
+ */
+function createLLMTransactionOrigin(
+  requestId: string,
+  userId?: string,
+  batchId?: string,
+  metadata?: Record<string, unknown>
+): TransactionOrigin {
+  return {
+    source: "llm",
+    requestId,
+    batchId: batchId || `llm-batch-${Date.now()}`,
+    userId,
+    timestamp: Date.now(),
+    metadata,
+  };
+}
 
 /**
  * Converts BlockNote onChange events to unified block operations
  * Enhanced with Y.js transaction origin support for provenance tracking
  */
-export class BlockNoteOperationConverter {
-  private static instance: BlockNoteOperationConverter;
+export class BlockNoteAdapter {
+  private static instance: BlockNoteAdapter;
   private batchTimeout: NodeJS.Timeout | null = null;
   private pendingOperations: BlockOperation[] = [];
 
-  public static getInstance(): BlockNoteOperationConverter {
-    if (!BlockNoteOperationConverter.instance) {
-      BlockNoteOperationConverter.instance = new BlockNoteOperationConverter();
+  public static getInstance(): BlockNoteAdapter {
+    if (!BlockNoteAdapter.instance) {
+      BlockNoteAdapter.instance = new BlockNoteAdapter();
     }
-    return BlockNoteOperationConverter.instance;
+    return BlockNoteAdapter.instance;
   }
 
   /**
@@ -38,7 +72,7 @@ export class BlockNoteOperationConverter {
     requestId?: string
   ): { operations: BlockOperation[]; origin: TransactionOrigin } {
     log.debug(
-      `[BlockNoteOperationConverter] Converting ${changes.length} BlockNote changes`
+      `[BlockNoteAdapter] Converting ${changes.length} BlockNote changes`
     );
 
     const operations: BlockOperation[] = [];
@@ -64,7 +98,7 @@ export class BlockNoteOperationConverter {
 
       operations.push(operation);
       log.debug(
-        `[BlockNoteOperationConverter] Converted ${change.type} operation for block ${operation.blockId}`
+        `[BlockNoteAdapter] Converted ${change.type} operation for block ${operation.blockId}`
       );
     }
 
@@ -100,7 +134,7 @@ export class BlockNoteOperationConverter {
     blocks: CustomBlock[]
   ): { operations: BlockOperation[]; origin: TransactionOrigin } {
     log.debug(
-      `[BlockNoteOperationConverter] Creating ${blocks.length} LLM operations for request ${request.requestId}`
+      `[BlockNoteAdapter] Creating ${blocks.length} LLM operations for request ${request.requestId}`
     );
 
     const batchId = `llm-batch-${request.requestId}-${Date.now()}`;
@@ -136,7 +170,7 @@ export class BlockNoteOperationConverter {
     );
 
     log.debug(
-      `[BlockNoteOperationConverter] Created LLM batch ${batchId} with ${operations.length} operations`
+      `[BlockNoteAdapter] Created LLM batch ${batchId} with ${operations.length} operations`
     );
     return { operations, origin };
   }
@@ -177,7 +211,7 @@ export class BlockNoteOperationConverter {
         };
 
         log.debug(
-          `[BlockNoteOperationConverter] Flushing batch of ${batchedOperations.length} operations`
+          `[BlockNoteAdapter] Flushing batch of ${batchedOperations.length} operations`
         );
         resolve({ operations: batchedOperations, origin: batchedOrigin });
       }, batchDelayMs);
@@ -194,7 +228,7 @@ export class BlockNoteOperationConverter {
 
     if (!shouldProcess) {
       log.debug(
-        `[BlockNoteOperationConverter] Skipping ${change.source.type} change to avoid loops`
+        `[BlockNoteAdapter] Skipping ${change.source.type} change to avoid loops`
       );
     }
 
