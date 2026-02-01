@@ -1,9 +1,18 @@
 import { Container } from "./Container";
 import { DatabaseManager } from "../database/DatabaseManager";
 import { initializeEventLogger } from "./EventLogger";
-import { BlockOperationService } from "../domains/blocks/services";
+import {
+  BlockOperationService,
+  BlockEventManager,
+  BlockMiddlewarePipelineImpl,
+  BlockOperationsApplier,
+} from "../domains/blocks/services";
 import { getDebugEventService, DebugEventService } from "./DebugEventService";
-import { BlockEventManager } from "../domains/blocks/services";
+import type {
+  BlockMiddlewarePipeline,
+  IBlockPostWriteMiddleware,
+  IBlockPreWriteMiddleware,
+} from "../domains/blocks/core/middleware";
 import { log } from "../utils/mainLogger";
 import { ProfileManager } from "./ProfileManager";
 import { DocumentManager } from "./DocumentManager";
@@ -120,6 +129,79 @@ export function registerServices(container: Container): void {
       });
     },
   });
+
+  // Block middleware: pre-write (transform) and post-write (observe)
+  container.register("blockPreWriteMiddlewares", {
+    version: "1.0.0",
+    dependencies: [],
+    factory: async (): Promise<never[]> => {
+      log.debug("Initializing blockPreWriteMiddlewares", "ServiceRegistry");
+      return [];
+    },
+  });
+
+  container.register("blockPostWriteMiddlewares", {
+    version: "1.0.0",
+    dependencies: ["imageService", "searchIndexManager"],
+    factory: async (c) => {
+      log.debug("Initializing blockPostWriteMiddlewares", "ServiceRegistry");
+      const imageService = await c.resolve("imageService") as ImageService;
+      const searchIndexManager = await c.resolve("searchIndexManager") as SearchIndexManager;
+
+      const imageMiddleware: IBlockPostWriteMiddleware = {
+        afterApply: async (operations) => {
+          for (const op of operations) {
+            const changes = (op as { changes?: Array<{ type: string; block?: unknown }> }).changes ?? [];
+            const deletions = changes.filter((c) => c.type === "delete");
+            for (const deletion of deletions) {
+              const block = deletion.block;
+              if (!block) continue;
+              const imageIds = ImageService.extractImageIdsFromBlock(block);
+              for (const imageId of imageIds) {
+                const deleted = imageService.deleteImage(imageId);
+                if (deleted) {
+                  log.debug(
+                    `Cleaned up image ${imageId} for deleted block`,
+                    "blockPostWriteMiddlewares"
+                  );
+                }
+              }
+            }
+          }
+        },
+      };
+
+      const searchMiddleware: IBlockPostWriteMiddleware = {
+        afterApply: async (operations, _result, context) => {
+          await searchIndexManager.indexOperations(operations, context.documentId);
+        },
+      };
+
+      return [imageMiddleware, searchMiddleware];
+    },
+  });
+
+  container.register("blockMiddlewarePipeline", {
+    version: "1.0.0",
+    dependencies: ["blockPreWriteMiddlewares", "blockPostWriteMiddlewares"],
+    factory: async (c) => {
+      log.debug("Initializing blockMiddlewarePipeline", "ServiceRegistry");
+      const pre = (await c.resolve("blockPreWriteMiddlewares")) as IBlockPreWriteMiddleware[];
+      const post = (await c.resolve("blockPostWriteMiddlewares")) as IBlockPostWriteMiddleware[];
+      return new BlockMiddlewarePipelineImpl(pre, post);
+    },
+  });
+
+  container.register("blockOperationsApplier", {
+    version: "1.0.0",
+    dependencies: ["documentManager", "blockMiddlewarePipeline"],
+    factory: async (c) => {
+      log.debug("Initializing blockOperationsApplier", "ServiceRegistry");
+      const documentManager = (await c.resolve("documentManager")) as DocumentManager;
+      const pipeline = (await c.resolve("blockMiddlewarePipeline")) as BlockMiddlewarePipeline;
+      return new BlockOperationsApplier(documentManager, pipeline);
+    },
+  });
 }
 
 /**
@@ -142,6 +224,10 @@ export async function initializeAllServices(
   await container.resolve("blockEventManager");
   await container.resolve("imageService");
   await container.resolve("searchIndexManager");
+  await container.resolve("blockPreWriteMiddlewares");
+  await container.resolve("blockPostWriteMiddlewares");
+  await container.resolve("blockMiddlewarePipeline");
+  await container.resolve("blockOperationsApplier");
 
   log.debug("All services initialized successfully", "ServiceRegistry");
 }
@@ -162,5 +248,8 @@ export function getServices(container: Container) {
     documentManager: container.get("documentManager") as DocumentManager,
     imageService: container.get("imageService") as ImageService,
     searchIndexManager: container.get("searchIndexManager") as SearchIndexManager,
+    blockOperationsApplier: container.get(
+      "blockOperationsApplier"
+    ) as BlockOperationsApplier,
   };
 }

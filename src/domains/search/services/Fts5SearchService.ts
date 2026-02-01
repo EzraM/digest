@@ -65,9 +65,9 @@ export class Fts5SearchService implements ISearchIndexService {
       );
     `);
 
-    // Create a content table to track what's indexed (for deduplication)
+    // Content-tracking table (name must not end in _content/_segments/_segdir/_docsize/_stat - reserved by FTS5)
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS search_fts5_content (
+      CREATE TABLE IF NOT EXISTS search_fts5_blocks (
         block_id TEXT PRIMARY KEY,
         document_id TEXT NOT NULL,
         block_type TEXT NOT NULL,
@@ -78,8 +78,8 @@ export class Fts5SearchService implements ISearchIndexService {
 
     // Create index for document lookups
     this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_search_fts5_content_document
-      ON search_fts5_content(document_id);
+      CREATE INDEX IF NOT EXISTS idx_search_fts5_blocks_document
+      ON search_fts5_blocks(document_id);
     `);
 
     log.debug("FTS5 search tables initialized", "Fts5SearchService");
@@ -111,7 +111,7 @@ export class Fts5SearchService implements ISearchIndexService {
           .prepare("DELETE FROM search_fts5 WHERE block_id = ?")
           .run(block.id);
         this.db
-          .prepare("DELETE FROM search_fts5_content WHERE block_id = ?")
+          .prepare("DELETE FROM search_fts5_blocks WHERE block_id = ?")
           .run(block.id);
 
         // Insert into FTS5 table
@@ -125,7 +125,7 @@ export class Fts5SearchService implements ISearchIndexService {
         // Insert into content tracking table
         this.db
           .prepare(
-            `INSERT INTO search_fts5_content (block_id, document_id, block_type, text_preview, updated_at)
+            `INSERT INTO search_fts5_blocks (block_id, document_id, block_type, text_preview, updated_at)
              VALUES (?, ?, ?, ?, ?)`
           )
           .run(block.id, documentId, block.type, textPreview, now);
@@ -202,14 +202,14 @@ export class Fts5SearchService implements ISearchIndexService {
       "DELETE FROM search_fts5 WHERE block_id = ?"
     );
     const deleteFromContent = this.db.prepare(
-      "DELETE FROM search_fts5_content WHERE block_id = ?"
+      "DELETE FROM search_fts5_blocks WHERE block_id = ?"
     );
     const insertFts = this.db.prepare(
       `INSERT INTO search_fts5 (block_id, document_id, block_type, content, updated_at)
        VALUES (?, ?, ?, ?, ?)`
     );
     const insertContent = this.db.prepare(
-      `INSERT INTO search_fts5_content (block_id, document_id, block_type, text_preview, updated_at)
+      `INSERT INTO search_fts5_blocks (block_id, document_id, block_type, text_preview, updated_at)
        VALUES (?, ?, ?, ?, ?)`
     );
 
@@ -267,7 +267,7 @@ export class Fts5SearchService implements ISearchIndexService {
         .prepare("DELETE FROM search_fts5 WHERE block_id = ?")
         .run(blockId);
       this.db
-        .prepare("DELETE FROM search_fts5_content WHERE block_id = ?")
+        .prepare("DELETE FROM search_fts5_blocks WHERE block_id = ?")
         .run(blockId);
     })();
 
@@ -290,7 +290,7 @@ export class Fts5SearchService implements ISearchIndexService {
         .prepare("DELETE FROM search_fts5 WHERE document_id = ?")
         .run(documentId);
       this.db
-        .prepare("DELETE FROM search_fts5_content WHERE document_id = ?")
+        .prepare("DELETE FROM search_fts5_blocks WHERE document_id = ?")
         .run(documentId);
     })();
 
@@ -340,7 +340,7 @@ export class Fts5SearchService implements ISearchIndexService {
           c.updated_at,
           bm25(search_fts5) as rank
         FROM search_fts5 f
-        JOIN search_fts5_content c ON f.block_id = c.block_id
+        JOIN search_fts5_blocks c ON f.block_id = c.block_id
         WHERE search_fts5 MATCH ?
       `;
 
@@ -453,12 +453,12 @@ export class Fts5SearchService implements ISearchIndexService {
    */
   async getStats(): Promise<{ indexedBlocks: number; lastIndexedAt?: number }> {
     const countResult = this.db
-      .prepare("SELECT COUNT(*) as count FROM search_fts5_content")
+      .prepare("SELECT COUNT(*) as count FROM search_fts5_blocks")
       .get() as { count: number };
 
     const lastResult = this.db
       .prepare(
-        "SELECT MAX(updated_at) as last_updated FROM search_fts5_content"
+        "SELECT MAX(updated_at) as last_updated FROM search_fts5_blocks"
       )
       .get() as { last_updated: number | null };
 

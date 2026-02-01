@@ -469,7 +469,11 @@ const setupIpcHandlers = (
   registerMap(createBrowserHandlers(viewStore, createBrowserBlock));
   registerMap(createSlashCommandHandlers(slashCommandManager));
   registerMap(
-    createBlockHandlers(documentManager, rendererView, services.imageService)
+    createBlockHandlers(
+      documentManager,
+      rendererView,
+      services.blockOperationsApplier
+    )
   );
   registerMap(
     createProfileHandlers(

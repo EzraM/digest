@@ -26,6 +26,7 @@ import type {
   RetrievedNote,
 } from "../core/types";
 import type { Block } from "../../blocks/core/types";
+import type { BlockOperation } from "../../blocks/core";
 import { log } from "../../../utils/mainLogger";
 
 /**
@@ -213,6 +214,49 @@ export class SearchIndexManager {
   ): Promise<RetrievedNote[]> {
     this.ensureInitialized();
     return this.searchService.search(query, context, limit);
+  }
+
+  /**
+   * React to applied block operations (for post-write middleware).
+   * Indexes insert/update blocks and removes deleted blocks from the search index.
+   */
+  async indexOperations(
+    operations: BlockOperation[],
+    documentId: string
+  ): Promise<void> {
+    this.ensureInitialized();
+
+    for (const op of operations) {
+      try {
+        const changes = (op as BlockOperation & { changes?: Array<{ type: string; block?: Block }> }).changes;
+        if (changes?.length) {
+          for (const change of changes) {
+            if (change.type === "delete" && change.block?.id) {
+              await this.removeBlock(change.block.id);
+            } else if (
+              (change.type === "insert" || change.type === "update") &&
+              change.block
+            ) {
+              await this.indexBlock(change.block, documentId);
+            }
+          }
+        } else {
+          if (op.type === "delete") {
+            await this.removeBlock(op.blockId);
+          } else if (
+            (op.type === "insert" || op.type === "update") &&
+            op.block
+          ) {
+            await this.indexBlock(op.block, documentId);
+          }
+        }
+      } catch (error) {
+        log.debug(
+          `Search index: failed to process operation ${op.blockId}: ${error}`,
+          "SearchIndexManager"
+        );
+      }
+    }
   }
 
   /**
