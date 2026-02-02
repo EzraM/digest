@@ -8,16 +8,8 @@ import { SlashCommandOption } from "../../types/slashCommand";
 import { GoogleSearchExtensionName } from "../../Search/GoogleSearchBlock";
 import { ChatGPTExtensionName } from "../../Search/ChatGPTBlock";
 import { URLExtensionName } from "../../Search/URLBlock";
-
-/** Search result from the vector store */
-interface SearchResult {
-  blockId: string;
-  documentId: string;
-  blockType: string;
-  content: string;
-  score: number;
-  metadata: Record<string, unknown>;
-}
+import { combineAndRank, type SearchResultPayload } from "./combineSuggestions";
+import { useAppRoute } from "../../context/AppRouteContext";
 
 const workspacePropSchema = {
   initialQuery: {
@@ -28,7 +20,9 @@ const workspacePropSchema = {
 /**
  * Maps a slash command key to the actual block insertion parameters
  */
-function getBlockInsertParams(blockKey: string): { type: string; props?: Record<string, unknown> } | null {
+function getBlockInsertParams(
+  blockKey: string
+): { type: string; props?: Record<string, unknown> } | null {
   switch (blockKey) {
     case "paragraph":
       return { type: "paragraph" };
@@ -76,38 +70,44 @@ export const workspace = createReactBlockSpec(
       const { block, editor } = props;
       const [query, setQuery] = useState(block.props.initialQuery || "");
       const [selectedIndex, setSelectedIndex] = useState(0);
-      const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+      const [searchResults, setSearchResults] = useState<SearchResultPayload[]>(
+        []
+      );
+      const [webSearchResults, setWebSearchResults] = useState<
+        Array<{ title: string; url: string; description: string }>
+      >([]);
       const [isSearching, setIsSearching] = useState(false);
       const inputRef = useRef<HTMLInputElement>(null);
       const containerRef = useRef<HTMLDivElement>(null);
-      const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+      const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null
+      );
+      const webSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null
+      );
+      const { navigateToUrl } = useAppRoute();
 
-      const filteredOptions = filterSlashCommandOptions(query, slashCommandOptions);
+      const filteredOptions = filterSlashCommandOptions(
+        query,
+        slashCommandOptions
+      );
 
-      // Debounced search - only search if query is at least 2 characters and not a slash command trigger
+      // Debounced in-doc search - only if query is at least 2 chars and not slash trigger
       useEffect(() => {
-        // Clear any pending search
-        if (searchTimeoutRef.current) {
-          clearTimeout(searchTimeoutRef.current);
-        }
-
-        // Don't search for very short queries or if query starts with special characters
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
         const trimmedQuery = query.trim();
         if (trimmedQuery.length < 2 || trimmedQuery.startsWith("/")) {
           setSearchResults([]);
           setIsSearching(false);
           return;
         }
-
         setIsSearching(true);
-
-        // Debounce search by 300ms
         searchTimeoutRef.current = setTimeout(async () => {
           try {
             const results = await window.electronAPI.search.execute(
               trimmedQuery,
               { minScore: 0.1 },
-              5  // Limit to 5 results
+              5
             );
             setSearchResults(results);
           } catch (error) {
@@ -117,23 +117,47 @@ export const workspace = createReactBlockSpec(
             setIsSearching(false);
           }
         }, 300);
-
         return () => {
-          if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-          }
+          if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
         };
       }, [query]);
 
-      // Compute total items: slash commands + search results
-      const totalItems = useMemo(() => {
-        return filteredOptions.length + searchResults.length;
-      }, [filteredOptions.length, searchResults.length]);
+      // Debounced Brave web search (1s) - same conditions as in-doc search
+      useEffect(() => {
+        if (webSearchTimeoutRef.current)
+          clearTimeout(webSearchTimeoutRef.current);
+        const trimmedQuery = query.trim();
+        if (trimmedQuery.length < 2 || trimmedQuery.startsWith("/")) {
+          setWebSearchResults([]);
+          return;
+        }
+        webSearchTimeoutRef.current = setTimeout(async () => {
+          try {
+            const list = await window.electronAPI.search.webSearch(
+              trimmedQuery,
+              { count: 5 }
+            );
+            setWebSearchResults(list);
+          } catch {
+            setWebSearchResults([]);
+          }
+        }, 1000);
+        return () => {
+          if (webSearchTimeoutRef.current)
+            clearTimeout(webSearchTimeoutRef.current);
+        };
+      }, [query]);
 
-      // Reset selection when options/results change
+      const combinedList = useMemo(
+        () =>
+          combineAndRank(filteredOptions, searchResults, webSearchResults),
+        [filteredOptions, searchResults, webSearchResults]
+      );
+      const totalItems = combinedList.length;
+
       useEffect(() => {
         setSelectedIndex(0);
-      }, [query, searchResults.length]);
+      }, [query, combinedList.length]);
 
       // Focus input on mount
       useEffect(() => {
@@ -151,100 +175,126 @@ export const workspace = createReactBlockSpec(
         editor.focus();
       }, [editor, block.id]);
 
-      const selectOption = useCallback((option: SlashCommandOption) => {
-        const params = getBlockInsertParams(option.key);
-        if (!params) {
-          dismiss();
-          return;
-        }
-
-        // Replace this workspace block with the selected block type
-        editor.updateBlock(block.id, params as Parameters<typeof editor.updateBlock>[1]);
-        editor.focus();
-      }, [editor, block.id, dismiss]);
-
-      const selectSearchResult = useCallback((result: SearchResult) => {
-        // For now, insert the search result content as a paragraph
-        // In the future, this could navigate to the block or do something more sophisticated
-        editor.updateBlock(block.id, {
-          type: "paragraph",
-          content: result.content,
-        });
-        editor.focus();
-      }, [editor, block.id]);
-
-      // Unified selection handler that picks between slash commands and search results
-      const handleSelect = useCallback((index: number) => {
-        if (index < filteredOptions.length) {
-          // It's a slash command option
-          selectOption(filteredOptions[index]);
-        } else {
-          // It's a search result
-          const searchIndex = index - filteredOptions.length;
-          if (searchResults[searchIndex]) {
-            selectSearchResult(searchResults[searchIndex]);
-          }
-        }
-      }, [filteredOptions, searchResults, selectOption, selectSearchResult]);
-
-      const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-        switch (e.key) {
-          case "ArrowDown":
-            e.preventDefault();
-            setSelectedIndex((prev) =>
-              prev < totalItems - 1 ? prev + 1 : prev
-            );
-            break;
-          case "ArrowUp":
-            e.preventDefault();
-            setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
-            break;
-          case "Enter":
-            e.preventDefault();
-            if (totalItems > 0) {
-              handleSelect(selectedIndex);
-            }
-            break;
-          case "Escape":
-            e.preventDefault();
+      const selectOption = useCallback(
+        (option: SlashCommandOption) => {
+          const params = getBlockInsertParams(option.key);
+          if (!params) {
             dismiss();
-            break;
-          case "Tab":
-            e.preventDefault();
-            if (e.shiftKey) {
-              setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
-            } else {
+            return;
+          }
+
+          // Replace this workspace block with the selected block type
+          editor.updateBlock(
+            block.id,
+            params as Parameters<typeof editor.updateBlock>[1]
+          );
+          editor.focus();
+        },
+        [editor, block.id, dismiss]
+      );
+
+      const selectSearchResult = useCallback(
+        (result: SearchResultPayload) => {
+          editor.updateBlock(block.id, {
+            type: "paragraph",
+            content: result.content,
+          } as unknown as Parameters<typeof editor.updateBlock>[1]);
+          editor.focus();
+        },
+        [editor, block.id]
+      );
+
+      const handleSelect = useCallback(
+        (index: number) => {
+          const item = combinedList[index];
+          if (!item) return;
+          switch (item.kind) {
+            case "slash":
+              selectOption(item.payload);
+              break;
+            case "note":
+              selectSearchResult(item.payload);
+              break;
+            case "suggest": {
+              const { title, url } = item.payload;
+              editor.updateBlock(block.id, {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "link",
+                    href: url,
+                    content: [
+                      { type: "text", text: title, styles: {} },
+                    ],
+                  },
+                ],
+              } as unknown as Parameters<typeof editor.updateBlock>[1]);
+              editor.focus();
+              navigateToUrl(url);
+              break;
+            }
+          }
+        },
+        [
+          combinedList,
+          selectOption,
+          selectSearchResult,
+          editor,
+          block.id,
+          navigateToUrl,
+        ]
+      );
+
+      const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent) => {
+          switch (e.key) {
+            case "ArrowDown":
+              e.preventDefault();
               setSelectedIndex((prev) =>
                 prev < totalItems - 1 ? prev + 1 : prev
               );
-            }
-            break;
-        }
-      }, [totalItems, selectedIndex, handleSelect, dismiss]);
+              break;
+            case "ArrowUp":
+              e.preventDefault();
+              setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
+              break;
+            case "Enter":
+              e.preventDefault();
+              if (totalItems > 0) {
+                handleSelect(selectedIndex);
+              }
+              break;
+            case "Escape":
+              e.preventDefault();
+              dismiss();
+              break;
+            case "Tab":
+              e.preventDefault();
+              if (e.shiftKey) {
+                setSelectedIndex((prev) => (prev > 0 ? prev - 1 : prev));
+              } else {
+                setSelectedIndex((prev) =>
+                  prev < totalItems - 1 ? prev + 1 : prev
+                );
+              }
+              break;
+          }
+        },
+        [totalItems, selectedIndex, handleSelect, dismiss]
+      );
 
       // Scroll selected item into view
       useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
-        const selectedEl = container.querySelector(`[data-index="${selectedIndex}"]`);
+        const selectedEl = container.querySelector(
+          `[data-index="${selectedIndex}"]`
+        );
         if (selectedEl) {
           selectedEl.scrollIntoView({ block: "nearest" });
         }
       }, [selectedIndex]);
-
-      // Group options by their group property
-      const groupedOptions = filteredOptions.reduce((acc, option) => {
-        const group = option.group || "Other";
-        if (!acc[group]) {
-          acc[group] = [];
-        }
-        acc[group].push(option);
-        return acc;
-      }, {} as Record<string, SlashCommandOption[]>);
-
-      // Flatten for index tracking
-      let flatIndex = 0;
 
       return (
         <div
@@ -274,88 +324,139 @@ export const workspace = createReactBlockSpec(
                 fontSize: "14px",
                 outline: "none",
               }}
-              onFocus={(e) => e.target.style.borderColor = "#228be6"}
-              onBlur={(e) => e.target.style.borderColor = "#e0e0e0"}
+              onFocus={(e) => (e.target.style.borderColor = "#228be6")}
+              onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
             />
           </div>
 
-          {/* Options and results list */}
+          {/* Single flat list of ranked results */}
           <div
             ref={containerRef}
             style={{
-              maxHeight: "300px",
+              minWidth: "320px",
+              maxWidth: "90vw",
+              maxHeight: "800px",
               overflowY: "auto",
-              padding: "4px 0",
+              padding: "8px 0",
             }}
           >
-            {/* Search results section */}
-            {searchResults.length > 0 && (
-              <div>
-                <div
-                  style={{
-                    padding: "6px 12px",
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: "#228be6",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <span style={{ fontSize: "12px" }}>🔍</span>
-                  Notes
-                </div>
-                {searchResults.map((result, idx) => {
-                  const currentIndex = idx;
-                  const isSelected = currentIndex === selectedIndex;
-                  return (
+            {combinedList.map((item, idx) => {
+              const isSelected = idx === selectedIndex;
+              const rowStyle = {
+                padding: "8px 12px",
+                cursor: "pointer" as const,
+                backgroundColor: isSelected ? "#e7f5ff" : "transparent",
+                borderLeft: isSelected
+                  ? "2px solid #228be6"
+                  : "2px solid transparent",
+              };
+              if (item.kind === "slash") {
+                return (
+                  <div
+                    key={`slash-${item.payload.key}`}
+                    data-index={idx}
+                    onClick={() => handleSelect(idx)}
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                    style={rowStyle}
+                  >
                     <div
-                      key={result.blockId}
-                      data-index={currentIndex}
-                      onClick={() => selectSearchResult(result)}
-                      onMouseEnter={() => setSelectedIndex(currentIndex)}
                       style={{
-                        padding: "8px 12px",
-                        cursor: "pointer",
-                        backgroundColor: isSelected ? "#e7f5ff" : "transparent",
-                        borderLeft: isSelected ? "2px solid #228be6" : "2px solid transparent",
+                        fontSize: "14px",
+                        fontWeight: 500,
+                        color: "#212529",
                       }}
                     >
+                      {item.payload.title}
+                    </div>
+                    {item.payload.subtext && (
                       <div
                         style={{
-                          fontSize: "14px",
-                          fontWeight: 500,
-                          color: "#212529",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {result.content.slice(0, 60)}{result.content.length > 60 ? "..." : ""}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "11px",
+                          fontSize: "12px",
                           color: "#868e96",
                           marginTop: "2px",
-                          display: "flex",
-                          gap: "8px",
                         }}
                       >
-                        <span style={{ textTransform: "capitalize" }}>{result.blockType}</span>
-                        <span>·</span>
-                        <span>{Math.round(result.score * 100)}% match</span>
+                        {item.payload.subtext}
                       </div>
+                    )}
+                  </div>
+                );
+              }
+              if (item.kind === "note") {
+                const r = item.payload;
+                return (
+                  <div
+                    key={`note-${r.blockId}`}
+                    data-index={idx}
+                    onClick={() => handleSelect(idx)}
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                    style={rowStyle}
+                  >
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {r.content.slice(0, 50)}
+                      {r.content.length > 50 ? "..." : ""}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    <div
+                      style={{
+                        fontSize: "11px",
+                        color: "#868e96",
+                        marginTop: "2px",
+                      }}
+                    >
+                      {r.blockType} · {Math.round(r.score * 100)}%
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={`suggest-${item.payload.url}`}
+                  data-index={idx}
+                  onClick={() => handleSelect(idx)}
+                  onMouseEnter={() => setSelectedIndex(idx)}
+                  style={rowStyle}
+                >
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      color: "#495057",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {item.payload.title}
+                  </div>
+                  {item.payload.description && (
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#868e96",
+                        marginTop: "2px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {item.payload.description.slice(0, 60)}
+                      {item.payload.description.length > 60 ? "..." : ""}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-            {/* Loading indicator */}
-            {isSearching && searchResults.length === 0 && (
+          {isSearching &&
+            searchResults.length === 0 &&
+            combinedList.length === 0 && (
               <div
                 style={{
                   padding: "8px 12px",
@@ -368,96 +469,17 @@ export const workspace = createReactBlockSpec(
               </div>
             )}
 
-            {/* Divider between search results and slash commands */}
-            {searchResults.length > 0 && filteredOptions.length > 0 && (
-              <div style={{ borderTop: "1px solid #f0f0f0", margin: "4px 0" }} />
-            )}
-
-            {/* Slash command options */}
-            {filteredOptions.length === 0 && searchResults.length === 0 && !isSearching ? (
-              <div
-                style={{
-                  padding: "12px 16px",
-                  color: "#868e96",
-                  fontSize: "13px",
-                }}
-              >
-                No matching blocks or notes
-              </div>
-            ) : (
-              Object.entries(groupedOptions).map(([groupName, options]) => (
-                <div key={groupName}>
-                  <div
-                    style={{
-                      padding: "6px 12px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: "#868e96",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    {groupName}
-                  </div>
-                  {options.map((option) => {
-                    // Offset by search results length
-                    const currentIndex = searchResults.length + flatIndex++;
-                    const isSelected = currentIndex === selectedIndex;
-                    return (
-                      <div
-                        key={option.key}
-                        data-index={currentIndex}
-                        onClick={() => selectOption(option)}
-                        onMouseEnter={() => setSelectedIndex(currentIndex)}
-                        style={{
-                          padding: "8px 12px",
-                          cursor: "pointer",
-                          backgroundColor: isSelected ? "#f1f3f5" : "transparent",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                        }}
-                      >
-                        <div style={{ flex: 1 }}>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              fontWeight: 500,
-                              color: "#212529",
-                            }}
-                          >
-                            {option.title}
-                          </div>
-                          {option.subtext && (
-                            <div
-                              style={{
-                                fontSize: "12px",
-                                color: "#868e96",
-                                marginTop: "2px",
-                              }}
-                            >
-                              {option.subtext}
-                            </div>
-                          )}
-                        </div>
-                        {option.badge && (
-                          <div
-                            style={{
-                              fontSize: "11px",
-                              color: "#868e96",
-                              fontFamily: "monospace",
-                            }}
-                          >
-                            {option.badge}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))
-            )}
-          </div>
+          {!isSearching && combinedList.length === 0 && (
+            <div
+              style={{
+                padding: "12px 16px",
+                color: "#868e96",
+                fontSize: "13px",
+              }}
+            >
+              No matching blocks, notes, or suggestions
+            </div>
+          )}
 
           {/* Footer hint */}
           <div

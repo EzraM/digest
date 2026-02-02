@@ -36,10 +36,12 @@ export class Fts5SearchService implements ISearchIndexService {
 
   // Event stream for index updates
   private eventSubject = new Subject<IndexEvent>();
-  public readonly events$: Observable<IndexEvent> = this.eventSubject.asObservable();
+  public readonly events$: Observable<IndexEvent> =
+    this.eventSubject.asObservable();
 
   // Pending indexing queue
-  private pendingBlocks: Map<string, { block: Block; documentId: string }> = new Map();
+  private pendingBlocks: Map<string, { block: Block; documentId: string }> =
+    new Map();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private isIndexing = false;
 
@@ -230,7 +232,13 @@ export class Fts5SearchService implements ISearchIndexService {
 
             // Insert new entries
             insertFts.run(block.id, documentId, block.type, text, now);
-            insertContent.run(block.id, documentId, block.type, textPreview, now);
+            insertContent.run(
+              block.id,
+              documentId,
+              block.type,
+              textPreview,
+              now
+            );
 
             indexed++;
           }
@@ -457,9 +465,7 @@ export class Fts5SearchService implements ISearchIndexService {
       .get() as { count: number };
 
     const lastResult = this.db
-      .prepare(
-        "SELECT MAX(updated_at) as last_updated FROM search_fts5_blocks"
-      )
+      .prepare("SELECT MAX(updated_at) as last_updated FROM search_fts5_blocks")
       .get() as { last_updated: number | null };
 
     return {

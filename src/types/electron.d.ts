@@ -87,14 +87,14 @@ interface ElectronAPI {
     callback: (data: { url: string; sourceBlockId?: string }) => void
   ) => () => void;
   onInsertLink: (
-    callback: (data: { url: string; title: string; sourceBlockId?: string }) => void
-  ) => () => void;
-  onLinkCaptured: (
     callback: (data: {
       url: string;
       title: string;
-      capturedAt: number;
+      sourceBlockId?: string;
     }) => void
+  ) => () => void;
+  onLinkCaptured: (
+    callback: (data: { url: string; title: string; capturedAt: number }) => void
   ) => () => void;
   applyBlockOperations: (
     operations: BlockOperation[],
@@ -204,18 +204,24 @@ interface ElectronAPI {
         minScore?: number;
       },
       limit?: number
-    ) => Promise<Array<{
-      blockId: string;
-      documentId: string;
-      blockType: string;
-      content: string;
-      score: number;
-      metadata: Record<string, unknown>;
-    }>>;
+    ) => Promise<
+      Array<{
+        blockId: string;
+        documentId: string;
+        blockType: string;
+        content: string;
+        score: number;
+        metadata: Record<string, unknown>;
+      }>
+    >;
     getStats: () => Promise<{
       indexedBlocks: number;
       lastIndexedAt?: number;
     }>;
+    webSearch: (
+      query: string,
+      options?: { country?: string; count?: number }
+    ) => Promise<Array<{ title: string; url: string; description: string }>>;
   };
 }
 

@@ -18,6 +18,7 @@ import { ProfileManager } from "./ProfileManager";
 import { DocumentManager } from "./DocumentManager";
 import { ImageService } from "./ImageService";
 import { SearchIndexManager } from "../domains/search/services/SearchIndexManager";
+import { BraveSearchService } from "../domains/search/services/BraveSearchService";
 
 /**
  * Service registry that defines all application services and their dependencies
@@ -130,6 +131,16 @@ export function registerServices(container: Container): void {
     },
   });
 
+  // BraveSearchService - no deps; uses getEnvVar("BRAVE_SEARCH_API_KEY")
+  container.register("braveSearchService", {
+    version: "1.0.0",
+    dependencies: [],
+    factory: async () => {
+      log.debug("Initializing BraveSearchService", "ServiceRegistry");
+      return new BraveSearchService();
+    },
+  });
+
   // Block middleware: pre-write (transform) and post-write (observe)
   container.register("blockPreWriteMiddlewares", {
     version: "1.0.0",
@@ -145,13 +156,17 @@ export function registerServices(container: Container): void {
     dependencies: ["imageService", "searchIndexManager"],
     factory: async (c) => {
       log.debug("Initializing blockPostWriteMiddlewares", "ServiceRegistry");
-      const imageService = await c.resolve("imageService") as ImageService;
-      const searchIndexManager = await c.resolve("searchIndexManager") as SearchIndexManager;
+      const imageService = (await c.resolve("imageService")) as ImageService;
+      const searchIndexManager = (await c.resolve(
+        "searchIndexManager"
+      )) as SearchIndexManager;
 
       const imageMiddleware: IBlockPostWriteMiddleware = {
         afterApply: async (operations) => {
           for (const op of operations) {
-            const changes = (op as { changes?: Array<{ type: string; block?: unknown }> }).changes ?? [];
+            const changes =
+              (op as { changes?: Array<{ type: string; block?: unknown }> })
+                .changes ?? [];
             const deletions = changes.filter((c) => c.type === "delete");
             for (const deletion of deletions) {
               const block = deletion.block;
@@ -173,7 +188,10 @@ export function registerServices(container: Container): void {
 
       const searchMiddleware: IBlockPostWriteMiddleware = {
         afterApply: async (operations, _result, context) => {
-          await searchIndexManager.indexOperations(operations, context.documentId);
+          await searchIndexManager.indexOperations(
+            operations,
+            context.documentId
+          );
         },
       };
 
@@ -186,8 +204,12 @@ export function registerServices(container: Container): void {
     dependencies: ["blockPreWriteMiddlewares", "blockPostWriteMiddlewares"],
     factory: async (c) => {
       log.debug("Initializing blockMiddlewarePipeline", "ServiceRegistry");
-      const pre = (await c.resolve("blockPreWriteMiddlewares")) as IBlockPreWriteMiddleware[];
-      const post = (await c.resolve("blockPostWriteMiddlewares")) as IBlockPostWriteMiddleware[];
+      const pre = (await c.resolve(
+        "blockPreWriteMiddlewares"
+      )) as IBlockPreWriteMiddleware[];
+      const post = (await c.resolve(
+        "blockPostWriteMiddlewares"
+      )) as IBlockPostWriteMiddleware[];
       return new BlockMiddlewarePipelineImpl(pre, post);
     },
   });
@@ -197,8 +219,12 @@ export function registerServices(container: Container): void {
     dependencies: ["documentManager", "blockMiddlewarePipeline"],
     factory: async (c) => {
       log.debug("Initializing blockOperationsApplier", "ServiceRegistry");
-      const documentManager = (await c.resolve("documentManager")) as DocumentManager;
-      const pipeline = (await c.resolve("blockMiddlewarePipeline")) as BlockMiddlewarePipeline;
+      const documentManager = (await c.resolve(
+        "documentManager"
+      )) as DocumentManager;
+      const pipeline = (await c.resolve(
+        "blockMiddlewarePipeline"
+      )) as BlockMiddlewarePipeline;
       return new BlockOperationsApplier(documentManager, pipeline);
     },
   });
@@ -224,6 +250,7 @@ export async function initializeAllServices(
   await container.resolve("blockEventManager");
   await container.resolve("imageService");
   await container.resolve("searchIndexManager");
+  await container.resolve("braveSearchService");
   await container.resolve("blockPreWriteMiddlewares");
   await container.resolve("blockPostWriteMiddlewares");
   await container.resolve("blockMiddlewarePipeline");
@@ -247,7 +274,12 @@ export function getServices(container: Container) {
     profileManager: container.get("profileManager") as ProfileManager,
     documentManager: container.get("documentManager") as DocumentManager,
     imageService: container.get("imageService") as ImageService,
-    searchIndexManager: container.get("searchIndexManager") as SearchIndexManager,
+    searchIndexManager: container.get(
+      "searchIndexManager"
+    ) as SearchIndexManager,
+    braveSearchService: container.get(
+      "braveSearchService"
+    ) as BraveSearchService,
     blockOperationsApplier: container.get(
       "blockOperationsApplier"
     ) as BlockOperationsApplier,

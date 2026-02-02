@@ -209,17 +209,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
     };
   },
   onInsertLink: (
-    callback: (data: { url: string; title: string; sourceBlockId?: string }) => void
+    callback: (data: {
+      url: string;
+      title: string;
+      sourceBlockId?: string;
+    }) => void
   ) => {
-    console.log("[preload] Setting up onInsertLink IPC listener for event:", EVENTS.BROWSER.INSERT_LINK);
+    console.log(
+      "[preload] Setting up onInsertLink IPC listener for event:",
+      EVENTS.BROWSER.INSERT_LINK
+    );
 
     const subscription = (_: any, data: any) => {
-      console.log("[preload] Received browser:insert-link IPC event with data:", data);
+      console.log(
+        "[preload] Received browser:insert-link IPC event with data:",
+        data
+      );
 
       const { url, title, sourceBlockId } = data;
 
       if (!url || !title) {
-        console.error("[preload] Invalid data format for browser:insert-link event:", data);
+        console.error(
+          "[preload] Invalid data format for browser:insert-link event:",
+          data
+        );
         return;
       }
 
@@ -239,11 +252,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     };
   },
   onLinkCaptured: (
-    callback: (data: {
-      url: string;
-      title: string;
-      capturedAt: number;
-    }) => void
+    callback: (data: { url: string; title: string; capturedAt: number }) => void
   ) => {
     const subscription = (_: any, data: any) => {
       log.debug(
@@ -441,5 +450,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
       limit?: number
     ) => ipcRenderer.invoke("search:execute", query, context, limit),
     getStats: () => ipcRenderer.invoke("search:get-stats"),
+    webSearch: (
+      query: string,
+      options?: { country?: string; count?: number }
+    ) => ipcRenderer.invoke("search:webSearch", query, options),
   },
 });

@@ -188,49 +188,37 @@ const createWindow = async () => {
 
   // Shared helper to create a new browser block (used by EventTranslator for page context)
   const createBrowserBlock = (url: string, sourceBlockId?: string) => {
-    log.debug(
-      `Creating new browser block: ${url}, sourceBlockId: ${sourceBlockId}`,
-      "main"
-    );
-
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {
       globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, {
         url,
         sourceBlockId,
       });
-    } else {
-      log.debug("Cannot create browser block - appView not available", "main");
     }
   };
 
   // Helper to navigate to URL route (used by LinkInterceptionService for notebook context)
   const navigateToUrl = (url: string) => {
-    log.debug(`Navigating to URL route: ${url}`, "main");
-
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {
       // Use executeJavaScript to navigate by setting window.location.hash
       const encodedUrl = encodeURIComponent(url);
       globalAppView.webContents.executeJavaScript(
         `window.location.hash = '#/url/${encodedUrl}';`
-      ).catch(err => {
-        log.debug(`Failed to navigate to URL: ${err}`, "main");
-      });
-    } else {
-      log.debug("Cannot navigate to URL - appView not available", "main");
+      );
     }
   };
 
   // Helper to insert inline link (used by EventTranslator for page background clicks)
-  const insertInlineLink = async (url: string, sourceBlockId: string, _unusedTitle: string, profileId: string) => {
-    log.debug(`[main] Inserting inline link: ${url}, sourceBlockId: ${sourceBlockId}, profileId: ${profileId}`, "main");
-    log.debug(`[main] Fetching title for target URL: ${url} using profile: ${profileId}`, "main");
-
+  const insertInlineLink = async (
+    url: string,
+    sourceBlockId: string,
+    _unusedTitle: string,
+    profileId: string
+  ) => {
     // Fetch the title from the target URL (not the source page) using the source profile's session
     const title = await fetchPageTitle(url, { profileId });
     log.debug(`[main] Title fetched: "${title}"`, "main");
 
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-      log.debug(`[main] Sending INSERT_LINK event to renderer with title: "${title}"`, "main");
       globalAppView.webContents.send(EVENTS.BROWSER.INSERT_LINK, {
         url,
         title,
@@ -238,14 +226,12 @@ const createWindow = async () => {
       });
 
       // Emit link capture notification event for UI feedback
-      log.debug(`[main] Sending LINK_CAPTURED event to renderer for UI feedback`, "main");
       globalAppView.webContents.send(EVENTS.BROWSER.LINK_CAPTURED, {
         url,
         title,
         capturedAt: Date.now(),
       });
     } else {
-      log.debug("[main] Cannot insert inline link - appView not available", "main");
     }
   };
 
@@ -491,7 +477,12 @@ const setupIpcHandlers = (
       loadDocumentIntoRenderer
     )
   );
-  registerMap(createSearchHandlers(services.searchIndexManager));
+  registerMap(
+    createSearchHandlers(
+      services.searchIndexManager,
+      services.braveSearchService
+    )
+  );
 };
 
 app.on("ready", async () => {
