@@ -85,7 +85,7 @@ export const workspace = createReactBlockSpec(
       const webSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
         null
       );
-      const { navigateToUrl } = useAppRoute();
+      const { navigateToUrl, navigateToDoc } = useAppRoute();
 
       const filteredOptions = filterSlashCommandOptions(
         query,
@@ -193,17 +193,6 @@ export const workspace = createReactBlockSpec(
         [editor, block.id, dismiss]
       );
 
-      const selectSearchResult = useCallback(
-        (result: SearchResultPayload) => {
-          editor.updateBlock(block.id, {
-            type: "paragraph",
-            content: result.content,
-          } as unknown as Parameters<typeof editor.updateBlock>[1]);
-          editor.focus();
-        },
-        [editor, block.id]
-      );
-
       const handleSelect = useCallback(
         (index: number) => {
           const item = combinedList[index];
@@ -213,7 +202,8 @@ export const workspace = createReactBlockSpec(
               selectOption(item.payload);
               break;
             case "note":
-              selectSearchResult(item.payload);
+              navigateToDoc(item.payload.documentId, item.payload.blockId);
+              dismiss();
               break;
             case "suggest": {
               const { title, url } = item.payload;
@@ -238,7 +228,8 @@ export const workspace = createReactBlockSpec(
         [
           combinedList,
           selectOption,
-          selectSearchResult,
+          navigateToDoc,
+          dismiss,
           editor,
           block.id,
           navigateToUrl,

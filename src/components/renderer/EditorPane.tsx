@@ -24,7 +24,7 @@ export const EditorPane = ({
   onSlashMenuItemClick,
   focusBlockId,
 }: EditorPaneProps) => {
-  useEditorScrollIntoView(focusBlockId);
+  useEditorScrollIntoView(focusBlockId, editor);
 
   // Note: We don't check editor.view availability here because BlockNoteView
   // creates the view when it mounts. The check would prevent initial render.
