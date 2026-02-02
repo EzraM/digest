@@ -299,16 +299,23 @@ export const workspace = createReactBlockSpec(
       return (
         <div
           style={{
-            border: "1px solid #e0e0e0",
+            width: "100%",
+            maxWidth: "100%",
+            border: "1px solid var(--mantine-color-default-border)",
             borderRadius: "8px",
-            backgroundColor: "#fff",
+            backgroundColor: "var(--mantine-color-default)",
             boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
             overflow: "hidden",
             margin: "4px 0",
           }}
         >
           {/* Search input */}
-          <div style={{ padding: "8px", borderBottom: "1px solid #f0f0f0" }}>
+          <div
+            style={{
+              padding: "8px",
+              borderBottom: "1px solid var(--mantine-color-default-border)",
+            }}
+          >
             <input
               ref={inputRef}
               type="text"
@@ -319,13 +326,21 @@ export const workspace = createReactBlockSpec(
               style={{
                 width: "100%",
                 padding: "8px 12px",
-                border: "1px solid #e0e0e0",
+                border: "1px solid var(--mantine-color-default-border)",
                 borderRadius: "6px",
                 fontSize: "14px",
                 outline: "none",
+                backgroundColor: "var(--mantine-color-body)",
+                color: "var(--mantine-color-text)",
               }}
-              onFocus={(e) => (e.target.style.borderColor = "#228be6")}
-              onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
+              onFocus={(e) => {
+                e.target.style.borderColor =
+                  "var(--mantine-color-blue-6)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor =
+                  "var(--mantine-color-default-border)";
+              }}
             />
           </div>
 
@@ -334,7 +349,8 @@ export const workspace = createReactBlockSpec(
             ref={containerRef}
             style={{
               minWidth: "320px",
-              maxWidth: "90vw",
+              width: "100%",
+              maxWidth: "100%",
               maxHeight: "800px",
               overflowY: "auto",
               padding: "8px 0",
@@ -345,9 +361,11 @@ export const workspace = createReactBlockSpec(
               const rowStyle = {
                 padding: "8px 12px",
                 cursor: "pointer" as const,
-                backgroundColor: isSelected ? "#e7f5ff" : "transparent",
+                backgroundColor: isSelected
+                  ? "var(--mantine-color-default-hover)"
+                  : "transparent",
                 borderLeft: isSelected
-                  ? "2px solid #228be6"
+                  ? "2px solid var(--mantine-color-blue-6)"
                   : "2px solid transparent",
               };
               if (item.kind === "slash") {
@@ -363,7 +381,7 @@ export const workspace = createReactBlockSpec(
                       style={{
                         fontSize: "14px",
                         fontWeight: 500,
-                        color: "#212529",
+                        color: "var(--mantine-color-text)",
                       }}
                     >
                       {item.payload.title}
@@ -372,7 +390,7 @@ export const workspace = createReactBlockSpec(
                       <div
                         style={{
                           fontSize: "12px",
-                          color: "#868e96",
+                          color: "var(--mantine-color-dimmed)",
                           marginTop: "2px",
                         }}
                       >
@@ -395,6 +413,7 @@ export const workspace = createReactBlockSpec(
                     <div
                       style={{
                         fontSize: "14px",
+                        color: "var(--mantine-color-text)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -406,7 +425,7 @@ export const workspace = createReactBlockSpec(
                     <div
                       style={{
                         fontSize: "11px",
-                        color: "#868e96",
+                        color: "var(--mantine-color-dimmed)",
                         marginTop: "2px",
                       }}
                     >
@@ -426,7 +445,7 @@ export const workspace = createReactBlockSpec(
                   <div
                     style={{
                       fontSize: "14px",
-                      color: "#495057",
+                      color: "var(--mantine-color-text)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -438,7 +457,7 @@ export const workspace = createReactBlockSpec(
                     <div
                       style={{
                         fontSize: "12px",
-                        color: "#868e96",
+                        color: "var(--mantine-color-dimmed)",
                         marginTop: "2px",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -461,7 +480,7 @@ export const workspace = createReactBlockSpec(
                 style={{
                   padding: "8px 12px",
                   fontSize: "12px",
-                  color: "#868e96",
+                  color: "var(--mantine-color-dimmed)",
                   fontStyle: "italic",
                 }}
               >
@@ -473,7 +492,7 @@ export const workspace = createReactBlockSpec(
             <div
               style={{
                 padding: "12px 16px",
-                color: "#868e96",
+                color: "var(--mantine-color-dimmed)",
                 fontSize: "13px",
               }}
             >
@@ -485,9 +504,9 @@ export const workspace = createReactBlockSpec(
           <div
             style={{
               padding: "8px 12px",
-              borderTop: "1px solid #f0f0f0",
+              borderTop: "1px solid var(--mantine-color-default-border)",
               fontSize: "11px",
-              color: "#868e96",
+              color: "var(--mantine-color-dimmed)",
               display: "flex",
               gap: "12px",
             }}
