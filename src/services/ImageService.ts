@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { net } from "electron";
 import { log } from "../utils/mainLogger";
 
 // Simple ID generator
@@ -246,6 +247,84 @@ export class ImageService {
       log.debug(`Deleted image: ${imageId}`, "ImageService");
     }
     return deleted;
+  }
+
+  /**
+   * Download an image from a URL and save it to the database.
+   * Uses Electron's net module to bypass CORS restrictions.
+   */
+  async downloadAndSaveImage(params: {
+    url: string;
+    documentId?: string;
+  }): Promise<SaveImageResult | null> {
+    const { url, documentId } = params;
+
+    log.debug(`downloadAndSaveImage: ${url}`, "ImageService");
+
+    // Skip non-http(s) URLs, data URIs, and already-saved images
+    if (url.startsWith("digest-image://")) {
+      log.debug(`Skipping already-saved image: ${url}`, "ImageService");
+      return null;
+    }
+    if (url.startsWith("data:")) {
+      log.debug(`Skipping data URI`, "ImageService");
+      return null;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      log.debug(`Skipping non-http URL: ${url}`, "ImageService");
+      return null;
+    }
+
+    try {
+      const response = await net.fetch(url);
+
+      if (!response.ok) {
+        log.debug(
+          `Failed to download image: HTTP ${response.status} for ${url}`,
+          "ImageService"
+        );
+        return null;
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      // Determine MIME type - default to image/png if content-type is missing or not an image
+      let mimeType = "image/png";
+      if (contentType.startsWith("image/")) {
+        mimeType = contentType.split(";")[0].trim();
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) {
+        log.debug(`Empty response for image: ${url}`, "ImageService");
+        return null;
+      }
+
+      // Extract a filename from the URL
+      let fileName = "clipped-image";
+      try {
+        const urlPath = new URL(url).pathname;
+        const lastSegment = urlPath.split("/").pop();
+        if (lastSegment && lastSegment.includes(".")) {
+          fileName = lastSegment;
+        }
+      } catch {
+        // Keep default filename
+      }
+
+      return await this.saveImage({
+        arrayBuffer,
+        mimeType,
+        fileName,
+        documentId,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      log.debug(
+        `Failed to download image from ${url}: ${msg}`,
+        "ImageService"
+      );
+      return null;
+    }
   }
 
   /**

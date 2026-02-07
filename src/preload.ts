@@ -438,6 +438,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       documentId?: string;
     }) => ipcRenderer.invoke("image:saveImage", params),
     getImageInfo: (id: string) => ipcRenderer.invoke("image:getImageInfo", id),
+    downloadAndSaveImage: (params: { url: string; documentId?: string }) =>
+      ipcRenderer.invoke("image:downloadAndSaveImage", params),
   },
   search: {
     execute: (

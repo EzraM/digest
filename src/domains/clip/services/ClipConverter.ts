@@ -64,6 +64,9 @@ export class ClipConverter implements IClipConverter {
         blocks.push(...this.convertTextToBlocks(draft.selectionText));
       }
 
+      // Download and save all images locally to avoid CORS issues
+      await this.saveImagesInBlocks(blocks);
+
       const latency = Date.now() - startTime;
       log.debug(
         `Converted clip draft ${draft.id} to ${blocks.length} blocks in ${latency}ms`,
@@ -242,6 +245,55 @@ export class ClipConverter implements IClipConverter {
     const blocks = editor.tryParseHTMLToBlocks(html) as CustomPartialBlock[];
 
     return blocks;
+  }
+
+  /**
+   * Walk blocks and download all remote images, replacing URLs with local digest-image:// URLs.
+   * This avoids CORS issues when displaying clipped content.
+   */
+  private async saveImagesInBlocks(
+    blocks: CustomPartialBlock[]
+  ): Promise<void> {
+    const imagePromises: Promise<void>[] = [];
+
+    const processBlock = (block: any) => {
+      // Handle image blocks (props.url contains the image URL)
+      if (block.type === "image" && block.props?.url) {
+        const url = block.props.url as string;
+        if (/^https?:\/\//i.test(url)) {
+          imagePromises.push(
+            window.electronAPI.image
+              .downloadAndSaveImage({ url })
+              .then((result) => {
+                if (result) {
+                  block.props.url = result.url;
+                  if (result.width) block.props.width = result.width;
+                  if (result.height) block.props.height = result.height;
+                }
+              })
+              .catch((err) => {
+                log.debug(
+                  `Failed to save clipped image ${url}: ${err}`,
+                  "ClipConverter"
+                );
+              })
+          );
+        }
+      }
+
+      // Recurse into children
+      if (block.children) {
+        for (const child of block.children) {
+          processBlock(child);
+        }
+      }
+    };
+
+    for (const block of blocks) {
+      processBlock(block);
+    }
+
+    await Promise.all(imagePromises);
   }
 
   /**
