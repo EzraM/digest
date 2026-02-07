@@ -188,6 +188,9 @@ export const workspace = createReactBlockSpec(
             block.id,
             params as Parameters<typeof editor.updateBlock>[1]
           );
+          // Place cursor inside the new block's inline content area
+          // (important for blocks like ChatGPT/Google that have content: "inline")
+          editor.setTextCursorPosition(block.id);
           editor.focus();
         },
         [editor, block.id, dismiss]
