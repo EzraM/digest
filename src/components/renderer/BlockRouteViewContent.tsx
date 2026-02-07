@@ -210,8 +210,6 @@ export const BlockRouteViewContent = ({
             isVisible={hasActiveNotifications}
           />
           <BlockRouteStatusBar
-            title={title}
-            urlString={displayUrl}
             viewId={viewId}
           />
           <BlockRoutePageToolSlot

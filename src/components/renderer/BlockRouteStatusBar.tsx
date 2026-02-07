@@ -2,14 +2,10 @@ import React from "react";
 import { ClipButtons } from "../clip/ClipButtons";
 
 type BlockRouteStatusBarProps = {
-  title: string;
-  urlString: string;
   viewId: string;
 };
 
 export const BlockRouteStatusBar = ({
-  title,
-  urlString,
   viewId,
 }: BlockRouteStatusBarProps) => {
   return (
@@ -28,19 +24,6 @@ export const BlockRouteStatusBar = ({
         color: "#666",
       }}
     >
-      <span
-        style={{
-          userSelect: "none",
-          color: "#666",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          minWidth: 0,
-          maxWidth: "60%",
-        }}
-      >
-        {title || urlString}
-      </span>
       <ClipButtons context="page" viewId={viewId} placement="toolbar" />
     </div>
   );
