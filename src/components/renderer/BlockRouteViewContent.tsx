@@ -1,4 +1,4 @@
-import React, { useContext, useMemo } from "react";
+import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
 import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
@@ -11,7 +11,7 @@ import { BlockRouteNotificationsRow } from "./BlockRouteNotificationsRow";
 import { BlockRoutePageToolSlot } from "./BlockRoutePageToolSlot";
 import { BlockRouteSidebarButton } from "./BlockRouteSidebarButton";
 import { BlockRouteStatusBar } from "./BlockRouteStatusBar";
-import { CustomBlockNoteEditor } from "../../types/schema";
+import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
 import { BlockNotificationContext } from "../../context/BlockNotificationContext";
 
 type BlockRouteViewContentProps = {
@@ -47,15 +47,81 @@ export const BlockRouteViewContent = ({
     isBusy: isTogglingDevTools,
     toggleDevTools,
   } = useDevToolsState(viewId);
+
+  // Track the initial URL so we can detect navigation away from the original page
+  const initialUrlRef = useRef(urlString);
+  const [currentBrowserUrl, setCurrentBrowserUrl] = useState(urlString);
+
+  const handleUrlChange = useCallback(
+    (nextUrl: string) => {
+      setCurrentBrowserUrl(nextUrl);
+      onUrlChange?.(nextUrl);
+    },
+    [onUrlChange]
+  );
+
   const { canGoBack, isNavigatingBack, goBack } = useBrowserNavigationState(
     viewId,
     urlString,
     {
       blockIdForEditorSync: blockId ?? undefined, // Only sync if blockId exists
-      onUrlChange,
+      onUrlChange: handleUrlChange,
       editor,
     }
   );
+
+  // When toggling back to notebook, insert a link if the user navigated to a different page
+  const handleBack = useCallback(() => {
+    const originalUrl = initialUrlRef.current;
+    if (currentBrowserUrl && currentBrowserUrl !== originalUrl && blockId) {
+      // Insert a link to the navigated page at the cursor position
+      try {
+        const cursorPosition = editor.getTextCursorPosition();
+        if (cursorPosition) {
+          editor.insertBlocks(
+            [
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "link",
+                    href: currentBrowserUrl,
+                    content: [
+                      {
+                        type: "text",
+                        text: currentBrowserUrl,
+                        styles: {},
+                      },
+                    ],
+                  },
+                ],
+              } as any,
+            ],
+            cursorPosition.block,
+            "after"
+          );
+        }
+      } catch (error) {
+        console.error("[BlockRouteViewContent] Failed to insert page link:", error);
+      }
+
+      // Restore the block's original URL
+      try {
+        const block = editor.getBlock(blockId);
+        if (block && block.type === "site") {
+          editor.updateBlock(block, {
+            props: {
+              ...block.props,
+              url: originalUrl,
+            },
+          } as CustomPartialBlock);
+        }
+      } catch (error) {
+        console.error("[BlockRouteViewContent] Failed to restore block URL:", error);
+      }
+    }
+    onBack();
+  }, [currentBrowserUrl, blockId, editor, onBack]);
   // Get page tool slot content
   const pageToolContext = useContext(PageToolSlotContext);
   const pageToolContent = pageToolContext?.content ?? null;
@@ -95,7 +161,7 @@ export const BlockRouteViewContent = ({
         }}
       >
         {/* Left sidebar - minimize/expand toggle */}
-        <BlockRouteSidebarButton onBack={onBack} />
+        <BlockRouteSidebarButton onBack={handleBack} />
 
         {/* Main content area */}
         <div
