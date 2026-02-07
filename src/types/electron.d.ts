@@ -194,6 +194,15 @@ interface ElectronAPI {
       created_at: number;
       document_id: string | null;
     } | null>;
+    downloadAndSaveImage: (params: {
+      url: string;
+      documentId?: string;
+    }) => Promise<{
+      id: string;
+      url: string;
+      width: number | null;
+      height: number | null;
+    } | null>;
   };
   search: {
     execute: (

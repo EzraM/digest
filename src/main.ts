@@ -278,6 +278,7 @@ const createWindow = async () => {
     [
       { method: "saveImage", alias: "saveImage" },
       { method: "getImageInfo", alias: "getImageInfo" },
+      { method: "downloadAndSaveImage", alias: "downloadAndSaveImage" },
     ],
     "image"
   );
