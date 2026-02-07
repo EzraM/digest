@@ -40,17 +40,20 @@ export const BlockRouteViewContent = ({
   onBack,
 }: BlockRouteViewContentProps) => {
   const urlString = url;
-  const { copied, copy: handleCopy } = useCopyToClipboard(urlString);
+
+  // Track the initial URL so we can detect navigation away from the original page
+  const initialUrlRef = useRef(urlString);
+  const [currentBrowserUrl, setCurrentBrowserUrl] = useState(urlString);
+
+  // Use the live browser URL for display and clipboard
+  const displayUrl = currentBrowserUrl || urlString;
+  const { copied, copy: handleCopy } = useCopyToClipboard(displayUrl);
   const {
     isAvailable: devToolsAvailable,
     isOpen: devToolsOpen,
     isBusy: isTogglingDevTools,
     toggleDevTools,
   } = useDevToolsState(viewId);
-
-  // Track the initial URL so we can detect navigation away from the original page
-  const initialUrlRef = useRef(urlString);
-  const [currentBrowserUrl, setCurrentBrowserUrl] = useState(urlString);
 
   const handleUrlChange = useCallback(
     (nextUrl: string) => {
@@ -177,7 +180,7 @@ export const BlockRouteViewContent = ({
             canGoBack={canGoBack}
             isNavigatingBack={isNavigatingBack}
             onGoBack={goBack}
-            urlString={urlString}
+            urlString={displayUrl}
             copied={copied}
             onCopy={handleCopy}
             devToolsAvailable={devToolsAvailable}
@@ -208,7 +211,7 @@ export const BlockRouteViewContent = ({
           />
           <BlockRouteStatusBar
             title={title}
-            urlString={urlString}
+            urlString={displayUrl}
             viewId={viewId}
           />
           <BlockRoutePageToolSlot
