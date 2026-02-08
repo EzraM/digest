@@ -1,6 +1,42 @@
 import { createTheme, MantineTheme } from "@mantine/core";
 
 /**
+ * Sidebar button color definitions for light and dark modes
+ */
+export const sidebarButtonColors = {
+  // Navigation button (opens/closes sidebar to access notebooks) - Blue theme
+  navigation: {
+    light: {
+      background: "#e7f5ff", // blue[0]
+      hover: "#d0ebff", // blue[1]
+      text: "#1c7ed6", // blue[7]
+      border: "#e0e0e0",
+    },
+    dark: {
+      background: "#1e3a5f", // dark blue
+      hover: "#2a4a6f", // slightly lighter blue
+      text: "#74c0fc", // blue[4]
+      border: "#373A40", // dark[4]
+    },
+  },
+  // Close/back button (returns from browser view) - Amber/Orange theme
+  close: {
+    light: {
+      background: "#fff4e6", // orange[0]
+      hover: "#ffe8cc", // orange[1]
+      text: "#e8590c", // orange[7]
+      border: "#e0e0e0",
+    },
+    dark: {
+      background: "#4a3520", // dark orange-brown
+      hover: "#5a4530", // slightly lighter
+      text: "#ffa94d", // orange[4]
+      border: "#373A40", // dark[4]
+    },
+  },
+};
+
+/**
  * Custom Mantine theme with tighter spacing for a more compact,
  * terminal-like aesthetic similar to the debug toolbar.
  *
