@@ -19,6 +19,13 @@ const EVENTS = {
     INSERT_LINK: "browser:insert-link",
     LINK_CAPTURED: "browser:link-captured",
   },
+  DOWNLOAD: {
+    STARTED: "download:started",
+    PROGRESS: "download:progress",
+    COMPLETED: "download:completed",
+    FAILED: "download:failed",
+    INSERT_FILE_BLOCK: "download:insert-file-block",
+  },
 } as const;
 
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -454,5 +461,65 @@ contextBridge.exposeInMainWorld("electronAPI", {
       query: string,
       options?: { country?: string; count?: number }
     ) => ipcRenderer.invoke("search:webSearch", query, options),
+  },
+  // Download events from main process
+  onDownloadStarted: (
+    callback: (data: {
+      id: string;
+      fileName: string;
+      url: string;
+      totalBytes: number;
+      savePath: string;
+    }) => void
+  ) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(EVENTS.DOWNLOAD.STARTED, handler);
+    return () => ipcRenderer.removeListener(EVENTS.DOWNLOAD.STARTED, handler);
+  },
+  onDownloadProgress: (
+    callback: (data: {
+      id: string;
+      receivedBytes: number;
+      totalBytes: number;
+    }) => void
+  ) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(EVENTS.DOWNLOAD.PROGRESS, handler);
+    return () => ipcRenderer.removeListener(EVENTS.DOWNLOAD.PROGRESS, handler);
+  },
+  onDownloadCompleted: (
+    callback: (data: {
+      id: string;
+      savePath: string;
+      fileName: string;
+    }) => void
+  ) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(EVENTS.DOWNLOAD.COMPLETED, handler);
+    return () => ipcRenderer.removeListener(EVENTS.DOWNLOAD.COMPLETED, handler);
+  },
+  onDownloadFailed: (
+    callback: (data: { id: string }) => void
+  ) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(EVENTS.DOWNLOAD.FAILED, handler);
+    return () => ipcRenderer.removeListener(EVENTS.DOWNLOAD.FAILED, handler);
+  },
+  onDownloadInsertFileBlock: (
+    callback: (data: {
+      fileName: string;
+      savePath: string;
+      url: string;
+    }) => void
+  ) => {
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(EVENTS.DOWNLOAD.INSERT_FILE_BLOCK, handler);
+    return () => ipcRenderer.removeListener(EVENTS.DOWNLOAD.INSERT_FILE_BLOCK, handler);
+  },
+  downloadShowInFolder: (filePath: string) => {
+    ipcRenderer.send("download:show-in-folder", filePath);
+  },
+  downloadCancel: (downloadId: string) => {
+    ipcRenderer.send("download:cancel", downloadId);
   },
 });

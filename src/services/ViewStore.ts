@@ -9,6 +9,7 @@ import { EventTranslator } from "./view-adapter/EventTranslator";
 import { HandleOperations } from "./view-adapter/HandleOperations";
 import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
+import { DownloadManager } from "./DownloadManager";
 
 /**
  * The ViewStore orchestrates the pure core with Electron adapters.
@@ -22,6 +23,8 @@ export class ViewStore {
   private notifications: NotificationLayer;
   private events: EventTranslator;
   private operations: HandleOperations;
+
+  private downloadManager?: DownloadManager;
 
   // Rate limiting: track pending creates to prevent duplicate URL loads
   // Maps viewId -> { url, timestamp } of pending create commands
@@ -44,6 +47,10 @@ export class ViewStore {
       (id, view, profileId) => {
         // When a view is created, attach event listeners
         this.events.attach(id, view, (cmd) => this.dispatch(cmd), profileId);
+        // Attach download handling to the view's session
+        if (this.downloadManager) {
+          this.downloadManager.attachToWebContents(view.webContents);
+        }
       }
     );
 
@@ -225,6 +232,13 @@ export class ViewStore {
       return { success: false, canGoBack: false, error: result.error };
     }
     return { success: true, canGoBack: result.value.canGoBack };
+  }
+
+  /**
+   * Set the download manager so it can attach to new browser block sessions.
+   */
+  setDownloadManager(dm: DownloadManager): void {
+    this.downloadManager = dm;
   }
 
   /**

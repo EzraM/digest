@@ -223,6 +223,41 @@ interface ElectronAPI {
       options?: { country?: string; count?: number }
     ) => Promise<Array<{ title: string; url: string; description: string }>>;
   };
+  onDownloadStarted: (
+    callback: (data: {
+      id: string;
+      fileName: string;
+      url: string;
+      totalBytes: number;
+      savePath: string;
+    }) => void
+  ) => () => void;
+  onDownloadProgress: (
+    callback: (data: {
+      id: string;
+      receivedBytes: number;
+      totalBytes: number;
+    }) => void
+  ) => () => void;
+  onDownloadCompleted: (
+    callback: (data: {
+      id: string;
+      savePath: string;
+      fileName: string;
+    }) => void
+  ) => () => void;
+  onDownloadFailed: (
+    callback: (data: { id: string }) => void
+  ) => () => void;
+  onDownloadInsertFileBlock: (
+    callback: (data: {
+      fileName: string;
+      savePath: string;
+      url: string;
+    }) => void
+  ) => () => void;
+  downloadShowInFolder: (filePath: string) => void;
+  downloadCancel: (downloadId: string) => void;
 }
 
 declare global {
