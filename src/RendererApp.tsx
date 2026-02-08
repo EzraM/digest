@@ -34,6 +34,9 @@ import { useBrowserSelection } from "./hooks/useBrowserSelection";
 import { LinkCaptureProvider } from "./domains/link-capture/ui/LinkCaptureContext";
 import { LinkCaptureNotification } from "./domains/link-capture/ui/LinkCaptureNotification";
 import { useLinkCaptureNotification } from "./domains/link-capture/ui/useLinkCaptureNotification";
+import { DownloadProvider } from "./domains/downloads/ui/DownloadContext";
+import { DownloadNotification } from "./domains/downloads/ui/DownloadNotification";
+import { useDownloadNotification } from "./domains/downloads/ui/useDownloadNotification";
 
 const RendererAppContent = () => {
   const [isNavbarOpened, { toggle: toggleNavbar, close: closeNavbar }] =
@@ -57,6 +60,9 @@ const RendererAppContent = () => {
 
   // Listen for link capture events
   useLinkCaptureNotification();
+
+  // Listen for download events
+  useDownloadNotification();
 
   const {
     SlashCommandSyncMenu,
@@ -415,6 +421,7 @@ const RendererAppContent = () => {
       />
       <ClipInbox />
       <LinkCaptureNotification />
+      <DownloadNotification />
     </MantineProvider>
   );
 };
@@ -439,9 +446,11 @@ export const RendererApp = () => {
     <BlockNotificationProvider>
       <ClipDraftProvider>
         <LinkCaptureProvider>
-          <PageToolSlotProvider>
-            <RendererAppWithRouteContext />
-          </PageToolSlotProvider>
+          <DownloadProvider>
+            <PageToolSlotProvider>
+              <RendererAppWithRouteContext />
+            </PageToolSlotProvider>
+          </DownloadProvider>
         </LinkCaptureProvider>
       </ClipDraftProvider>
     </BlockNotificationProvider>

@@ -31,9 +31,11 @@ import { createRendererHandlers } from "./ipc/handlers/rendererHandlers";
 import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
 import { createBlockHandlers } from "./ipc/handlers/blockHandlers";
 import { createSearchHandlers } from "./ipc/handlers/searchHandlers";
+import { createDownloadHandlers } from "./ipc/handlers/downloadHandlers";
 import { IPCServiceBridge } from "./services/IPCServiceBridge";
 import { ImageProtocolService } from "./services/ImageProtocolService";
 import { fetchPageTitle } from "./domains/link-capture/adapter/fetchPageTitle";
+import { DownloadManager } from "./services/DownloadManager";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -64,6 +66,12 @@ const EVENTS = {
     INSERT_LINK: "browser:insert-link",
     LINK_CAPTURED: "browser:link-captured",
     NAVIGATION: "browser:navigation-state",
+  },
+  DOWNLOAD: {
+    STARTED: "download:started",
+    PROGRESS: "download:progress",
+    COMPLETED: "download:completed",
+    FAILED: "download:failed",
   },
 } as const;
 
@@ -235,6 +243,59 @@ const createWindow = async () => {
     }
   };
 
+  // Set up download manager for browser block file downloads
+  const downloadManager = new DownloadManager();
+  downloadManager.recoverFromCrash();
+
+  const sendToApp = (channel: string, payload: any) => {
+    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
+      globalAppView.webContents.send(channel, payload);
+    }
+  };
+
+  downloadManager.setOnStarted((info) => {
+    sendToApp(EVENTS.DOWNLOAD.STARTED, {
+      id: info.id,
+      fileName: info.fileName,
+      url: info.url,
+      totalBytes: info.totalBytes,
+      savePath: info.savePath,
+    });
+  });
+
+  downloadManager.setOnProgress((info) => {
+    sendToApp(EVENTS.DOWNLOAD.PROGRESS, {
+      id: info.id,
+      receivedBytes: info.receivedBytes,
+      totalBytes: info.totalBytes,
+    });
+  });
+
+  downloadManager.setOnCompleted((info) => {
+    sendToApp(EVENTS.DOWNLOAD.COMPLETED, {
+      id: info.id,
+      savePath: info.savePath,
+      fileName: info.fileName,
+    });
+
+    // Also send a file block insertion event so the renderer can add a file block at cursor
+    sendToApp("download:insert-file-block", {
+      fileName: info.fileName,
+      savePath: info.savePath,
+      url: info.url,
+    });
+  });
+
+  downloadManager.setOnFailed((info) => {
+    sendToApp(EVENTS.DOWNLOAD.FAILED, {
+      id: info.id,
+      status: info.status,
+    });
+  });
+
+  // Pass download manager to view store so it can attach to browser block sessions
+  viewStore.setDownloadManager(downloadManager);
+
   // Set up the link click callback for ViewStore (page context - still creates blocks for now)
   viewStore.setLinkClickCallback(createBrowserBlock);
 
@@ -302,7 +363,8 @@ const createWindow = async () => {
     slashCommandManager,
     services,
     appViewInstance,
-    createBrowserBlock
+    createBrowserBlock,
+    downloadManager
   );
 
   // Update view bounds when window is resized
@@ -370,7 +432,8 @@ const setupIpcHandlers = (
   slashCommandManager: SlashCommandManager,
   services: ReturnType<typeof getServices>,
   rendererView: WebContentsView,
-  createBrowserBlock: (url: string, sourceBlockId?: string) => void
+  createBrowserBlock: (url: string, sourceBlockId?: string) => void,
+  downloadManager: DownloadManager
 ) => {
   const { documentManager, profileManager } = services;
 
@@ -484,6 +547,7 @@ const setupIpcHandlers = (
       services.braveSearchService
     )
   );
+  registerMap(createDownloadHandlers(downloadManager));
 };
 
 app.on("ready", async () => {

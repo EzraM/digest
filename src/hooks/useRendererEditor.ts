@@ -229,6 +229,40 @@ export const useRendererEditor = (
     return unsubscribe;
   }, []);
 
+  // Handle file block insertion when a download completes
+  useEffect(() => {
+    if (!window.electronAPI?.onDownloadInsertFileBlock) {
+      return () => {};
+    }
+
+    const unsubscribe = window.electronAPI.onDownloadInsertFileBlock((data) => {
+      if (!currentEditor) return;
+
+      try {
+        const cursorPosition = currentEditor.getTextCursorPosition();
+        if (!cursorPosition) return;
+
+        currentEditor.insertBlocks(
+          [
+            {
+              type: "file",
+              props: {
+                name: data.fileName,
+                url: data.url,
+              },
+            } as any,
+          ],
+          cursorPosition.block,
+          "after"
+        );
+      } catch (error) {
+        console.error("[useRendererEditor] Failed to insert file block:", error);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
   // Handle scroll position updates from main process
   useEffect(() => {
     if (!window.electronAPI?.onBrowserScrollPercent || !currentEditor) {
