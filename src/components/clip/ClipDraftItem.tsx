@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Box, Text, Button, Stack, Group, Anchor } from "@mantine/core";
 import { ClipDraft } from "../../types/clip";
 import { ClipDraftEditor } from "./ClipDraftEditor";
@@ -15,8 +16,10 @@ type ClipDraftItemProps = {
  */
 export const ClipDraftItem = ({ draft, onRemove }: ClipDraftItemProps) => {
   const commitService = ClipCommitService.getInstance();
+  const [insertError, setInsertError] = useState<string | null>(null);
 
   const handleInsert = async () => {
+    setInsertError(null);
     try {
       log.debug(`Inserting clip draft ${draft.id}`, "ClipDraftItem");
 
@@ -40,18 +43,21 @@ export const ClipDraftItem = ({ draft, onRemove }: ClipDraftItemProps) => {
         );
         onRemove();
       } else {
+        const errorMsg = result.errors?.join(", ") || "Unknown error";
         log.debug(
-          `Failed to insert clip draft ${draft.id}: ${result.errors?.join(", ")}`,
+          `Failed to insert clip draft ${draft.id}: ${errorMsg}`,
           "ClipDraftItem"
         );
-        // TODO: Show error to user
+        setInsertError(`Failed to insert clip: ${errorMsg}`);
       }
     } catch (error) {
       log.debug(
         `Error inserting clip draft ${draft.id}: ${error}`,
         "ClipDraftItem"
       );
-      // TODO: Show error to user
+      setInsertError(
+        `Failed to insert clip: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   };
 
@@ -92,6 +98,11 @@ export const ClipDraftItem = ({ draft, onRemove }: ClipDraftItemProps) => {
             {draft.conversion?.status === "failed" && (
               <Text size="xs" c="red">
                 Conversion failed: {draft.conversion.error}
+              </Text>
+            )}
+            {insertError && (
+              <Text size="xs" c="red">
+                {insertError}
               </Text>
             )}
           </Box>
