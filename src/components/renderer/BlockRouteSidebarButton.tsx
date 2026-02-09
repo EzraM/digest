@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { useMantineColorScheme } from "@mantine/core";
+import { sidebarButtonColors } from "../../config/theme";
 
 type BlockRouteSidebarButtonProps = {
   onBack: () => void;
@@ -8,6 +10,9 @@ export const BlockRouteSidebarButton = ({
   onBack,
 }: BlockRouteSidebarButtonProps) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { colorScheme } = useMantineColorScheme();
+  const colors =
+    sidebarButtonColors.close[colorScheme === "dark" ? "dark" : "light"];
 
   return (
     <button
@@ -17,8 +22,8 @@ export const BlockRouteSidebarButton = ({
         width: "2rem",
         height: "100%",
         border: "none",
-        borderRight: "1px solid #e0e0e0",
-        backgroundColor: isHovered ? "#d0ebff" : "#e7f5ff",
+        borderRight: `1px solid ${colors.border}`,
+        backgroundColor: isHovered ? colors.hover : colors.background,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -33,7 +38,7 @@ export const BlockRouteSidebarButton = ({
     >
       <span
         style={{
-          color: "#1c7ed6",
+          color: colors.text,
           fontSize: "14px",
           fontWeight: 600,
           writingMode: "vertical-rl",
