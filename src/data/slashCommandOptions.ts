@@ -2,6 +2,13 @@ import { SlashCommandOption } from "../types/slashCommand";
 
 export const slashCommandOptions: SlashCommandOption[] = [
   {
+    key: "chatgpt",
+    title: "ChatGPT",
+    subtext: "Start a ChatGPT conversation from a prompt",
+    aliases: ["c", "chat", "gpt", "chatgpt"],
+    group: "Media",
+  },
+  {
     badge: "⌘-Alt-1",
     key: "heading",
     title: "Heading 1",
@@ -105,13 +112,6 @@ export const slashCommandOptions: SlashCommandOption[] = [
     title: "Google Search",
     subtext: "Search Google and view results",
     aliases: ["g", "google", "search"],
-    group: "Media",
-  },
-  {
-    key: "chatgpt",
-    title: "ChatGPT",
-    subtext: "Start a ChatGPT conversation from a prompt",
-    aliases: ["c", "chat", "gpt", "chatgpt"],
     group: "Media",
   },
   {
