@@ -27,6 +27,7 @@ import type {
 } from "../core/types";
 import type { Block } from "../../blocks/core/types";
 import type { BlockOperation } from "../../blocks/core";
+import { extractTextFromBlock } from "../core/textExtractor";
 import { log } from "../../../utils/mainLogger";
 
 /**
@@ -61,10 +62,7 @@ export class SearchIndexManager {
   private initialized = false;
   private providerType: SearchProviderType;
 
-  private constructor(
-    db: Database.Database,
-    config: SearchIndexManagerConfig
-  ) {
+  private constructor(db: Database.Database, config: SearchIndexManagerConfig) {
     this.db = db;
     this.providerType = config.searchProvider;
 
@@ -177,6 +175,13 @@ export class SearchIndexManager {
    */
   async indexBlock(block: Block, documentId: string): Promise<void> {
     this.ensureInitialized();
+    // If the block has no searchable content (e.g. link URL cleared), remove from index
+    // so it doesn't appear in results; we only get updates here, not block deletes.
+    const text = extractTextFromBlock(block).trim();
+    if (!text) {
+      await this.removeBlock(block.id);
+      return;
+    }
     await this.searchService.indexBlock(block, documentId);
   }
 
@@ -228,10 +233,18 @@ export class SearchIndexManager {
 
     for (const op of operations) {
       try {
-        const changes = (op as BlockOperation & { changes?: Array<{ type: string; block?: Block }> }).changes;
+        const changes = (
+          op as BlockOperation & {
+            changes?: Array<{ type: string; block?: Block }>;
+          }
+        ).changes;
         if (changes?.length) {
           for (const change of changes) {
             if (change.type === "delete" && change.block?.id) {
+              log.info(
+                `Search index: delete via changes, blockId=${change.block.id}`,
+                "SearchIndexManager"
+              );
               await this.removeBlock(change.block.id);
             } else if (
               (change.type === "insert" || change.type === "update") &&
@@ -242,6 +255,10 @@ export class SearchIndexManager {
           }
         } else {
           if (op.type === "delete") {
+            log.info(
+              `Search index: delete via op, blockId=${op.blockId}`,
+              "SearchIndexManager"
+            );
             await this.removeBlock(op.blockId);
           } else if (
             (op.type === "insert" || op.type === "update") &&

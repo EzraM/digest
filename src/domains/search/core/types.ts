@@ -7,6 +7,8 @@
  * - Implementations live in services/
  */
 
+import type { Observable } from 'rxjs';
+
 // Re-export block search types from blocks domain
 export type {
   BlockSearchManifest,
@@ -155,4 +157,13 @@ export interface ISearchIndexService {
 
   /** Get index statistics */
   getStats(): Promise<{ indexedBlocks: number; lastIndexedAt?: number }>;
+
+  /** Queue a block for debounced indexing */
+  queueBlock(block: import('../../blocks/core/types').Block, documentId: string): void;
+
+  /** Stream of index lifecycle events */
+  readonly events$: Observable<IndexEvent>;
+
+  /** Release resources */
+  dispose(): void;
 }
