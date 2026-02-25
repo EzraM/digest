@@ -222,14 +222,18 @@ interface WorkspaceActions {
 - [x] Implement `IVectorStore` (sqlite-vec based)
 - [x] Create `SearchIndexService` with debounced batching
 - [x] Create `SearchIndexManager` for main process integration
-- [ ] Wire up indexing on block changes (integration point ready)
-- [ ] Bootstrap indexing on startup (API ready: `manager.bootstrapIndex()`)
+- [x] Wire up indexing on block changes (post-write middleware in `ServiceRegistry`)
+- [x] FTS5 full-text search wired as default provider (no API key required)
+- [ ] Bootstrap indexing on startup (API ready: `manager.bootstrapIndex()`, not yet called)
 
 ### Phase 3: Inline Workspace UI ✅
-- [x] Create inline workspace component (`WorkspaceBlock.tsx` exists)
+- [x] Register `workspace` block type in `BlockNoteSchema` (`src/types/schema.ts`)
+- [x] Intercept `/` via `useSlashCommandBridge` — inserts workspace block, suppresses default menu
 - [x] Connect workspace to search service (IPC handlers + preload API)
-- [x] Display search results in workspace (with debounced search)
-- [x] Basic query → note retrieval flow (search results show alongside slash commands)
+- [x] Debounced in-doc FTS search (300ms) + Brave web search (1s)
+- [x] Ranked merged results: slash commands + notes + web suggestions (`combineSuggestions.ts`)
+- [x] Keyboard navigation (↑↓ arrows, Enter, Escape, Tab)
+- [x] Note results navigate to source doc/block; web results insert link + open browser
 
 ### Phase 4: Context Assembly
 - [ ] Implement `IContextAssembler`
@@ -245,14 +249,19 @@ interface WorkspaceActions {
 - [ ] Define agent-accessible interface
 - [ ] Clip integration with workspace
 
-## Files to Remove (Eventually)
+## Removed Files
+
+The following files were deleted as part of the inline workspace migration:
 
 | File | Reason |
 |------|--------|
-| `app-overlay/` | Replaced by inline workspace |
-| `src/services/AppOverlay.ts` | HUD overlay manager |
-| `src/services/SlashCommandManager.ts` | Command state machine |
-| `src/data/slashCommandOptions.ts` | Static command list |
+| `app-overlay/` | Replaced by inline workspace block |
+| `src/app-overlay.preload.ts` | HUD overlay preload script |
+| `src/services/AppOverlay.ts` | HUD overlay WebContentsView manager |
+| `src/services/SlashCommandManager.ts` | Old command state machine |
+| `src/ipc/handlers/slashCommandHandlers.ts` | IPC handlers for old overlay system |
+
+`src/data/slashCommandOptions.ts` is still used by the workspace block for slash command suggestions.
 
 ## Design Decisions
 

@@ -9,8 +9,6 @@ import {
 import path from "path";
 import { ViewStore } from "./services/ViewStore";
 import { viteConfig } from "./config/vite";
-import { AppOverlay } from "./services/AppOverlay";
-import { SlashCommandManager } from "./services/SlashCommandManager";
 import { LinkInterceptionService } from "./services/LinkInterceptionService";
 import { log } from "./utils/mainLogger";
 import { shouldOpenDevTools } from "./config/development";
@@ -26,7 +24,6 @@ import {
 import { IPCRouter, IPCHandlerMap } from "./ipc/IPCRouter";
 import { createProfileHandlers } from "./ipc/handlers/profileHandlers";
 import { createDocumentHandlers } from "./ipc/handlers/documentHandlers";
-import { createSlashCommandHandlers } from "./ipc/handlers/slashCommandHandlers";
 import { createRendererHandlers } from "./ipc/handlers/rendererHandlers";
 import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
 import { createBlockHandlers } from "./ipc/handlers/blockHandlers";
@@ -188,12 +185,6 @@ const createWindow = async () => {
     viewLayerManager,
     appViewInstance.webContents
   );
-  const appOverlay = new AppOverlay({}, baseWindow, globalAppView);
-  const slashCommandManager = new SlashCommandManager(
-    appOverlay,
-    globalAppView
-  );
-
   // Shared helper to create a new browser block (used by EventTranslator for page context)
   const createBrowserBlock = (url: string, sourceBlockId?: string) => {
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {
@@ -360,7 +351,6 @@ const createWindow = async () => {
   setupIpcHandlers(
     ipcRouter,
     viewStore,
-    slashCommandManager,
     services,
     appViewInstance,
     createBrowserBlock,
@@ -429,7 +419,6 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 const setupIpcHandlers = (
   router: IPCRouter,
   viewStore: ViewStore,
-  slashCommandManager: SlashCommandManager,
   services: ReturnType<typeof getServices>,
   rendererView: WebContentsView,
   createBrowserBlock: (url: string, sourceBlockId?: string) => void,
@@ -517,7 +506,6 @@ const setupIpcHandlers = (
   );
 
   registerMap(createBrowserHandlers(viewStore, createBrowserBlock));
-  registerMap(createSlashCommandHandlers(slashCommandManager));
   registerMap(
     createBlockHandlers(
       documentManager,

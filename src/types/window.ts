@@ -19,10 +19,6 @@ export interface BlockViewState {
   [key: string]: BlockView;
 }
 
-export interface OverlayState {
-  overlay?: WebContentsView;
-}
-
 export interface LayoutEvent {
   type: "set-layout";
   blockId: string;

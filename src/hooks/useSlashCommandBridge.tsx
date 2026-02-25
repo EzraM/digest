@@ -4,18 +4,9 @@ import {
   CustomBlockNoteEditor,
   CustomPartialBlock,
 } from "../types/schema";
-import {
-  SlashCommandLoadingState,
-  SlashCommandOption,
-} from "../types/slashCommand";
+import { SlashCommandOption } from "../types/slashCommand";
 import { log } from "../utils/rendererLogger";
 import { URLExtensionName } from "../Search/URLBlock";
-
-type SlashCommandMenuProps = {
-  items: SlashCommandOption[];
-  selectedIndex?: number;
-  loadingState: SlashCommandLoadingState;
-};
 
 const URL_BLOCK_TYPES = new Set([URLExtensionName, "url"]);
 
@@ -62,7 +53,7 @@ export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
   );
 
   // Minimal menu component - returns null since workspace block handles UI
-  const SlashCommandSyncMenu: React.FC<SlashCommandMenuProps> = () => {
+  const SlashCommandSyncMenu: React.FC = () => {
     useEffect(() => {
       return () => {
         workspaceInsertedRef.current = false;

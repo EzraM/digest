@@ -9,12 +9,8 @@ export default defineConfig((env) => {
   const { mode } = forgeEnv;
   const name = (forgeEnv as any).forgeConfigSelf?.name ?? "";
 
-  // Set root path based on the renderer name
-  const rootPath =
-    name === "app_overlay" ? "app-overlay" : (forgeEnv as any).root || ".";
-
   return {
-    root: rootPath,
+    root: (forgeEnv as any).root || ".",
     mode,
     base: "./",
     build: {

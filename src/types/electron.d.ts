@@ -31,14 +31,6 @@ interface ElectronAPI {
     setScrollPercent: (blockId: string, scrollPercent: number) => void;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
-  startSlashCommand: () => void;
-  cancelSlashCommand: () => void;
-  updateSlashCommandResults: (
-    payload: import("./slashCommand").SlashCommandResultsPayload
-  ) => void;
-  selectSlashCommandBlock: (blockKey: string) => void;
-  onSelectBlockType: (callback: (blockKey: string) => void) => () => void;
-  onSlashCommandInsert: (callback: (blockKey: string) => void) => () => void;
   onBrowserInitialized: (
     callback: (data: {
       blockId: string;

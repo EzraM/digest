@@ -103,7 +103,7 @@ Key scenarios requiring seamless focus transitions:
 ## Development Setup
 
 1. Install dependencies: `yarn install`
-2. Optional: Create `.env.local` with `ANTHROPIC_API_KEY=your-key` for AI features
+2. Optional: Create `.env.local` with `BRAVE_SEARCH_API_KEY=your-key` for Brave web search in the workspace (no default; when missing, web search is disabled).
 3. Start development: `yarn start`
 
 ### Enable DevTools
@@ -145,6 +145,6 @@ All features must be tested with:
 
 ## Current Known Issues
 
-- Slash command (`/`) opens BlockNote menu but doesn't trigger HUD overlay
 - Some blocks don't properly disappear when removed
 - Race conditions in multi-context scenarios
+- Bootstrap indexing not called on startup — existing blocks won't appear in workspace search until edited
