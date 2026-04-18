@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useClipDraftContext } from "../context/ClipDraftContext";
-import { ClipService } from "../services/ClipService";
+import { ClipService } from "../domains/clip/services/ClipService";
 import { log } from "../utils/rendererLogger";
 
 /**
@@ -35,6 +35,5 @@ export const useBrowserSelection = () => {
     return unsubscribe;
   }, [addDraft]);
 };
-
 
 

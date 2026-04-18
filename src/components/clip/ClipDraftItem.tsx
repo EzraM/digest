@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Box, Text, Button, Stack, Group, Anchor } from "@mantine/core";
-import { ClipDraft } from "../../types/clip";
+import { ClipDraft } from "../../domains/clip/types";
 import { ClipDraftEditor } from "./ClipDraftEditor";
-import { ClipCommitService } from "../../services/ClipCommitService";
+import { ClipCommitService } from "../../domains/clip/services/ClipCommitService";
 import { log } from "../../utils/rendererLogger";
 import { getCurrentCursorBlockId } from "../../hooks/useRendererEditor";
 

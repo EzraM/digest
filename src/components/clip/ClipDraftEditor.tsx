@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { schema, CustomBlockNoteEditor } from "../../types/schema";
-import { ClipDraft } from "../../types/clip";
+import { ClipDraft } from "../../domains/clip/types";
 import { useClipDraftContext } from "../../context/ClipDraftContext";
 
 type ClipDraftEditorProps = {
