@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import { ClipDraft } from "../types/clip";
-import { ClipService } from "../services/ClipService";
-import { ClipConverter } from "../services/ClipConverter";
+import { ClipDraft } from "../domains/clip/types";
+import { ClipService } from "../domains/clip/services/ClipService";
+import { ClipConverter } from "../domains/clip/services/ClipConverter";
 import { log } from "../utils/rendererLogger";
 
 /**
@@ -82,5 +82,4 @@ export const useClipDraft = () => {
     getDraft,
   };
 };
-
 

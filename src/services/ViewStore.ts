@@ -1,12 +1,12 @@
 import { BrowserWindow, WebContents } from "electron";
-import { ViewWorld, emptyWorld } from "./view-core/types";
-import { Command } from "./view-core/commands";
-import { reduce } from "./view-core/reducer";
-import { Interpreter } from "./view-adapter/Interpreter";
-import { NotificationLayer } from "./view-adapter/NotificationLayer";
-import { HandleRegistry } from "./view-adapter/HandleRegistry";
-import { EventTranslator } from "./view-adapter/EventTranslator";
-import { HandleOperations } from "./view-adapter/HandleOperations";
+import { ViewWorld, emptyWorld } from "../domains/browser-views/core/types";
+import { Command } from "../domains/browser-views/core/commands";
+import { reduce } from "../domains/browser-views/core/reducer";
+import { Interpreter } from "../domains/browser-views/adapter/Interpreter";
+import { NotificationLayer } from "../domains/browser-views/adapter/NotificationLayer";
+import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry";
+import { EventTranslator } from "../domains/browser-views/adapter/EventTranslator";
+import { HandleOperations } from "../domains/browser-views/adapter/HandleOperations";
 import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
 import { DownloadManager } from "./DownloadManager";
@@ -79,7 +79,9 @@ export class ViewStore {
       this.interpreter.interpret(cmd);
 
       // Notify renderer of changes
-      this.notifications.notify(cmdId, prevWorld, nextWorld);
+      if (cmdId) {
+        this.notifications.notify(cmdId, prevWorld, nextWorld);
+      }
     }
   }
 

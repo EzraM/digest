@@ -1,6 +1,6 @@
 import { createContext, useContext, ReactNode } from "react";
 import { useClipDraft } from "../hooks/useClipDraft";
-import { ClipDraft } from "../types/clip";
+import { ClipDraft } from "../domains/clip/types";
 
 type ClipDraftContextType = {
   drafts: ClipDraft[];
@@ -43,6 +43,5 @@ export const useClipDraftContext = () => {
   }
   return context;
 };
-
 
 
