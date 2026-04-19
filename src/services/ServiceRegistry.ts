@@ -1,4 +1,5 @@
 import { Container } from "./Container";
+import { CORE_SERVICE_BOOT_ORDER, SERVICE_IDS } from "./serviceIds";
 import { DatabaseManager } from "../database/DatabaseManager";
 import { initializeEventLogger } from "./EventLogger";
 import {
@@ -26,7 +27,7 @@ import { BraveSearchService } from "../domains/search/services/BraveSearchServic
  */
 export function registerServices(container: Container): void {
   // Database - foundational service with no dependencies
-  container.register("database", {
+  container.register(SERVICE_IDS.DATABASE, {
     version: "1.0.0",
     factory: async () => {
       log.debug("Initializing database service", "ServiceRegistry");
@@ -37,57 +38,57 @@ export function registerServices(container: Container): void {
   });
 
   // EventLogger - depends on database
-  container.register("eventLogger", {
+  container.register(SERVICE_IDS.EVENT_LOGGER, {
     version: "1.0.0",
-    dependencies: ["database"],
+    dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing EventLogger service", "ServiceRegistry");
-      const database = await c.resolve("database");
+      const database = await c.resolve(SERVICE_IDS.DATABASE);
       return initializeEventLogger(database);
     },
   });
 
   // BlockOperationService - depends on database (eventLogger resolved lazily)
-  container.register("blockOperationService", {
+  container.register(SERVICE_IDS.BLOCK_OPERATION_SERVICE, {
     version: "1.0.0",
-    dependencies: ["database"],
+    dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing BlockOperationService", "ServiceRegistry");
-      const database = await c.resolve("database");
+      const database = await c.resolve(SERVICE_IDS.DATABASE);
       BlockOperationService.setDatabase(database);
       return BlockOperationService.getInstance("default", database);
     },
   });
 
   // ProfileManager - depends on database
-  container.register("profileManager", {
+  container.register(SERVICE_IDS.PROFILE_MANAGER, {
     version: "1.0.0",
-    dependencies: ["database"],
+    dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing ProfileManager service", "ServiceRegistry");
-      const database = await c.resolve("database");
+      const database = await c.resolve(SERVICE_IDS.DATABASE);
       return new ProfileManager(database);
     },
   });
 
   // DocumentManager - depends on database and profileManager
-  container.register("documentManager", {
+  container.register(SERVICE_IDS.DOCUMENT_MANAGER, {
     version: "1.0.0",
-    dependencies: ["database", "profileManager"],
+    dependencies: [SERVICE_IDS.DATABASE, SERVICE_IDS.PROFILE_MANAGER],
     factory: async (c) => {
       log.debug("Initializing DocumentManager service", "ServiceRegistry");
-      const database = await c.resolve("database");
+      const database = await c.resolve(SERVICE_IDS.DATABASE);
       const profileManager = (await c.resolve(
-        "profileManager"
+        SERVICE_IDS.PROFILE_MANAGER
       )) as ProfileManager;
       return new DocumentManager(database, profileManager);
     },
   });
 
   // DebugEventService - depends on eventLogger being available
-  container.register("debugEventService", {
+  container.register(SERVICE_IDS.DEBUG_EVENT_SERVICE, {
     version: "1.0.0",
-    dependencies: ["eventLogger"],
+    dependencies: [SERVICE_IDS.EVENT_LOGGER],
     factory: async () => {
       log.debug("Initializing DebugEventService", "ServiceRegistry");
       // EventLogger is guaranteed to be initialized at this point
@@ -96,9 +97,9 @@ export function registerServices(container: Container): void {
   });
 
   // BlockEventManager - depends on eventLogger and blockOperationService
-  container.register("blockEventManager", {
+  container.register(SERVICE_IDS.BLOCK_EVENT_MANAGER, {
     version: "1.0.0",
-    dependencies: ["eventLogger", "blockOperationService"],
+    dependencies: [SERVICE_IDS.EVENT_LOGGER, SERVICE_IDS.BLOCK_OPERATION_SERVICE],
     factory: async () => {
       log.debug("Initializing BlockEventManager", "ServiceRegistry");
       // EventLogger is guaranteed to be initialized at this point
@@ -107,23 +108,23 @@ export function registerServices(container: Container): void {
   });
 
   // ImageService - depends on database
-  container.register("imageService", {
+  container.register(SERVICE_IDS.IMAGE_SERVICE, {
     version: "1.0.0",
-    dependencies: ["database"],
+    dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing ImageService", "ServiceRegistry");
-      const database = await c.resolve("database");
+      const database = await c.resolve(SERVICE_IDS.DATABASE);
       return ImageService.getInstance(database);
     },
   });
 
   // SearchIndexManager - depends on database
-  container.register("searchIndexManager", {
+  container.register(SERVICE_IDS.SEARCH_INDEX_MANAGER, {
     version: "1.0.0",
-    dependencies: ["database"],
+    dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing SearchIndexManager", "ServiceRegistry");
-      const database = await c.resolve("database");
+      const database = await c.resolve(SERVICE_IDS.DATABASE);
       // Use FTS5 for full-text search (works offline, no API key required)
       return SearchIndexManager.initialize(database, {
         searchProvider: "fts5",
@@ -132,7 +133,7 @@ export function registerServices(container: Container): void {
   });
 
   // BraveSearchService - no deps; uses getEnvVar("BRAVE_SEARCH_API_KEY")
-  container.register("braveSearchService", {
+  container.register(SERVICE_IDS.BRAVE_SEARCH_SERVICE, {
     version: "1.0.0",
     dependencies: [],
     factory: async () => {
@@ -142,7 +143,7 @@ export function registerServices(container: Container): void {
   });
 
   // Block middleware: pre-write (transform) and post-write (observe)
-  container.register("blockPreWriteMiddlewares", {
+  container.register(SERVICE_IDS.BLOCK_PRE_WRITE_MIDDLEWARES, {
     version: "1.0.0",
     dependencies: [],
     factory: async (): Promise<never[]> => {
@@ -151,14 +152,14 @@ export function registerServices(container: Container): void {
     },
   });
 
-  container.register("blockPostWriteMiddlewares", {
+  container.register(SERVICE_IDS.BLOCK_POST_WRITE_MIDDLEWARES, {
     version: "1.0.0",
-    dependencies: ["imageService", "searchIndexManager"],
+    dependencies: [SERVICE_IDS.IMAGE_SERVICE, SERVICE_IDS.SEARCH_INDEX_MANAGER],
     factory: async (c) => {
       log.debug("Initializing blockPostWriteMiddlewares", "ServiceRegistry");
-      const imageService = (await c.resolve("imageService")) as ImageService;
+      const imageService = (await c.resolve(SERVICE_IDS.IMAGE_SERVICE)) as ImageService;
       const searchIndexManager = (await c.resolve(
-        "searchIndexManager"
+        SERVICE_IDS.SEARCH_INDEX_MANAGER
       )) as SearchIndexManager;
 
       const imageMiddleware: IBlockPostWriteMiddleware = {
@@ -177,7 +178,7 @@ export function registerServices(container: Container): void {
                 if (deleted) {
                   log.debug(
                     `Cleaned up image ${imageId} for deleted block`,
-                    "blockPostWriteMiddlewares"
+                    SERVICE_IDS.BLOCK_POST_WRITE_MIDDLEWARES
                   );
                 }
               }
@@ -199,31 +200,31 @@ export function registerServices(container: Container): void {
     },
   });
 
-  container.register("blockMiddlewarePipeline", {
+  container.register(SERVICE_IDS.BLOCK_MIDDLEWARE_PIPELINE, {
     version: "1.0.0",
-    dependencies: ["blockPreWriteMiddlewares", "blockPostWriteMiddlewares"],
+    dependencies: [SERVICE_IDS.BLOCK_PRE_WRITE_MIDDLEWARES, SERVICE_IDS.BLOCK_POST_WRITE_MIDDLEWARES],
     factory: async (c) => {
       log.debug("Initializing blockMiddlewarePipeline", "ServiceRegistry");
       const pre = (await c.resolve(
-        "blockPreWriteMiddlewares"
+        SERVICE_IDS.BLOCK_PRE_WRITE_MIDDLEWARES
       )) as IBlockPreWriteMiddleware[];
       const post = (await c.resolve(
-        "blockPostWriteMiddlewares"
+        SERVICE_IDS.BLOCK_POST_WRITE_MIDDLEWARES
       )) as IBlockPostWriteMiddleware[];
       return new BlockMiddlewarePipelineImpl(pre, post);
     },
   });
 
-  container.register("blockOperationsApplier", {
+  container.register(SERVICE_IDS.BLOCK_OPERATIONS_APPLIER, {
     version: "1.0.0",
-    dependencies: ["documentManager", "blockMiddlewarePipeline"],
+    dependencies: [SERVICE_IDS.DOCUMENT_MANAGER, SERVICE_IDS.BLOCK_MIDDLEWARE_PIPELINE],
     factory: async (c) => {
       log.debug("Initializing blockOperationsApplier", "ServiceRegistry");
       const documentManager = (await c.resolve(
-        "documentManager"
+        SERVICE_IDS.DOCUMENT_MANAGER
       )) as DocumentManager;
       const pipeline = (await c.resolve(
-        "blockMiddlewarePipeline"
+        SERVICE_IDS.BLOCK_MIDDLEWARE_PIPELINE
       )) as BlockMiddlewarePipeline;
       return new BlockOperationsApplier(documentManager, pipeline);
     },
@@ -241,20 +242,9 @@ export async function initializeAllServices(
 
   // Resolve services sequentially to avoid race conditions
   // (Container handles dependencies automatically)
-  await container.resolve("database");
-  await container.resolve("eventLogger");
-  await container.resolve("blockOperationService");
-  await container.resolve("profileManager");
-  await container.resolve("documentManager");
-  await container.resolve("debugEventService");
-  await container.resolve("blockEventManager");
-  await container.resolve("imageService");
-  await container.resolve("searchIndexManager");
-  await container.resolve("braveSearchService");
-  await container.resolve("blockPreWriteMiddlewares");
-  await container.resolve("blockPostWriteMiddlewares");
-  await container.resolve("blockMiddlewarePipeline");
-  await container.resolve("blockOperationsApplier");
+  for (const serviceId of CORE_SERVICE_BOOT_ORDER) {
+    await container.resolve(serviceId);
+  }
 
   log.debug("All services initialized successfully", "ServiceRegistry");
 }
@@ -264,24 +254,24 @@ export async function initializeAllServices(
  */
 export function getServices(container: Container) {
   return {
-    database: container.get("database"),
-    eventLogger: container.get("eventLogger"),
+    database: container.get(SERVICE_IDS.DATABASE),
+    eventLogger: container.get(SERVICE_IDS.EVENT_LOGGER),
     blockOperationService: container.get(
-      "blockOperationService"
+      SERVICE_IDS.BLOCK_OPERATION_SERVICE
     ) as BlockOperationService,
-    debugEventService: container.get("debugEventService") as DebugEventService,
-    blockEventManager: container.get("blockEventManager") as BlockEventManager,
-    profileManager: container.get("profileManager") as ProfileManager,
-    documentManager: container.get("documentManager") as DocumentManager,
-    imageService: container.get("imageService") as ImageService,
+    debugEventService: container.get(SERVICE_IDS.DEBUG_EVENT_SERVICE) as DebugEventService,
+    blockEventManager: container.get(SERVICE_IDS.BLOCK_EVENT_MANAGER) as BlockEventManager,
+    profileManager: container.get(SERVICE_IDS.PROFILE_MANAGER) as ProfileManager,
+    documentManager: container.get(SERVICE_IDS.DOCUMENT_MANAGER) as DocumentManager,
+    imageService: container.get(SERVICE_IDS.IMAGE_SERVICE) as ImageService,
     searchIndexManager: container.get(
-      "searchIndexManager"
+      SERVICE_IDS.SEARCH_INDEX_MANAGER
     ) as SearchIndexManager,
     braveSearchService: container.get(
-      "braveSearchService"
+      SERVICE_IDS.BRAVE_SEARCH_SERVICE
     ) as BraveSearchService,
     blockOperationsApplier: container.get(
-      "blockOperationsApplier"
+      SERVICE_IDS.BLOCK_OPERATIONS_APPLIER
     ) as BlockOperationsApplier,
   };
 }
