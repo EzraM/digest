@@ -11,7 +11,7 @@ import { URLExtensionName } from "../Search/URLBlock";
 const URL_BLOCK_TYPES = new Set([URLExtensionName, "url"]);
 
 export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
-  const workspaceInsertedRef = useRef(false);
+  const workspaceInsertPendingRef = useRef(false);
 
   const handleSlashMenuItems = useCallback(
     async (query: string): Promise<SlashCommandOption[]> => {
@@ -25,23 +25,31 @@ export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
       }
 
       // Insert workspace block on first trigger (when query is empty)
-      if (!workspaceInsertedRef.current && query === "") {
-        workspaceInsertedRef.current = true;
-        log.debug("Inserting workspace block", "renderer");
+      if (!workspaceInsertPendingRef.current && query === "") {
+        workspaceInsertPendingRef.current = true;
 
-        // Close the suggestion menu - workspace block handles the UI
-        editor.suggestionMenus.closeMenu();
+        queueMicrotask(() => {
+          try {
+            const { block: currentBlock } = editor.getTextCursorPosition();
 
-        // Insert the workspace block at cursor
-        insertOrUpdateBlock(editor, {
-          type: "workspace",
-          props: { initialQuery: "" }
-        } as unknown as CustomPartialBlock);
+            if (currentBlock?.type === "workspace") {
+              return;
+            }
 
-        // Reset flag after a short delay to allow re-triggering
-        setTimeout(() => {
-          workspaceInsertedRef.current = false;
-        }, 100);
+            log.debug("Inserting workspace block", "renderer");
+
+            // Close the suggestion menu - workspace block handles the UI
+            editor.suggestionMenus.closeMenu();
+
+            // Insert the workspace block at cursor
+            insertOrUpdateBlock(editor, {
+              type: "workspace",
+              props: { initialQuery: "" },
+            } as unknown as CustomPartialBlock);
+          } finally {
+            workspaceInsertPendingRef.current = false;
+          }
+        });
 
         return [];
       }
@@ -56,14 +64,14 @@ export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
   const SlashCommandSyncMenu: React.FC = () => {
     useEffect(() => {
       return () => {
-        workspaceInsertedRef.current = false;
+        workspaceInsertPendingRef.current = false;
       };
     }, []);
 
     return null;
   };
 
-  const handleSlashMenuItemClick = useCallback((_item: SlashCommandOption) => {
+  const handleSlashMenuItemClick = useCallback(() => {
     // No-op - workspace block handles selection
   }, []);
 
