@@ -13,6 +13,12 @@ import { handleElectronPaste } from "../clipboard/handleElectronPaste";
 let currentEditor: CustomBlockNoteEditor | null = null;
 let onBlockCreatedCallback: ((blockId: string) => void) | null = null;
 
+type PendingInlineLink = {
+  url: string;
+  title: string;
+  sourceBlockId?: string;
+};
+
 export const getCurrentEditor = (): CustomBlockNoteEditor | null =>
   currentEditor;
 
@@ -67,6 +73,49 @@ const createNewBrowserBlock = (url: string, sourceBlockId?: string): void => {
   if (newBlock?.id && onBlockCreatedCallback) {
     onBlockCreatedCallback(newBlock.id);
   }
+};
+
+const createInlineLinkBlock = (data: PendingInlineLink): CustomPartialBlock =>
+  ({
+    type: "paragraph",
+    content: [
+      {
+        type: "link",
+        href: data.url,
+        content: [
+          {
+            type: "text",
+            text: data.title,
+            styles: {},
+          },
+        ],
+      },
+    ],
+  }) as unknown as CustomPartialBlock;
+
+const insertInlineLinkBlock = (
+  editor: CustomBlockNoteEditor,
+  data: PendingInlineLink
+): boolean => {
+  const anchorBlock = data.sourceBlockId
+    ? editor.getBlock(data.sourceBlockId)
+    : editor.getTextCursorPosition()?.block;
+
+  if (!anchorBlock) {
+    console.warn("[useRendererEditor] No anchor block available for link insertion");
+    return false;
+  }
+
+  editor.insertBlocks([createInlineLinkBlock(data)], anchorBlock, "after");
+
+  return true;
+};
+
+const isCurrentBlockRoute = (blockId: string): boolean => {
+  const blockRouteMatch = window.location.hash.match(/^#\/block\/([^?/]*)/);
+  return blockRouteMatch
+    ? decodeURIComponent(blockRouteMatch[1]) === blockId
+    : false;
 };
 
 export const useRendererEditor = (
@@ -147,7 +196,7 @@ export const useRendererEditor = (
 
   useEffect(() => {
     if (!window.electronAPI?.onNewBrowserBlock) {
-      return () => {}; // Return empty cleanup function
+      return;
     }
 
     const unsubscribe = window.electronAPI.onNewBrowserBlock((data) => {
@@ -163,7 +212,7 @@ export const useRendererEditor = (
   useEffect(() => {
     if (!window.electronAPI?.onInsertLink) {
       console.warn("[useRendererEditor] onInsertLink API not available");
-      return () => {}; // Return empty cleanup function
+      return;
     }
 
     console.log("[useRendererEditor] Registering onInsertLink handler");
@@ -182,42 +231,16 @@ export const useRendererEditor = (
       }
 
       try {
-        // Get current cursor position
-        const cursorPosition = currentEditor.getTextCursorPosition();
-        console.log("[useRendererEditor] Current cursor position:", cursorPosition);
-
-        if (!cursorPosition) {
-          console.warn("[useRendererEditor] No cursor position available for link insertion");
+        if (data.sourceBlockId && isCurrentBlockRoute(data.sourceBlockId)) {
+          console.log(
+            `[useRendererEditor] Ignoring route inline link; back bar will insert the current page URL: "${data.title}" → ${data.url}`
+          );
           return;
         }
 
-        console.log("[useRendererEditor] Inserting link block after current block");
-
-        // Insert a paragraph with the link at the cursor position
-        // We insert after the current block
-        // BlockNote link format: { type: "link", href: string, content: [{ type: "text", text: string }] }
-        currentEditor.insertBlocks(
-          [
-            {
-              type: "paragraph",
-              content: [
-                {
-                  type: "link",
-                  href: data.url,
-                  content: [
-                    {
-                      type: "text",
-                      text: data.title,
-                      styles: {},
-                    },
-                  ],
-                },
-              ],
-            } as any,
-          ],
-          cursorPosition.block,
-          "after"
-        );
+        if (!insertInlineLinkBlock(currentEditor, data)) {
+          return;
+        }
 
         console.log("[useRendererEditor] Link block inserted successfully");
         console.log(`[useRendererEditor] ✓ Link captured: "${data.title}" → ${data.url}`);
@@ -232,7 +255,7 @@ export const useRendererEditor = (
   // Handle file block insertion when a download completes
   useEffect(() => {
     if (!window.electronAPI?.onDownloadInsertFileBlock) {
-      return () => {};
+      return;
     }
 
     const unsubscribe = window.electronAPI.onDownloadInsertFileBlock((data) => {
@@ -266,7 +289,7 @@ export const useRendererEditor = (
   // Handle scroll position updates from main process
   useEffect(() => {
     if (!window.electronAPI?.onBrowserScrollPercent || !currentEditor) {
-      return () => {}; // Return empty cleanup function
+      return;
     }
 
     const unsubscribe = window.electronAPI.onBrowserScrollPercent((data) => {

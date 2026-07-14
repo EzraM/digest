@@ -1,5 +1,4 @@
 import { createReactBlockSpec } from "@blocknote/react";
-import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useDocumentContext } from "../../context/DocumentContext";
 import { useAppRoute } from "../../context/AppRouteContext";
 
@@ -24,7 +23,6 @@ export const site = createReactBlockSpec(
     render: (props) => {
       const { block } = props;
       const { url } = block.props;
-      const { copied, copy: handleCopy } = useCopyToClipboard(url);
       const { documentId } = useDocumentContext();
       const { navigateToBlock } = useAppRoute();
 
@@ -55,61 +53,26 @@ export const site = createReactBlockSpec(
         <div
           id={`site-block-${block.id}`}
           onClick={openInFullView}
-          style={{
-            border: "1px solid #e0e0e0",
-            borderRadius: "8px",
-            padding: "8px 12px",
-            backgroundColor: "#fff",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            fontSize: "12px",
-            transition: "background-color 0.15s ease",
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openInFullView();
+            }
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.backgroundColor = "#f8f9fa")
-          }
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fff")}
+          role="link"
+          tabIndex={0}
+          style={{
+            cursor: "pointer",
+            display: "block",
+            color: "#0066cc",
+            textDecoration: "underline",
+            textDecorationThickness: "from-font",
+            textUnderlineOffset: "2px",
+            overflowWrap: "anywhere",
+          }}
+          title={url}
         >
-          <span aria-hidden="true">🌐</span>
-          <span
-            style={{
-              flex: 1,
-              fontFamily: "monospace",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              color: "#333",
-            }}
-          >
-            {url}
-          </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCopy();
-            }}
-            style={{
-              border: "1px solid #d0d0d0",
-              backgroundColor: "#fff",
-              color: "#333",
-              borderRadius: "4px",
-              padding: "2px 8px",
-              cursor: "pointer",
-              fontSize: "12px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minWidth: "36px",
-            }}
-            title={copied ? "Copied!" : "Copy link"}
-            aria-label={copied ? "Copied link" : "Copy link"}
-          >
-            {copied ? "✓" : "🔗"}
-          </button>
-          <span style={{ color: "#666" }}>→</span>
+          {url}
         </div>
       );
     },

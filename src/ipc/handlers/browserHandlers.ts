@@ -53,6 +53,21 @@ export function createBrowserHandlers(
         return viewStore.goBack(blockId);
       },
     },
+    "browser:get-page-info": {
+      type: "invoke",
+      fn: (_event, viewId: string) => {
+        const view = viewStore.getHandleRegistry().get(viewId);
+        if (!view || view.webContents.isDestroyed()) {
+          return { success: false, error: `No active view found for ${viewId}` };
+        }
+
+        return {
+          success: true,
+          url: view.webContents.getURL(),
+          title: view.webContents.getTitle(),
+        };
+      },
+    },
     "update-browser-view": {
       type: "on",
       fn: (_event, data) => {
