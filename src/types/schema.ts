@@ -12,6 +12,10 @@ import {
   URL,
   URLExtensionName,
 } from "../Search/URLBlock";
+import {
+  YouTubeSearch,
+  YouTubeSearchExtensionName,
+} from "../Search/YouTubeSearchBlock";
 import { clip } from "../components/clip/ClipBlock";
 import { workspace } from "../domains/workspace/WorkspaceBlock";
 
@@ -22,6 +26,7 @@ export const schema = BlockNoteSchema.create({
     [GoogleSearchExtensionName]: GoogleSearch(),
     [ChatGPTExtensionName]: ChatGPT(),
     [URLExtensionName]: URL(),
+    [YouTubeSearchExtensionName]: YouTubeSearch(),
     clip: clip(),
     workspace: workspace(),
   },

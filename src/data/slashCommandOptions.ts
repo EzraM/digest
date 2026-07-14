@@ -115,6 +115,13 @@ export const slashCommandOptions: SlashCommandOption[] = [
     group: "Media",
   },
   {
+    key: "youtube_search",
+    title: "YouTube Search",
+    subtext: "Search YouTube and view results",
+    aliases: ["y", "yt", "youtube", "video search"],
+    group: "Media",
+  },
+  {
     key: "url",
     title: "URL",
     subtext: "Load a URL in an embedded browser",

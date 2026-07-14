@@ -8,6 +8,7 @@ import { SlashCommandOption } from "../../types/slashCommand";
 import { GoogleSearchExtensionName } from "../../Search/GoogleSearchBlock";
 import { ChatGPTExtensionName } from "../../Search/ChatGPTBlock";
 import { URLExtensionName } from "../../Search/URLBlock";
+import { YouTubeSearchExtensionName } from "../../Search/YouTubeSearchBlock";
 import { combineAndRank, type SearchResultPayload } from "./combineSuggestions";
 import { useAppRoute } from "../../context/AppRouteContext";
 
@@ -50,6 +51,8 @@ function getBlockInsertParams(
       return { type: "file" };
     case "google_search":
       return { type: GoogleSearchExtensionName };
+    case "youtube_search":
+      return { type: YouTubeSearchExtensionName };
     case "chatgpt":
       return { type: ChatGPTExtensionName };
     case "url":
