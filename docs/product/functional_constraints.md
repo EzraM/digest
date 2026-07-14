@@ -72,7 +72,19 @@ User Action → Main Renderer → IPC to Main Process → IPC to HUD → UI Upda
 
 **Constraint**: State changes in ANY WebContents must be propagated to ALL relevant contexts.
 
-### 4. Focus Management
+### 4. View Layering Management
+
+**Requirement**: Proper z-order layering of all WebContentsView instances.
+
+**Critical Layer Hierarchy** (bottom to top):
+- Background Layer (0): Main app content (BlockNote editor)
+- Browser Blocks Layer (10): All browser block WebContentsViews
+- Overlays Layer (20): HUD WebContents and other UI overlays
+- Prompt Layer (30): Prompt overlay (highest priority)
+
+**Constraint**: The ViewLayerManager must be used for all WebContentsView additions to ensure proper layering. Manual `addChildView` calls can disrupt the z-order.
+
+### 5. Focus Management
 
 **Requirement**: Seamless focus transitions between contexts.
 
@@ -93,6 +105,7 @@ User Action → Main Renderer → IPC to Main Process → IPC to HUD → UI Upda
 3. How does this affect the HUD display logic?
 4. What happens if a WebContents instance is unavailable?
 5. How do we maintain state consistency?
+6. **What layer should this WebContentsView be on? (Background, Browser Blocks, Overlays, Prompt)**
 
 ### Required IPC Event Planning
 

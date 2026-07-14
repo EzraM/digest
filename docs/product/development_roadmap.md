@@ -6,10 +6,10 @@ This roadmap outlines the development priorities for the Digest project, organiz
 
 ### UI Fixes (High Priority, Medium Effort)
 - [x] **Fix Block Removal**: Ensure blocks are properly removed when deleted
-- [ ] **Improve Add Block UI**:
-  - [ ] Make input full width
-  - [ ] Implement Mantine styling
-  - [ ] Add autofocus to input field
+- [x] **Improve Add Block UI**:
+  - [x] Make input full width
+  - [x] Implement Mantine styling
+  - [x] Add autofocus to input field
 
 
 
@@ -23,10 +23,10 @@ This roadmap outlines the development priorities for the Digest project, organiz
 ## Priority 2: Editor and Interaction Improvements
 
 ### Editor Enhancements (Medium Priority, Medium Effort)
-- [ ] **Rework Floating Editor**:
-  - [ ] Move to heads-up-display in lower right
-  - [ ] Ensure compatibility with layered structure
-  - [ ] Fix dropdown menu styling issues
+- [x] **Rework Floating Editor**:
+  - [x] Move to heads-up-display to bottom center
+  - [x] Ensure compatibility with layered structure
+  - [x] Fix dropdown menu styling issues
 
 ### Interaction Improvements (Medium Priority, Medium-High Effort)
 - [ ] **Enhanced Scrolling**:
@@ -76,3 +76,10 @@ This roadmap outlines the development priorities for the Digest project, organiz
   - [ ] Determine if a backend server is necessary
   - [ ] Research Rama as potential technology
   - [ ] Create proof of concept
+
+
+## Philosophy
+
+It's probably time to give a bit of guidance, or point of view, on when to make new blocks versus when to update. The name of the document editor is Digest. The idea behind Digest is that we want to compress and refine the information we get while exploring on the internet. Our understanding should become sharper and more dense as we put in more time. It's quality over quantity. We are training ourselves.
+
+A curious and fastidious friend.

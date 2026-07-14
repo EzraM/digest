@@ -8,9 +8,10 @@ You can't just start typing into the input because it doesn't autofocus.
 
 **Floating editor** There's a floating editor that comes with BlockNote that we've turned off somehow. The floating editor allows you to do things like click "B" for bold text, or add links. Issue with it is that it has dropdown menus that are not perfectly square. The way we're building the application is in layers that sit on top of each other. The embedded web browsers would, naively, sit on top of the floating editor bar. Probably simplest thing is to rework the editor bar to be in the heads-up-display in the lower right, similar to the choose-a-block editor.
 
+**Selection** We want to be able to select text in a browser and have it land in a block.
+
 **Scrolling** We might want to experiment with scrolling rules. Maybe first one would be, when you scroll to the bottom of a webpage and keep scrolling down, forward those events somehow to the app, so it scrolls down.
 
-**Selection** We want to be able to select text in a browser and have it land in a block.
 
 ## Agent
 **Ships with Claude** I'd like to be able to chat with Claude from the browser, using recent notes as context, along with a `question` block, where I can ask things.
