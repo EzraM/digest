@@ -97,3 +97,5 @@ out/
 
 # Development config with secrets (if someone accidentally adds real keys)
 src/config/development.local.ts
+
+db/

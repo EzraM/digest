@@ -26,7 +26,7 @@ export const DEV_CONFIG = {
   // Logging configuration
   logging: {
     // Enable verbose logging
-    verbose: true,
+    verbose: false,
 
     // Log browser events
     browserEvents: true,
@@ -39,6 +39,9 @@ export const DEV_CONFIG = {
 
     // Show performance metrics
     showPerformanceMetrics: false,
+
+    // Disable WebView rendering (useful for testing React UI without website content)
+    disableWebViewRendering: false,
   },
 } as const;
 
@@ -47,7 +50,7 @@ export { isDevelopment };
 
 // Helper function to check if devtools should be enabled for a specific component
 export const shouldOpenDevTools = (
-  component: keyof typeof DEV_CONFIG.devtools
+  component: keyof typeof DEV_CONFIG.devtools,
 ): boolean => {
   return isDevelopment() && DEV_CONFIG.devtools[component];
 };
