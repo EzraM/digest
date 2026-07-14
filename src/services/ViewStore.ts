@@ -258,9 +258,23 @@ export class ViewStore {
    * This is external coordination with main.ts, not a state change.
    */
   setBackgroundLinkClickCallback(
-    callback: (url: string, sourceBlockId: string, title: string) => void
+    callback: (
+      url: string,
+      sourceBlockId: string,
+      title: string,
+      profileId: string
+    ) => void
   ): void {
     this.events.setBackgroundLinkClickCallback(callback);
+  }
+
+  /**
+   * Set callback for right-click image clipping in browser views.
+   */
+  setImageContextCallback(
+    callback: Parameters<EventTranslator["setImageContextCallback"]>[0]
+  ): void {
+    this.events.setImageContextCallback(callback);
   }
 
   /**

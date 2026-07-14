@@ -27,6 +27,12 @@ interface ElectronAPI {
     goBack: (
       viewId: string
     ) => Promise<{ success: boolean; canGoBack: boolean; error?: string }>;
+    getPageInfo: (viewId: string) => Promise<{
+      success: boolean;
+      url?: string;
+      title?: string;
+      error?: string;
+    }>;
     createBlock: (url: string, sourceBlockId?: string) => void;
     setScrollPercent: (blockId: string, scrollPercent: number) => void;
   };
@@ -63,6 +69,20 @@ interface ElectronAPI {
       sourceTitle: string;
       selectionText: string;
       selectionHtml: string;
+      capturedAt: number;
+    }) => void
+  ) => () => void;
+  onBrowserImageClipped: (
+    callback: (data: {
+      blockId: string;
+      sourceUrl: string;
+      sourceTitle: string;
+      originalImageUrl: string;
+      altText: string;
+      imageId: string;
+      localImageUrl: string;
+      width: number | null;
+      height: number | null;
       capturedAt: number;
     }) => void
   ) => () => void;
@@ -189,12 +209,20 @@ interface ElectronAPI {
     downloadAndSaveImage: (params: {
       url: string;
       documentId?: string;
+      width?: number;
+      height?: number;
+      fileName?: string;
     }) => Promise<{
       id: string;
       url: string;
       width: number | null;
       height: number | null;
     } | null>;
+    deleteImage: (imageId: string) => Promise<boolean>;
+    attachImageToDocument: (params: {
+      imageId: string;
+      documentId: string;
+    }) => Promise<boolean>;
   };
   search: {
     execute: (

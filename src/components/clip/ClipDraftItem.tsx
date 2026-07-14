@@ -37,6 +37,12 @@ export const ClipDraftItem = ({ draft, onRemove }: ClipDraftItemProps) => {
       );
 
       if (result.success) {
+        await attachDraftImagesToActiveDocument(draft).catch((error) => {
+          log.debug(
+            `Failed to attach draft images for ${draft.id}: ${error}`,
+            "ClipDraftItem"
+          );
+        });
         log.debug(
           `Successfully inserted clip draft ${draft.id}`,
           "ClipDraftItem"
@@ -63,7 +69,7 @@ export const ClipDraftItem = ({ draft, onRemove }: ClipDraftItemProps) => {
 
   const handleDiscard = () => {
     log.debug(`Discarding clip draft ${draft.id}`, "ClipDraftItem");
-    onRemove();
+    void discardDraft(draft).finally(onRemove);
   };
 
   return (
@@ -135,5 +141,39 @@ export const ClipDraftItem = ({ draft, onRemove }: ClipDraftItemProps) => {
         )}
       </Stack>
     </Box>
+  );
+};
+
+const attachDraftImagesToActiveDocument = async (draft: ClipDraft) => {
+  const imageIds = draft.context?.imageIds ?? [];
+  if (imageIds.length === 0) return;
+
+  const activeDocument = await window.electronAPI.documents.getActive();
+  if (!activeDocument) return;
+
+  await Promise.all(
+    imageIds.map((imageId) =>
+      window.electronAPI.image.attachImageToDocument({
+        imageId,
+        documentId: activeDocument.id,
+      })
+    )
+  );
+};
+
+const discardDraft = async (draft: ClipDraft) => {
+  const imageIds = draft.context?.imageIds ?? [];
+  if (imageIds.length === 0) return;
+
+  await Promise.all(
+    imageIds.map((imageId) =>
+      window.electronAPI.image.deleteImage(imageId).catch((error) => {
+        log.debug(
+          `Failed to delete draft image ${imageId}: ${error}`,
+          "ClipDraftItem"
+        );
+        return false;
+      })
+    )
   );
 };

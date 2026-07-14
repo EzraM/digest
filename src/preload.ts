@@ -11,6 +11,7 @@ const EVENTS = {
     NAVIGATION: "browser:navigation-state",
     INSERT_LINK: "browser:insert-link",
     LINK_CAPTURED: "browser:link-captured",
+    IMAGE_CLIPPED: "browser:image-clipped",
   },
   DOWNLOAD: {
     STARTED: "download:started",
@@ -48,6 +49,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     toggleDevTools: (blockId: string) =>
       ipcRenderer.invoke("browser:toggle-devtools", blockId),
     goBack: (blockId: string) => ipcRenderer.invoke("browser:go-back", blockId),
+    getPageInfo: (viewId: string) =>
+      ipcRenderer.invoke("browser:get-page-info", viewId),
     createBlock: (url: string, sourceBlockId?: string) => {
       log.debug(
         `Creating browser block via IPC: ${url}, sourceBlockId: ${sourceBlockId}`,
@@ -121,6 +124,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }) => void
   ) => {
     const channel = "browser:selection";
+    const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  onBrowserImageClipped: (
+    callback: (data: {
+      blockId: string;
+      sourceUrl: string;
+      sourceTitle: string;
+      originalImageUrl: string;
+      altText: string;
+      imageId: string;
+      localImageUrl: string;
+      width: number | null;
+      height: number | null;
+      capturedAt: number;
+    }) => void
+  ) => {
+    const channel = EVENTS.BROWSER.IMAGE_CLIPPED;
     const handler = (_: any, data: any) => callback(data);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
@@ -393,8 +415,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
       documentId?: string;
     }) => ipcRenderer.invoke("image:saveImage", params),
     getImageInfo: (id: string) => ipcRenderer.invoke("image:getImageInfo", id),
-    downloadAndSaveImage: (params: { url: string; documentId?: string }) =>
+    downloadAndSaveImage: (params: {
+      url: string;
+      documentId?: string;
+      width?: number;
+      height?: number;
+      fileName?: string;
+    }) =>
       ipcRenderer.invoke("image:downloadAndSaveImage", params),
+    deleteImage: (imageId: string) =>
+      ipcRenderer.invoke("image:deleteImage", imageId),
+    attachImageToDocument: (params: { imageId: string; documentId: string }) =>
+      ipcRenderer.invoke("image:attachImageToDocument", params),
   },
   search: {
     execute: (

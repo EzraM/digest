@@ -33,6 +33,7 @@ export const useClipDraft = () => {
         const updated = clipService.updateDraft(draft.id, {
           proposedBlocks: blocks,
           conversion: draft.conversion, // Preserve conversion status (completed/failed)
+          context: draft.context,
         });
         if (updated) {
           setDrafts(clipService.getAllDrafts());
@@ -82,4 +83,3 @@ export const useClipDraft = () => {
     getDraft,
   };
 };
-

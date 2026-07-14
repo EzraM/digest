@@ -65,7 +65,16 @@ export class ClipConverter implements IClipConverter {
       }
 
       // Download and save all images locally to avoid CORS issues
-      await this.saveImagesInBlocks(blocks);
+      const savedImageIds = await this.saveImagesInBlocks(blocks);
+      if (savedImageIds.length > 0) {
+        draft.context = {
+          ...draft.context,
+          imageIds: [
+            ...(draft.context?.imageIds ?? []),
+            ...savedImageIds,
+          ],
+        };
+      }
 
       const latency = Date.now() - startTime;
       log.debug(
@@ -253,8 +262,9 @@ export class ClipConverter implements IClipConverter {
    */
   private async saveImagesInBlocks(
     blocks: CustomPartialBlock[]
-  ): Promise<void> {
+  ): Promise<string[]> {
     const imagePromises: Promise<void>[] = [];
+    const savedImageIds: string[] = [];
 
     const processBlock = (block: any) => {
       // Handle image blocks (props.url contains the image URL)
@@ -269,6 +279,7 @@ export class ClipConverter implements IClipConverter {
                   block.props.url = result.url;
                   if (result.width) block.props.width = result.width;
                   if (result.height) block.props.height = result.height;
+                  savedImageIds.push(result.id);
                 }
               })
               .catch((err) => {
@@ -294,6 +305,7 @@ export class ClipConverter implements IClipConverter {
     }
 
     await Promise.all(imagePromises);
+    return savedImageIds;
   }
 
   /**

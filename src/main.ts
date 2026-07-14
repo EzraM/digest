@@ -62,6 +62,7 @@ const EVENTS = {
     NEW_BLOCK: "browser:new-block",
     INSERT_LINK: "browser:insert-link",
     LINK_CAPTURED: "browser:link-captured",
+    IMAGE_CLIPPED: "browser:image-clipped",
     NAVIGATION: "browser:navigation-state",
   },
   DOWNLOAD: {
@@ -230,7 +231,6 @@ const createWindow = async () => {
         title,
         capturedAt: Date.now(),
       });
-    } else {
     }
   };
 
@@ -293,6 +293,45 @@ const createWindow = async () => {
   // Set up background link click callback for ViewStore (page context - inserts inline links)
   viewStore.setBackgroundLinkClickCallback(insertInlineLink);
 
+  viewStore.setImageContextCallback(async ({
+    blockId,
+    webContents,
+    imageUrl,
+    altText,
+    width,
+    height,
+  }) => {
+    const sourceUrl = webContents.getURL();
+    const sourceTitle = webContents.getTitle() || sourceUrl;
+
+    const saved = await services.imageService.downloadAndSaveImage({
+      url: imageUrl,
+      width,
+      height,
+      session: webContents.session,
+    });
+
+    if (!saved) {
+      log.debug(`Failed to save clipped image: ${imageUrl}`, "main");
+      return;
+    }
+
+    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
+      globalAppView.webContents.send(EVENTS.BROWSER.IMAGE_CLIPPED, {
+        blockId,
+        sourceUrl,
+        sourceTitle,
+        originalImageUrl: imageUrl,
+        altText: altText || "",
+        imageId: saved.id,
+        localImageUrl: saved.url,
+        width: saved.width,
+        height: saved.height,
+        capturedAt: Date.now(),
+      });
+    }
+  });
+
   // Set up the link click callback for LinkInterceptionService (notebook context - navigates to URL)
   linkInterceptionService.setLinkClickCallback(navigateToUrl);
 
@@ -331,6 +370,8 @@ const createWindow = async () => {
       { method: "saveImage", alias: "saveImage" },
       { method: "getImageInfo", alias: "getImageInfo" },
       { method: "downloadAndSaveImage", alias: "downloadAndSaveImage" },
+      { method: "deleteImage", alias: "deleteImage" },
+      { method: "attachImageToDocument", alias: "attachImageToDocument" },
     ],
     "image"
   );

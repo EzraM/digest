@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { net } from "electron";
+import { net, Session } from "electron";
 import { log } from "../utils/mainLogger";
 
 // Simple ID generator
@@ -20,7 +20,7 @@ export interface ImageRecord {
 }
 
 export interface SaveImageParams {
-  arrayBuffer: ArrayBuffer;
+  arrayBuffer: ArrayBuffer | Uint8Array;
   mimeType: string;
   fileName: string;
   width?: number;
@@ -105,7 +105,7 @@ export class ImageService {
       );
     } else {
       log.debug(
-        `Unexpected arrayBuffer type: ${typeof arrayBuffer}, constructor: ${arrayBuffer?.constructor?.name}`,
+        `Unexpected arrayBuffer type: ${typeof arrayBuffer}, constructor: ${(arrayBuffer as any)?.constructor?.name}`,
         "ImageService"
       );
       // Try to convert anyway
@@ -250,25 +250,77 @@ export class ImageService {
   }
 
   /**
+   * Mark a previously draft-owned image as belonging to a document.
+   */
+  attachImageToDocument(params: {
+    imageId: string;
+    documentId: string;
+  }): boolean {
+    const stmt = this.database.prepare(`
+      UPDATE images
+      SET document_id = ?
+      WHERE id = ?
+    `);
+
+    const result = stmt.run(params.documentId, params.imageId);
+    const attached = result.changes > 0;
+    if (attached) {
+      log.debug(
+        `Attached image ${params.imageId} to document ${params.documentId}`,
+        "ImageService"
+      );
+    }
+    return attached;
+  }
+
+  /**
    * Download an image from a URL and save it to the database.
    * Uses Electron's net module to bypass CORS restrictions.
    */
   async downloadAndSaveImage(params: {
     url: string;
     documentId?: string;
+    width?: number;
+    height?: number;
+    fileName?: string;
+    session?: Session;
   }): Promise<SaveImageResult | null> {
-    const { url, documentId } = params;
+    const { url, documentId, width, height, session } = params;
 
     log.debug(`downloadAndSaveImage: ${url}`, "ImageService");
 
-    // Skip non-http(s) URLs, data URIs, and already-saved images
+    // Skip already-saved images
     if (url.startsWith("digest-image://")) {
       log.debug(`Skipping already-saved image: ${url}`, "ImageService");
       return null;
     }
     if (url.startsWith("data:")) {
-      log.debug(`Skipping data URI`, "ImageService");
-      return null;
+      const dataUriMatch = url.match(/^data:([^;,]+)?(;base64)?,(.*)$/s);
+      if (!dataUriMatch) {
+        log.debug("Invalid data URI", "ImageService");
+        return null;
+      }
+
+      const mimeType = dataUriMatch[1] || "image/png";
+      if (!mimeType.startsWith("image/")) {
+        log.debug(`Invalid data URI MIME type: ${mimeType}`, "ImageService");
+        return null;
+      }
+
+      const isBase64 = Boolean(dataUriMatch[2]);
+      const data = dataUriMatch[3] || "";
+      const buffer = isBase64
+        ? Buffer.from(data, "base64")
+        : Buffer.from(decodeURIComponent(data), "utf8");
+
+      return await this.saveImage({
+        arrayBuffer: buffer,
+        mimeType,
+        fileName: params.fileName || "clipped-image",
+        width,
+        height,
+        documentId,
+      });
     }
     if (!/^https?:\/\//i.test(url)) {
       log.debug(`Skipping non-http URL: ${url}`, "ImageService");
@@ -276,7 +328,7 @@ export class ImageService {
     }
 
     try {
-      const response = await net.fetch(url);
+      const response = await (session ? session.fetch(url) : net.fetch(url));
 
       if (!response.ok) {
         log.debug(
@@ -300,7 +352,7 @@ export class ImageService {
       }
 
       // Extract a filename from the URL
-      let fileName = "clipped-image";
+      let fileName = params.fileName || "clipped-image";
       try {
         const urlPath = new URL(url).pathname;
         const lastSegment = urlPath.split("/").pop();
@@ -315,6 +367,8 @@ export class ImageService {
         arrayBuffer,
         mimeType,
         fileName,
+        width,
+        height,
         documentId,
       });
     } catch (error) {
@@ -378,5 +432,3 @@ export class ImageService {
     return imageIds;
   }
 }
-
-

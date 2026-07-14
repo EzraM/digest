@@ -30,6 +30,9 @@ export interface ConversionState {
  */
 export interface SelectionContext {
   readonly frameUrl?: string;
+  readonly originalImageUrl?: string;
+  readonly localImageUrl?: string;
+  readonly imageIds?: readonly string[];
   readonly selectionRect?: {
     readonly x: number;
     readonly y: number;
@@ -53,7 +56,7 @@ export interface ClipDraft {
   readonly selectionHtml: string;
 
   // Optional context about the selection
-  readonly context?: SelectionContext;
+  context?: SelectionContext;
 
   // Conversion state (mutable during processing)
   conversion?: ConversionState;
