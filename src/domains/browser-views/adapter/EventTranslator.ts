@@ -222,8 +222,14 @@ export class EventTranslator {
           `[${id}] Foreground link click, navigating current page`,
           'EventTranslator'
         );
-        // Let it navigate in current page - return deny to prevent new window
-        // The default behavior will handle navigation
+        // Prevent Electron from creating a separate window and explicitly load
+        // the target in this browser view instead.
+        void webContents.loadURL(url).catch((error) => {
+          log.debug(
+            `[${id}] Failed to navigate window-open request to ${url}: ${error}`,
+            'EventTranslator'
+          );
+        });
         return { action: 'deny' };
       }
 
