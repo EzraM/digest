@@ -6,6 +6,7 @@ import { Interpreter } from "../domains/browser-views/adapter/Interpreter";
 import { NotificationLayer } from "../domains/browser-views/adapter/NotificationLayer";
 import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry";
 import { EventTranslator } from "../domains/browser-views/adapter/EventTranslator";
+import { ContextMenuController } from "../domains/browser-views/adapter/ContextMenuController";
 import { HandleOperations } from "../domains/browser-views/adapter/HandleOperations";
 import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
@@ -22,6 +23,7 @@ export class ViewStore {
   private interpreter: Interpreter;
   private notifications: NotificationLayer;
   private events: EventTranslator;
+  private contextMenus: ContextMenuController;
   private operations: HandleOperations;
 
   private downloadManager?: DownloadManager;
@@ -37,7 +39,8 @@ export class ViewStore {
     rendererWebContents: WebContents
   ) {
     this.notifications = new NotificationLayer(rendererWebContents);
-    this.events = new EventTranslator();
+    this.contextMenus = new ContextMenuController();
+    this.events = new EventTranslator(this.contextMenus);
     this.operations = new HandleOperations(this.handles);
     this.interpreter = new Interpreter(
       baseWindow,
@@ -272,9 +275,9 @@ export class ViewStore {
    * Set callback for right-click image clipping in browser views.
    */
   setImageContextCallback(
-    callback: Parameters<EventTranslator["setImageContextCallback"]>[0]
+    callback: Parameters<ContextMenuController["setImageContextCallback"]>[0]
   ): void {
-    this.events.setImageContextCallback(callback);
+    this.contextMenus.setImageContextCallback(callback);
   }
 
   /**
