@@ -30,6 +30,17 @@ export function createProfileHandlers(
         return profile;
       },
     },
+    "profiles:update-settings": {
+      type: "invoke",
+      fn: (_event, payload: { profileId: string; settings: import("../../types/documents").ProfileSettings }) => {
+        const profile = profileManager.updateSettings(
+          payload.profileId,
+          payload.settings
+        );
+        broadcastProfiles();
+        return profile;
+      },
+    },
     "profiles:delete": {
       type: "invoke",
       fn: (_event, profileId: string) => {

@@ -8,6 +8,7 @@ type FileTreePaneProps = {
   onCreateProfile: () => void;
   onRenameProfile?: (profileId: string) => void;
   onDeleteProfile?: (profileId: string) => void;
+  onToggleJiraLinks?: (profileId: string, enabled: boolean) => void;
   documentTree: DocumentTreeNode[];
   activeDocumentId: string | null;
   onSelectDocument: (documentId: string) => void;
@@ -42,6 +43,7 @@ export const FileTreePane = (props: FileTreePaneProps) => (
     onCreateProfile={props.onCreateProfile}
     onRenameProfile={props.onRenameProfile}
     onDeleteProfile={props.onDeleteProfile}
+    onToggleJiraLinks={props.onToggleJiraLinks}
     documentTree={props.documentTree}
     activeDocumentId={props.activeDocumentId}
     onSelectDocument={props.onSelectDocument}

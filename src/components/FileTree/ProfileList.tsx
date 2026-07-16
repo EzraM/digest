@@ -9,6 +9,7 @@ type ProfileListProps = {
   onCreateProfile?: () => void;
   onRenameProfile?: (profileId: string) => void;
   onDeleteProfile?: (profileId: string) => void;
+  onToggleJiraLinks?: (profileId: string, enabled: boolean) => void;
 };
 
 export const ProfileList = ({
@@ -18,6 +19,7 @@ export const ProfileList = ({
   onCreateProfile,
   onRenameProfile,
   onDeleteProfile,
+  onToggleJiraLinks,
 }: ProfileListProps) => {
   // Determine which profile to show as selected in the SegmentedControl
   // Priority: activeProfileId if valid, otherwise first profile, otherwise null
@@ -69,6 +71,22 @@ export const ProfileList = ({
                     onClick={() => onDeleteProfile(activeProfile.id)}
                   >
                     Delete
+                  </Menu.Item>
+                )}
+                {onToggleJiraLinks && (
+                  <Menu.Item
+                    onClick={() =>
+                      onToggleJiraLinks(
+                        activeProfile.id,
+                        !activeProfile.settings?.plugins?.["builtin.jira-links"]
+                          ?.enabled
+                      )
+                    }
+                  >
+                    {activeProfile.settings?.plugins?.["builtin.jira-links"]
+                      ?.enabled
+                      ? "Disable Jira links"
+                      : "Enable Jira links"}
                   </Menu.Item>
                 )}
               </>

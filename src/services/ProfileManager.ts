@@ -5,7 +5,7 @@ import {
   DEFAULT_PROFILE_NAME,
   getProfilePartition as deriveProfilePartition,
 } from "../config/profiles";
-import { ProfileRecord } from "../types/documents";
+import { ProfileRecord, ProfileSettings } from "../types/documents";
 import { log } from "../utils/mainLogger";
 
 export interface CreateProfileOptions {
@@ -13,7 +13,7 @@ export interface CreateProfileOptions {
   icon?: string | null;
   color?: string | null;
   partitionName?: string;
-  settings?: Record<string, unknown> | null;
+  settings?: ProfileSettings | null;
 }
 
 export class ProfileManager {
@@ -107,6 +107,21 @@ export class ProfileManager {
     return updated;
   }
 
+  updateSettings(
+    profileId: string,
+    settings: ProfileSettings
+  ): ProfileRecord {
+    const profile = this.getProfile(profileId);
+    const now = Date.now();
+    this.database
+      .prepare(`UPDATE profiles SET settings = ?, updated_at = ? WHERE id = ?`)
+      .run(JSON.stringify(settings), now, profileId);
+
+    const updated = { ...profile, settings, updatedAt: now };
+    this.profiles.set(profileId, updated);
+    return updated;
+  }
+
   deleteProfile(profileId: string): void {
     if (profileId === DEFAULT_PROFILE_ID) {
       throw new Error("Cannot delete default profile");
@@ -146,7 +161,7 @@ export class ProfileManager {
   }
 
   private mapProfileRow(row: any): ProfileRecord {
-    let parsedSettings: Record<string, unknown> | null = null;
+    let parsedSettings: ProfileSettings | null = null;
     if (row.settings) {
       try {
         parsedSettings = JSON.parse(row.settings);

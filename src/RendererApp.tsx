@@ -54,7 +54,15 @@ const RendererAppContent = () => {
   // Use useContext directly to avoid throwing if context isn't available during initial render
   const notificationContext = useContext(BlockNotificationContext);
   const triggerNotification = notificationContext?.triggerNotification;
-  const editor = useRendererEditor(triggerNotification);
+  const pluginProfile = activeDocument
+    ? {
+        profileId: activeDocument.profileId,
+        documentId: activeDocument.id,
+        settings: profiles.find((profile) => profile.id === activeDocument.profileId)
+          ?.settings,
+      }
+    : undefined;
+  const editor = useRendererEditor(triggerNotification, pluginProfile);
 
   // Listen for browser selection events
   useBrowserSelection();
@@ -309,6 +317,28 @@ const RendererAppContent = () => {
     [profiles, activeProfileTree, openDeleteProfileModal]
   );
 
+  const handleToggleJiraLinks = useCallback(
+    async (profileId: string, enabled: boolean) => {
+      const profile = profiles.find((candidate) => candidate.id === profileId);
+      if (!profile || !window.electronAPI?.profiles?.updateSettings) return;
+      await window.electronAPI.profiles.updateSettings({
+        profileId,
+        settings: {
+          ...profile.settings,
+          plugins: {
+            ...profile.settings?.plugins,
+            "builtin.jira-links": {
+              enabled,
+              baseUrl: "https://learning-ally.atlassian.net/browse",
+              projectKeys: ["PD"],
+            },
+          },
+        },
+      });
+    },
+    [profiles]
+  );
+
   return (
     <MantineProvider theme={theme} defaultColorScheme="auto">
       {route.kind === "block" && (
@@ -358,6 +388,7 @@ const RendererAppContent = () => {
               onCreateProfile={handleOpenCreateProfileModal}
               onRenameProfile={handleRenameProfile}
               onDeleteProfile={handleDeleteProfile}
+              onToggleJiraLinks={handleToggleJiraLinks}
               documentTree={activeProfileTree}
               activeDocumentId={activeDocumentId}
               onSelectDocument={handleSidebarDocumentSelect}

@@ -9,6 +9,13 @@ import {
 import { useBrowserScrollForward } from "./useBrowserScrollForward";
 import { useDocumentSync } from "./useDocumentSync";
 import { handleElectronPaste } from "../clipboard/handleElectronPaste";
+import { ProfileSettings } from "../types/documents";
+import { PluginHost } from "../domains/notebook-plugins/application/PluginHost";
+import { resolveProfilePlugins } from "../domains/notebook-plugins/application/resolveProfilePlugins";
+import {
+  NotebookBlockSnapshot,
+  NotebookPluginOperation,
+} from "../domains/notebook-plugins/core/types";
 
 let currentEditor: CustomBlockNoteEditor | null = null;
 let onBlockCreatedCallback: ((blockId: string) => void) | null = null;
@@ -119,7 +126,12 @@ const isCurrentBlockRoute = (blockId: string): boolean => {
 };
 
 export const useRendererEditor = (
-  onBlockCreated?: (blockId: string) => void
+  onBlockCreated?: (blockId: string) => void,
+  pluginProfile?: {
+    profileId: string;
+    documentId: string | null;
+    settings?: ProfileSettings | null;
+  }
 ): CustomBlockNoteEditor => {
   const editor = useCreateBlockNote({
     schema,
@@ -178,6 +190,50 @@ export const useRendererEditor = (
       return result.url;
     },
   }) as CustomBlockNoteEditor;
+
+  useEffect(() => {
+    if (!pluginProfile) return;
+
+    const host = new PluginHost();
+    host.configure(
+      pluginProfile.profileId,
+      resolveProfilePlugins(pluginProfile.settings)
+    );
+
+    const snapshot = (): NotebookBlockSnapshot[] =>
+      editor.document.map((block) => ({
+        id: block.id,
+        type: block.type,
+        content: Array.isArray(block.content) ? (block.content as any) : null,
+      }));
+
+    const apply = (operations: NotebookPluginOperation[]) => {
+      operations.forEach((operation) => {
+        const block = editor.getBlock(operation.blockId);
+        if (block && operation.type === "set-inline-content") {
+          editor.updateBlock(block, { content: operation.content } as any);
+        }
+      });
+    };
+
+    const unsubscribe = editor.onChange(() => {
+      void host.run(
+        {
+          profileId: pluginProfile.profileId,
+          documentId: pluginProfile.documentId,
+          transactionId: crypto.randomUUID(),
+          source: "user",
+          blocks: snapshot(),
+        },
+        apply
+      );
+    });
+
+    return () => {
+      unsubscribe?.();
+      host.dispose();
+    };
+  }, [editor, pluginProfile?.profileId, pluginProfile?.documentId, pluginProfile?.settings]);
 
   useEffect(() => {
     currentEditor = editor;

@@ -14,6 +14,7 @@ type FileTreeProps = {
   onCreateProfile: () => void;
   onRenameProfile?: (profileId: string) => void;
   onDeleteProfile?: (profileId: string) => void;
+  onToggleJiraLinks?: (profileId: string, enabled: boolean) => void;
   documentTree: DocumentTreeNode[];
   activeDocumentId: string | null;
   onSelectDocument: (documentId: string) => void;
@@ -47,6 +48,7 @@ export const FileTree = ({
   onCreateProfile,
   onRenameProfile,
   onDeleteProfile,
+  onToggleJiraLinks,
   documentTree,
   activeDocumentId,
   onSelectDocument,
@@ -73,6 +75,7 @@ export const FileTree = ({
         onCreateProfile={onCreateProfile}
         onRenameProfile={onRenameProfile}
         onDeleteProfile={onDeleteProfile}
+        onToggleJiraLinks={onToggleJiraLinks}
       />
 
       <Divider />

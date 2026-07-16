@@ -146,6 +146,10 @@ interface ElectronAPI {
       profileId: string;
       name: string;
     }) => Promise<ProfileRecord>;
+    updateSettings: (payload: {
+      profileId: string;
+      settings: import("./documents").ProfileSettings;
+    }) => Promise<ProfileRecord>;
     delete: (profileId: string) => Promise<{ success: boolean }>;
     onUpdated: (
       callback: (event: { profiles: ProfileRecord[] }) => void

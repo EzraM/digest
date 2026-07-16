@@ -1,3 +1,15 @@
+export interface JiraLinksPluginSettings {
+  enabled: boolean;
+  baseUrl: string;
+  projectKeys?: string[];
+}
+
+export interface ProfileSettings {
+  plugins?: {
+    "builtin.jira-links"?: JiraLinksPluginSettings;
+  };
+}
+
 export interface ProfileRecord {
   id: string;
   name: string;
@@ -6,7 +18,7 @@ export interface ProfileRecord {
   color?: string | null;
   createdAt: number;
   updatedAt: number;
-  settings?: Record<string, unknown> | null;
+  settings?: ProfileSettings | null;
 }
 
 export interface DocumentRecord {
