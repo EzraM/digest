@@ -52,7 +52,7 @@ export class Interpreter {
         this.hideView(cmd.id);
         break;
 
-      // markLoading, markReady, updateUrl don't need side effects
+      // markLoading, markReady, updateNavigation don't need side effects
       // (notifications handled separately by NotificationLayer)
     }
   }

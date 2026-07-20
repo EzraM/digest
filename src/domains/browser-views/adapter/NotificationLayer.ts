@@ -1,11 +1,11 @@
-import { WebContents } from 'electron';
-import { ViewWorld, ViewStatus } from '../core/types';
-import { log } from '../../../utils/mainLogger';
+import { WebContents } from "electron";
+import { LoadState, ViewWorld } from "../core/types";
+import { log } from "../../../utils/mainLogger";
 
 const EVENTS = {
   BROWSER: {
-    INITIALIZED: 'browser:initialized',
-    NAVIGATION: 'browser:navigation-state',
+    INITIALIZED: "browser:initialized",
+    NAVIGATION: "browser:navigation-state",
   },
 };
 
@@ -18,7 +18,7 @@ export class NotificationLayer {
 
   /**
    * Called after every state change.
-   * Compares old and new status to determine what notifications to send.
+   * Compares load and navigation state independently.
    */
   notify(id: string, prevWorld: ViewWorld, nextWorld: ViewWorld): void {
     const prev = prevWorld.get(id);
@@ -29,72 +29,97 @@ export class NotificationLayer {
       return;
     }
 
-    const prevStatus = prev?.status.type ?? 'idle';
-    const nextStatus = next.status.type;
+    const prevLoadState = prev?.loadState.type ?? "idle";
+    const nextLoadState = next.loadState.type;
+    const loadStateChanged = prevLoadState !== nextLoadState;
+    const navigationChanged =
+      prev?.url !== next.url ||
+      prev?.history.canGoBack !== next.history.canGoBack;
 
-    // Only notify on status transitions
-    if (prevStatus === nextStatus) return;
+    if (loadStateChanged) {
+      log.debug(
+        `[${id}] Load state transition: ${prevLoadState} → ${nextLoadState}`,
+        "NotificationLayer",
+      );
+      this.sendLoadStateNotification(id, next.loadState);
+    }
 
-    log.debug(
-      `[${id}] Status transition: ${prevStatus} → ${nextStatus}`,
-      'NotificationLayer'
-    );
-
-    this.sendStatusNotification(id, next.status, next.url);
+    if (navigationChanged) {
+      this.sendNavigationNotification(
+        id,
+        next.url,
+        next.history.canGoBack,
+      );
+    }
   }
 
-  private sendStatusNotification(id: string, status: ViewStatus, url: string): void {
+  private sendLoadStateNotification(
+    id: string,
+    loadState: LoadState,
+  ): void {
     if (this.rendererWebContents.isDestroyed()) {
       log.warn(
         `[${id}] Renderer WebContents destroyed, skipping notification`,
-        'NotificationLayer'
+        "NotificationLayer",
       );
       return;
     }
 
-    switch (status.type) {
-      case 'loading':
-        log.debug(
-          `[${id}] Sending loading notification`,
-          'NotificationLayer'
-        );
+    switch (loadState.type) {
+      case "loading":
+        log.debug(`[${id}] Sending loading notification`, "NotificationLayer");
         this.rendererWebContents.send(EVENTS.BROWSER.INITIALIZED, {
           blockId: id,
           success: true,
-          status: 'loading',
+          status: "loading",
         });
         break;
 
-      case 'ready':
-        log.debug(
-          `[${id}] Sending ready notification`,
-          'NotificationLayer'
-        );
+      case "ready":
+        log.debug(`[${id}] Sending ready notification`, "NotificationLayer");
         this.rendererWebContents.send(EVENTS.BROWSER.INITIALIZED, {
           blockId: id,
           success: true,
-          status: 'loaded',
-        });
-        this.rendererWebContents.send(EVENTS.BROWSER.NAVIGATION, {
-          blockId: id,
-          url,
-          canGoBack: status.canGoBack,
+          status: "loaded",
         });
         break;
 
-      case 'error':
+      case "error":
         log.debug(
-          `[${id}] Sending error notification: ${status.message} (${status.code})`,
-          'NotificationLayer'
+          `[${id}] Sending error notification: ${loadState.message} (${loadState.code})`,
+          "NotificationLayer",
         );
         this.rendererWebContents.send(EVENTS.BROWSER.INITIALIZED, {
           blockId: id,
           success: false,
-          error: `Failed to load: ${status.message} (${status.code})`,
-          errorCode: status.code,
-          errorDescription: status.message,
+          error: `Failed to load: ${loadState.message} (${loadState.code})`,
+          errorCode: loadState.code,
+          errorDescription: loadState.message,
         });
         break;
     }
+  }
+
+  private sendNavigationNotification(
+    id: string,
+    url: string,
+    canGoBack: boolean,
+  ): void {
+    if (this.rendererWebContents.isDestroyed()) {
+      log.warn(
+        `[${id}] Renderer WebContents destroyed, skipping navigation notification`,
+        "NotificationLayer",
+      );
+      return;
+    }
+    log.debug(
+      `[${id}] Sending navigation notification for ${url}`,
+      "NotificationLayer",
+    );
+    this.rendererWebContents.send(EVENTS.BROWSER.NAVIGATION, {
+      blockId: id,
+      url,
+      canGoBack,
+    });
   }
 }

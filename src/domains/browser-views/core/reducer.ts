@@ -6,10 +6,11 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
     case "create": {
       const entry: ViewEntry = {
         url: cmd.url,
+        history: { canGoBack: false },
         bounds: cmd.bounds,
         profile: cmd.profile,
         layout: cmd.layout ?? "inline",
-        status: { type: "loading" },
+        loadState: { type: "loading" },
       };
       return new Map(world).set(cmd.id, entry);
     }
@@ -24,12 +25,13 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
       });
     }
 
-    case "updateUrl": {
+    case "updateNavigation": {
       const existing = world.get(cmd.id);
       if (!existing) return world;
       return new Map(world).set(cmd.id, {
         ...existing,
         url: cmd.url,
+        history: { canGoBack: cmd.canGoBack },
       });
     }
 
@@ -43,10 +45,10 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
       const existing = world.get(cmd.id);
       if (!existing) return world;
       // KEY INSIGHT: Don't override error with loading (prevents the bug!)
-      if (existing.status.type === "error") return world;
+      if (existing.loadState.type === "error") return world;
       return new Map(world).set(cmd.id, {
         ...existing,
-        status: { type: "loading" },
+        loadState: { type: "loading" },
       });
     }
 
@@ -54,10 +56,10 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
       const existing = world.get(cmd.id);
       if (!existing) return world;
       // KEY INSIGHT: Don't override error with ready (the core bug fix!)
-      if (existing.status.type === "error") return world;
+      if (existing.loadState.type === "error") return world;
       return new Map(world).set(cmd.id, {
         ...existing,
-        status: { type: "ready", canGoBack: cmd.canGoBack },
+        loadState: { type: "ready" },
       });
     }
 
@@ -66,7 +68,7 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
       if (!existing) return world;
       return new Map(world).set(cmd.id, {
         ...existing,
-        status: { type: "error", code: cmd.code, message: cmd.message },
+        loadState: { type: "error", code: cmd.code, message: cmd.message },
       });
     }
 
@@ -74,10 +76,10 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
       const existing = world.get(cmd.id);
       if (!existing) return world;
       // Only allow retry from error state
-      if (existing.status.type !== "error") return world;
+      if (existing.loadState.type !== "error") return world;
       return new Map(world).set(cmd.id, {
         ...existing,
-        status: { type: "loading" },
+        loadState: { type: "loading" },
       });
     }
   }

@@ -54,7 +54,9 @@ export function useBrowserNavigationState(
           return;
         }
 
-        setCanGoBack(Boolean(event.canGoBack));
+        if (event.canGoBack !== undefined) {
+          setCanGoBack(event.canGoBack);
+        }
         setIsNavigatingBack(false);
 
         if (options?.onUrlChange && event.url) {

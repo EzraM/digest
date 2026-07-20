@@ -32,6 +32,14 @@ export class EventTranslator {
 
     // Track if we've seen an error for this load
     let hasErrored = false;
+    const updateNavigation = (url: string) => {
+      dispatch({
+        type: 'updateNavigation',
+        id,
+        url,
+        canGoBack: webContents.navigationHistory.canGoBack(),
+      });
+    };
 
     webContents.on('did-start-loading', () => {
       log.debug(`[${id}] did-start-loading`, 'EventTranslator');
@@ -70,10 +78,10 @@ export class EventTranslator {
 
       // Only mark as ready if we haven't seen an error
       if (!hasErrored) {
+        updateNavigation(url);
         dispatch({
           type: 'markReady',
           id,
-          canGoBack: webContents.canGoBack(),
         });
       } else {
         log.debug(
@@ -118,13 +126,13 @@ export class EventTranslator {
 
     webContents.on('did-navigate', (_event, url) => {
       log.debug(`[${id}] did-navigate to ${url}`, 'EventTranslator');
-      dispatch({ type: 'updateUrl', id, url });
+      updateNavigation(url);
     });
 
     webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (isMainFrame) {
         log.debug(`[${id}] did-navigate-in-page to ${url}`, 'EventTranslator');
-        dispatch({ type: 'updateUrl', id, url });
+        updateNavigation(url);
       }
     });
 
@@ -136,7 +144,7 @@ export class EventTranslator {
           'EventTranslator'
         );
         // Only update URL for main frame redirects, don't change loading state
-        dispatch({ type: 'updateUrl', id, url });
+        updateNavigation(url);
       }
     });
 

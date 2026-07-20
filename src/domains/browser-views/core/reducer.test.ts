@@ -16,7 +16,8 @@ describe('ViewWorld reducer', () => {
       bounds: { x: 0, y: 0, width: 800, height: 600 },
       profile: 'default',
       layout: 'inline',
-      status: { type: 'loading' },
+      history: { canGoBack: false },
+      loadState: { type: 'loading' },
     });
   });
 
@@ -40,11 +41,10 @@ describe('ViewWorld reducer', () => {
     world = reduce(world, {
       type: 'markReady',
       id: 'block-1',
-      canGoBack: false,
     });
 
     // Error should NOT be overridden
-    expect(world.get('block-1')?.status).toEqual({
+    expect(world.get('block-1')?.loadState).toEqual({
       type: 'error',
       code: -6,
       message: 'ERR_CONNECTION_REFUSED',
@@ -69,7 +69,7 @@ describe('ViewWorld reducer', () => {
 
     world = reduce(world, { type: 'retry', id: 'block-1' });
 
-    expect(world.get('block-1')?.status).toEqual({ type: 'loading' });
+    expect(world.get('block-1')?.loadState).toEqual({ type: 'loading' });
   });
 
   it('updates bounds without affecting other properties', () => {
@@ -103,13 +103,15 @@ describe('ViewWorld reducer', () => {
     });
 
     world = reduce(world, {
-      type: 'updateUrl',
+      type: 'updateNavigation',
       id: 'block-1',
       url: 'https://newurl.com',
+      canGoBack: true,
     });
 
     const view = world.get('block-1');
     expect(view?.url).toBe('https://newurl.com');
+    expect(view?.history.canGoBack).toBe(true);
     expect(view?.bounds).toEqual({ x: 0, y: 0, width: 800, height: 600 });
   });
 
@@ -149,7 +151,7 @@ describe('ViewWorld reducer', () => {
       id: 'block-1',
     });
 
-    expect(world.get('block-1')?.status).toEqual({
+    expect(world.get('block-1')?.loadState).toEqual({
       type: 'error',
       code: -6,
       message: 'ERR_CONNECTION_REFUSED',
@@ -165,18 +167,15 @@ describe('ViewWorld reducer', () => {
       profile: 'default',
     });
 
-    expect(world.get('block-1')?.status.type).toBe('loading');
+    expect(world.get('block-1')?.loadState.type).toBe('loading');
 
     world = reduce(world, {
       type: 'markReady',
       id: 'block-1',
-      canGoBack: true,
     });
 
-    expect(world.get('block-1')?.status).toEqual({
-      type: 'ready',
-      canGoBack: true,
-    });
+    expect(world.get('block-1')?.loadState).toEqual({ type: 'ready' });
+    expect(world.get('block-1')?.history.canGoBack).toBe(false);
   });
 
   it('ignores commands for non-existent views', () => {
@@ -200,20 +199,16 @@ describe('ViewWorld reducer', () => {
 
     // Try to retry from loading state - should not change
     world = reduce(world, { type: 'retry', id: 'block-1' });
-    expect(world.get('block-1')?.status.type).toBe('loading');
+    expect(world.get('block-1')?.loadState.type).toBe('loading');
 
     // Mark as ready
     world = reduce(world, {
       type: 'markReady',
       id: 'block-1',
-      canGoBack: false,
     });
 
     // Try to retry from ready state - should not change
     world = reduce(world, { type: 'retry', id: 'block-1' });
-    expect(world.get('block-1')?.status).toEqual({
-      type: 'ready',
-      canGoBack: false,
-    });
+    expect(world.get('block-1')?.loadState).toEqual({ type: 'ready' });
   });
 });

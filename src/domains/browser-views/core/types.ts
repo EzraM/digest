@@ -5,18 +5,21 @@ export type Rect = {
   height: number;
 };
 
-export type ViewStatus =
+export type LoadState =
   | { type: "idle" }
   | { type: "loading" }
-  | { type: "ready"; canGoBack: boolean }
+  | { type: "ready" }
   | { type: "error"; code: number; message: string };
 
 export type ViewEntry = {
   url: string;
+  history: {
+    canGoBack: boolean;
+  };
   bounds: Rect;
   profile: string;
   layout: "inline" | "full";
-  status: ViewStatus;
+  loadState: LoadState;
 };
 
 export type ViewWorld = ReadonlyMap<string, ViewEntry>;

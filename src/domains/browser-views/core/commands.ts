@@ -15,9 +15,14 @@ export type Command =
       bounds: Rect;
       layout?: "inline" | "full";
     }
-  | { type: "updateUrl"; id: string; url: string }
+  | {
+      type: "updateNavigation";
+      id: string;
+      url: string;
+      canGoBack: boolean;
+    }
   | { type: "remove"; id: string }
   | { type: "markLoading"; id: string }
-  | { type: "markReady"; id: string; canGoBack: boolean }
+  | { type: "markReady"; id: string }
   | { type: "markError"; id: string; code: number; message: string }
   | { type: "retry"; id: string };

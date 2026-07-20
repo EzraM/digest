@@ -15,15 +15,16 @@ Following the "Functional Core, Imperative Shell" pattern, this core is:
 ### `types.ts`
 Core data model representing browser views as values:
 - `ViewWorld`: Immutable map of view states
-- `ViewEntry`: A view's URL, bounds, profile, and status
-- `ViewStatus`: Union type for loading, ready, error, or idle states
+- `ViewEntry`: A view's navigation, load, bounds, and profile state
+- `LoadState`: Loading, ready, error, or idle lifecycle state
+- `history`: Navigation capability tracked independently from loading
 - `Rect`: Simple rectangle bounds
 
 ### `commands.ts`
 All possible state transitions as data:
 - `create`: Add a new view
 - `updateBounds`: Change view dimensions
-- `updateUrl`: Update view URL
+- `updateNavigation`: Atomically update the current URL and history capability
 - `remove`: Remove a view
 - `markLoading`: Transition to loading state
 - `markReady`: Transition to ready state
@@ -37,7 +38,7 @@ Pure state transition function: `(world, command) → world`
 ```typescript
 case 'markReady':
   // Don't override error with ready (prevents the race condition)
-  if (existing.status.type === 'error') return world;
+  if (existing.loadState.type === 'error') return world;
   // ...
 ```
 
@@ -46,7 +47,7 @@ This single guard makes the race condition between `did-fail-load` and `did-fini
 ### `selectors.ts`
 Query functions for reading from the world:
 - `getView`: Get a view entry by ID
-- `getStatus`: Get status for a view
+- `getLoadState`: Get load lifecycle state for a view
 - `hasError`: Check if view has error
 - `isLoading`: Check if view is loading
 - `canRetry`: Check if retry is allowed
@@ -88,7 +89,6 @@ world = reduce(world, {
 world = reduce(world, {
   type: 'markReady',
   id: 'block-1',
-  canGoBack: false,
 });
 
 // Explicit retry is required to recover from error
@@ -104,7 +104,7 @@ it('prevents the error-override bug', () => {
   let world = reduce(emptyWorld, createCmd);
   world = reduce(world, errorCmd);
   world = reduce(world, readyCmd);  // The race!
-  expect(world.get('id')?.status.type).toBe('error');
+  expect(world.get('id')?.loadState.type).toBe('error');
 });
 ```
 

@@ -82,15 +82,19 @@ export class HandleOperations {
       return { success: false, error: `WebContents destroyed for ${id}` };
     }
 
-    if (!webContents.canGoBack()) {
+    const { navigationHistory } = webContents;
+    if (!navigationHistory.canGoBack()) {
       log.debug(`No history to go back for ${id}`, 'HandleOperations');
       return { success: false, error: 'No history to go back' };
     }
 
     log.debug(`Navigating back for ${id}`, 'HandleOperations');
-    webContents.goBack();
+    navigationHistory.goBack();
 
     // Return updated canGoBack state after navigation
-    return { success: true, value: { canGoBack: webContents.canGoBack() } };
+    return {
+      success: true,
+      value: { canGoBack: navigationHistory.canGoBack() },
+    };
   }
 }
