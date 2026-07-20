@@ -6,10 +6,9 @@ import { Page } from "../../Browser/components/Page";
 import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { DocumentProvider } from "../../context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
-import { BlockRouteHeaderBar } from "./BlockRouteHeaderBar";
 import { BlockRouteNotificationsRow } from "./BlockRouteNotificationsRow";
 import { BlockRoutePageToolSlot } from "./BlockRoutePageToolSlot";
-import { BlockRouteSidebarButton } from "./BlockRouteSidebarButton";
+import { LeftRail } from "./LeftRail";
 import { BlockRouteStatusBar } from "./BlockRouteStatusBar";
 import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
 import { BlockNotificationContext } from "../../context/BlockNotificationContext";
@@ -41,7 +40,6 @@ export const BlockRouteViewContent = ({
   docId,
   profileId,
   url,
-  title,
   viewId,
   editor,
   onUrlChange,
@@ -170,7 +168,7 @@ export const BlockRouteViewContent = ({
 
   // Build grid template rows conditionally
   const gridTemplateRows = useMemo(() => {
-    return `34px 1fr${hasActiveNotifications ? " auto" : ""} 28px${
+    return `1fr${hasActiveNotifications ? " auto" : ""} 28px${
       hasPageTool ? " auto" : ""
     }`;
   }, [hasActiveNotifications, hasPageTool]);
@@ -195,7 +193,12 @@ export const BlockRouteViewContent = ({
         }}
       >
         {/* Left sidebar - minimize/expand toggle */}
-        <BlockRouteSidebarButton onBack={handleBack} />
+        <LeftRail
+          onBack={handleBack}
+          canGoBrowserBack={canGoBack}
+          isNavigatingBrowserBack={isNavigatingBack}
+          onBrowserBack={goBack}
+        />
 
         {/* Main content area */}
         <div
@@ -207,19 +210,6 @@ export const BlockRouteViewContent = ({
             transition: "grid-template-rows 180ms ease",
           }}
         >
-          <BlockRouteHeaderBar
-            canGoBack={canGoBack}
-            isNavigatingBack={isNavigatingBack}
-            onGoBack={goBack}
-            urlString={displayUrl}
-            copied={copied}
-            onCopy={handleCopy}
-            devToolsAvailable={devToolsAvailable}
-            devToolsOpen={devToolsOpen}
-            isTogglingDevTools={isTogglingDevTools}
-            onToggleDevTools={toggleDevTools}
-          />
-
           <div
             style={{
               minHeight: 0,
@@ -242,6 +232,13 @@ export const BlockRouteViewContent = ({
           />
           <BlockRouteStatusBar
             viewId={viewId}
+            url={displayUrl}
+            copied={copied}
+            onCopy={handleCopy}
+            devToolsAvailable={devToolsAvailable}
+            devToolsOpen={devToolsOpen}
+            isTogglingDevTools={isTogglingDevTools}
+            onToggleDevTools={toggleDevTools}
           />
           <BlockRoutePageToolSlot
             content={pageToolContent}

@@ -3,10 +3,24 @@ import { ClipButtons } from "../clip/ClipButtons";
 
 type BlockRouteStatusBarProps = {
   viewId: string;
+  url: string;
+  copied: boolean;
+  onCopy: () => void;
+  devToolsAvailable: boolean;
+  devToolsOpen: boolean;
+  isTogglingDevTools: boolean;
+  onToggleDevTools: () => void;
 };
 
 export const BlockRouteStatusBar = ({
   viewId,
+  url,
+  copied,
+  onCopy,
+  devToolsAvailable,
+  devToolsOpen,
+  isTogglingDevTools,
+  onToggleDevTools,
 }: BlockRouteStatusBarProps) => {
   return (
     <div
@@ -24,7 +38,50 @@ export const BlockRouteStatusBar = ({
         color: "#666",
       }}
     >
+      <span aria-hidden="true">🌐</span>
+      <button
+        type="button"
+        onClick={onCopy}
+        title={url}
+        aria-label={copied ? "Copied link" : "Copy link"}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          border: 0,
+          background: "transparent",
+          padding: 0,
+          color: "inherit",
+          font: "inherit",
+          textAlign: "left",
+          cursor: "pointer",
+        }}
+      >
+        {copied ? "Copied · " : ""}
+        {url}
+      </button>
       <ClipButtons context="page" viewId={viewId} placement="toolbar" />
+      {devToolsAvailable && (
+        <button
+          type="button"
+          onClick={onToggleDevTools}
+          disabled={isTogglingDevTools}
+          aria-pressed={devToolsOpen}
+          title={devToolsOpen ? "Close developer tools" : "Open developer tools"}
+          style={{
+            border: 0,
+            background: "transparent",
+            padding: "0 2px",
+            color: devToolsOpen ? "#1c7ed6" : "inherit",
+            font: "inherit",
+            cursor: isTogglingDevTools ? "wait" : "pointer",
+          }}
+        >
+          {isTogglingDevTools ? "…" : "DevTools"}
+        </button>
+      )}
     </div>
   );
 };

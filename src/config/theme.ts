@@ -34,6 +34,21 @@ export const sidebarButtonColors = {
       border: "#373A40", // dark[4]
     },
   },
+  // Browser history button - a related warm tone that stays distinct from close
+  browserBack: {
+    light: {
+      background: "#fff9db", // yellow[0]
+      hover: "#fff3bf", // yellow[1]
+      text: "#e67700", // yellow[8]
+      border: "#e0e0e0",
+    },
+    dark: {
+      background: "#4d4220", // dark ochre
+      hover: "#5d5128",
+      text: "#ffd43b", // yellow[4]
+      border: "#373A40",
+    },
+  },
 };
 
 /**
