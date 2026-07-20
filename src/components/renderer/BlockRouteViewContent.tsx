@@ -26,15 +26,6 @@ type BlockRouteViewContentProps = {
   onBack: () => void;
 };
 
-const getLinkLabel = (title: string | undefined, url: string): string => {
-  const cleanedTitle = title
-    ?.replace(/^\(\d+\)\s+/, "")
-    .replace(/\s+-\s+YouTube$/i, "")
-    .trim();
-
-  return cleanedTitle || url;
-};
-
 export const BlockRouteViewContent = ({
   blockId,
   docId,
@@ -48,9 +39,7 @@ export const BlockRouteViewContent = ({
 }: BlockRouteViewContentProps) => {
   const urlString = url;
 
-  // Track the initial URL so we can detect navigation away from the original page
   const initialUrlRef = useRef(urlString);
-  const currentBrowserUrlRef = useRef(urlString);
   const [currentBrowserUrl, setCurrentBrowserUrl] = useState(urlString);
 
   // Use the live browser URL for display and clipboard
@@ -65,7 +54,6 @@ export const BlockRouteViewContent = ({
 
   const handleUrlChange = useCallback(
     (nextUrl: string) => {
-      currentBrowserUrlRef.current = nextUrl;
       setCurrentBrowserUrl(nextUrl);
       onUrlChange?.(nextUrl);
     },
@@ -82,78 +70,28 @@ export const BlockRouteViewContent = ({
     }
   );
 
-  // When toggling back to the notebook, save where the browser ended up. URL
-  // routes are intentionally ephemeral, so this must not depend on an existing
-  // site block (for example, a ChatGPT query URL may become a conversation URL).
-  const handleBack = useCallback(async () => {
-    const originalUrl = initialUrlRef.current;
-    let finalUrl = currentBrowserUrlRef.current;
-    let finalTitle: string | undefined;
-
-    try {
-      const pageInfo = await window.electronAPI?.browser.getPageInfo(viewId);
-      if (pageInfo?.success) {
-        finalUrl = pageInfo.url || finalUrl;
-        finalTitle = pageInfo.title;
-      }
-    } catch (error) {
-      console.warn("[BlockRouteViewContent] Failed to read page title:", error);
-    }
-
-    if (finalUrl && finalUrl !== originalUrl) {
-      const linkLabel = getLinkLabel(finalTitle, finalUrl);
-      // Insert a link to the navigated page at the cursor position
+  const handleBack = useCallback(() => {
+    // Navigation events sync the live URL to an existing site block. Keep the
+    // block as the original notebook entry when leaving the full-page browser.
+    if (blockId) {
       try {
-        const cursorPosition = editor.getTextCursorPosition();
-        if (cursorPosition) {
-          editor.insertBlocks(
-            [
-              {
-                type: "paragraph",
-                content: [
-                  {
-                    type: "link",
-                    href: finalUrl,
-                    content: [
-                      {
-                        type: "text",
-                        text: linkLabel,
-                        styles: {},
-                      },
-                    ],
-                  },
-                ],
-              } as any,
-            ],
-            cursorPosition.block,
-            "after"
-          );
+        const block = editor.getBlock(blockId);
+        if (block && block.type === "site") {
+          editor.updateBlock(block, {
+            props: {
+              ...block.props,
+              url: initialUrlRef.current,
+            },
+          } as CustomPartialBlock);
         }
       } catch (error) {
-        console.error("[BlockRouteViewContent] Failed to insert page link:", error);
-      }
-
-      // Navigation events temporarily sync an existing site block to the live
-      // page. Restore its saved launch URL after capturing the final address.
-      if (blockId) {
-        try {
-          const block = editor.getBlock(blockId);
-          if (block && block.type === "site") {
-            editor.updateBlock(block, {
-              props: {
-                ...block.props,
-                url: originalUrl,
-              },
-            } as CustomPartialBlock);
-          }
-        } catch (error) {
-          console.error("[BlockRouteViewContent] Failed to restore block URL:", error);
-        }
+        console.error("[BlockRouteViewContent] Failed to restore block URL:", error);
       }
     }
 
     onBack();
-  }, [blockId, editor, onBack, viewId]);
+  }, [blockId, editor, onBack]);
+
   // Get page tool slot content
   const pageToolContext = useContext(PageToolSlotContext);
   const pageToolContent = pageToolContext?.content ?? null;
