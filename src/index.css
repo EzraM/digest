@@ -21,3 +21,12 @@ body {
 .bn-editor.bn-editor {
   padding-right: 5px;
 }
+
+/* Keep italic semantics and shortcuts, but present them as highlighted text. */
+.bn-editor .bn-inline-content em {
+  padding-inline: 0.08em;
+  border-radius: 2px;
+  background-color: #fff3bf;
+  color: #8a6500;
+  font-style: normal;
+}
