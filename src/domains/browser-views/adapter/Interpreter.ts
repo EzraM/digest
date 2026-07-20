@@ -215,6 +215,45 @@ export class Interpreter {
     }
   }
 
+  attachView(id: string): void {
+    const view = this.handles.get(id);
+    if (
+      !view ||
+      view.webContents.isDestroyed() ||
+      this.baseWindow.isDestroyed()
+    ) {
+      return;
+    }
+
+    if (this.layerManager) {
+      this.layerManager.addView(
+        `browser-block-${id}`,
+        view,
+        ViewLayer.BROWSER_BLOCKS
+      );
+      this.layerManager.forceReorder();
+    } else {
+      this.baseWindow.contentView.addChildView(view);
+    }
+  }
+
+  detachView(id: string): void {
+    const view = this.handles.get(id);
+    if (
+      !view ||
+      view.webContents.isDestroyed() ||
+      this.baseWindow.isDestroyed()
+    ) {
+      return;
+    }
+
+    if (this.layerManager) {
+      this.layerManager.removeView(`browser-block-${id}`);
+    } else {
+      this.baseWindow.contentView.removeChildView(view);
+    }
+  }
+
   private removeView(id: string): void {
     if (this.baseWindow.isDestroyed()) {
       log.warn(

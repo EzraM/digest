@@ -1,6 +1,7 @@
 import { createReactBlockSpec } from "@blocknote/react";
 import { useDocumentContext } from "../../context/DocumentContext";
 import { useAppRoute } from "../../context/AppRouteContext";
+import { useIsLivePage } from "../livePageStore";
 
 // Define the prop schema with proper typing
 const sitePropSchema = {
@@ -25,6 +26,7 @@ export const site = createReactBlockSpec(
       const { url } = block.props;
       const { documentId } = useDocumentContext();
       const { navigateToBlock } = useAppRoute();
+      const isLive = useIsLivePage(block.id);
 
       const openInFullView = () => {
         navigateToBlock(block.id, documentId ?? undefined);
@@ -63,7 +65,9 @@ export const site = createReactBlockSpec(
           tabIndex={0}
           style={{
             cursor: "pointer",
-            display: "block",
+            display: "flex",
+            alignItems: "baseline",
+            gap: "7px",
             color: "#0066cc",
             textDecoration: "underline",
             textDecorationThickness: "from-font",
@@ -72,7 +76,21 @@ export const site = createReactBlockSpec(
           }}
           title={url}
         >
-          {url}
+          {isLive && (
+            <span
+              aria-label="Page is kept live"
+              title="Page is kept live"
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                backgroundColor: "#2f9e44",
+                boxShadow: "0 0 0 1px rgba(47, 158, 68, 0.18)",
+                flex: "0 0 auto",
+              }}
+            />
+          )}
+          <span style={{ overflowWrap: "anywhere" }}>{url}</span>
         </div>
       );
     },

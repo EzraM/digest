@@ -33,6 +33,7 @@ interface ElectronAPI {
       viewId: string
     ) => Promise<{ success: boolean; error?: string }>;
     getPageInfo: (viewId: string) => Promise<BrowserPageInfo>;
+    getLivePages: () => Promise<{ blockIds: string[] }>;
     createBlock: (url: string, sourceBlockId?: string) => void;
     setScrollPercent: (blockId: string, scrollPercent: number) => void;
   };
@@ -86,6 +87,9 @@ interface ElectronAPI {
   }>;
   onBrowserScrollPercent: (
     callback: (data: { blockId: string; scrollPercent: number }) => void
+  ) => () => void;
+  onLivePagesChanged: (
+    callback: (data: { blockIds: string[] }) => void
   ) => () => void;
   onNewBrowserBlock: (
     callback: (data: { url: string; sourceBlockId?: string }) => void

@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     reload: (viewId: string) => ipcRenderer.invoke("browser:reload", viewId),
     getPageInfo: (viewId: string): Promise<BrowserPageInfo> =>
       ipcRenderer.invoke("browser:get-page-info", viewId),
+    getLivePages: (): Promise<{ blockIds: string[] }> =>
+      ipcRenderer.invoke("browser:get-live-pages"),
     createBlock: (url: string, sourceBlockId?: string) => {
       log.debug(
         `Creating browser block via IPC: ${url}, sourceBlockId: ${sourceBlockId}`,
@@ -157,6 +159,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ) => {
     const channel = "browser:save-scroll-percent";
     const handler = (_: any, data: any) => callback(data);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+  onLivePagesChanged: (
+    callback: (data: { blockIds: string[] }) => void
+  ) => {
+    const channel = "browser:live-pages-changed";
+    const handler = (_: unknown, data: { blockIds: string[] }) => callback(data);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },

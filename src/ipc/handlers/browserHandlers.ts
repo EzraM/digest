@@ -107,9 +107,13 @@ export function createBrowserHandlers(
     "remove-view": {
       type: "on",
       fn: (_event, viewId: string) => {
-        log.debug(`Received remove-view for view ${viewId}`, "main");
-        viewStore.handleRemoveView(viewId);
+        log.debug(`Received detach request for view ${viewId}`, "main");
+        viewStore.handleDetachView(viewId);
       },
+    },
+    "browser:get-live-pages": {
+      type: "invoke",
+      fn: () => ({ blockIds: viewStore.getLivePageBlockIds() }),
     },
     "browser:create-block": {
       type: "on",

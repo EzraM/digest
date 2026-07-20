@@ -11,6 +11,8 @@ import { HandleOperations } from "../domains/browser-views/adapter/HandleOperati
 import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
 import { DownloadManager } from "./DownloadManager";
+import { LivePageCache } from "./LivePageCache";
+import { toBlockId } from "../utils/viewId";
 
 /**
  * The ViewStore orchestrates the pure core with Electron adapters.
@@ -27,6 +29,7 @@ export class ViewStore {
   private operations: HandleOperations;
 
   private downloadManager?: DownloadManager;
+  private livePages = new LivePageCache(10);
 
   // Rate limiting: track pending creates to prevent duplicate URL loads
   // Maps viewId -> { url, timestamp } of pending create commands
@@ -138,7 +141,20 @@ export class ViewStore {
         profile: update.profileId,
         layout: update.layout ?? "inline",
       });
+
+      if (this.isCacheable(update.viewId, update.blockId, update.layout)) {
+        this.destroyEvictedViews(
+          this.livePages.addVisible(update.viewId, update.blockId)
+        );
+        this.notifyLivePagesChanged();
+      }
     } else {
+      if (this.livePages.isCached(update.viewId)) {
+        this.interpreter.attachView(update.viewId);
+        this.livePages.markVisible(update.viewId);
+        this.notifyLivePagesChanged();
+      }
+
       // Check if we need to update bounds or layout
       const boundsChanged =
         existing.bounds.x !== update.bounds.x ||
@@ -167,7 +183,55 @@ export class ViewStore {
     log.debug(`[${viewId}] Removing view`, "ViewStore");
     // Clean up rate limiting state
     this.pendingCreates.delete(viewId);
+    const wasLive = this.livePages.remove(viewId);
     this.dispatch({ type: "remove", id: viewId });
+    if (wasLive) this.notifyLivePagesChanged();
+  }
+
+  /** Detach a notebook page while retaining its live WebContents. */
+  handleDetachView(viewId: string): void {
+    if (!this.livePages.has(viewId)) {
+      this.handleRemoveView(viewId);
+      return;
+    }
+
+    log.debug(`[${viewId}] Detaching live page`, "ViewStore");
+    this.interpreter.detachView(viewId);
+    this.destroyEvictedViews(this.livePages.markCached(viewId));
+    this.notifyLivePagesChanged();
+  }
+
+  getLivePageBlockIds(): string[] {
+    return this.livePages.getLiveBlockIds();
+  }
+
+  private isCacheable(
+    viewId: string,
+    blockId: string,
+    layout?: "inline" | "full"
+  ): boolean {
+    return (
+      layout === "full" &&
+      !blockId.startsWith("ephemeral-") &&
+      toBlockId(viewId) === blockId
+    );
+  }
+
+  private destroyEvictedViews(viewIds: string[]): void {
+    for (const viewId of viewIds) {
+      log.debug(`[${viewId}] Evicting live page`, "ViewStore");
+      this.pendingCreates.delete(viewId);
+      this.dispatch({ type: "remove", id: viewId });
+    }
+  }
+
+  private notifyLivePagesChanged(): void {
+    const renderer = this.interpreter.getRendererWebContents();
+    if (!renderer.isDestroyed()) {
+      renderer.send("browser:live-pages-changed", {
+        blockIds: this.getLivePageBlockIds(),
+      });
+    }
   }
 
   retryView(blockId: string): void {
