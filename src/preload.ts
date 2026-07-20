@@ -1,6 +1,6 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
-import { clipboard, contextBridge, ipcRenderer } from "electron";
+import { clipboard, contextBridge, ipcRenderer, nativeImage } from "electron";
 import { log } from "./utils/mainLogger";
 log.debug("Preload script initialized", "preload");
 
@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     readText: () => clipboard.readText(),
     readHTML: () => clipboard.readHTML(),
     availableFormats: () => clipboard.availableFormats(),
+    writeImage: (arrayBuffer: ArrayBuffer) => {
+      const image = nativeImage.createFromBuffer(Buffer.from(arrayBuffer));
+      if (image.isEmpty()) {
+        throw new Error("Could not decode image data");
+      }
+      clipboard.writeImage(image);
+    },
   },
   updateBrowser: (data: {
     viewId: string;

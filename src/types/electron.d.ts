@@ -6,6 +6,7 @@ interface ElectronAPI {
     readText: () => string;
     readHTML: () => string;
     availableFormats: () => string[];
+    writeImage: (arrayBuffer: ArrayBuffer) => void;
   };
   updateBrowser: (data: {
     viewId: string;
