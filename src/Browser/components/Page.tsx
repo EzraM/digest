@@ -5,6 +5,7 @@ import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
 import { useSize } from "../hooks/useSize";
 import { useScrollContainer } from "../../context/ScrollContainerContext";
 import { toFullViewId } from "../../utils/viewId";
+import { SiteLoadingState } from "./SiteLoadingState";
 
 const NORMAL_HEIGHT = 800;
 
@@ -137,7 +138,8 @@ export function Page({
           position: "relative",
         }}
       >
-        {initStatus.state !== "initialized" && (
+        {initStatus.state !== "initialized" &&
+          (initStatus.state === "error" ? (
           <div
             style={{
               position: "absolute",
@@ -151,103 +153,76 @@ export function Page({
               backgroundColor: "rgba(255, 255, 255, 0.95)",
               borderRadius: "12px",
               boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)",
-              border:
-                initStatus.state === "error"
-                  ? "1px solid #ffa8a8"
-                  : "1px solid #e0e0e0",
+              border: "1px solid #ffa8a8",
             }}
           >
-            {initStatus.state === "error" ? (
-              <>
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: "1rem",
+                marginBottom: "8px",
+              }}
+            >
+              {initStatus.error.friendlyTitle}
+            </div>
+            {initStatus.error.friendlySubtitle && (
                 <div
                   style={{
-                    fontWeight: 600,
-                    fontSize: "1rem",
-                    marginBottom: "8px",
-                  }}
-                >
-                  {initStatus.error.friendlyTitle}
-                </div>
-                {initStatus.error.friendlySubtitle && (
-                  <div
-                    style={{
-                      fontSize: "0.9rem",
-                      color: "#555",
-                      marginBottom: initStatus.error.technicalMessage
-                        ? "12px"
-                        : "16px",
-                    }}
-                  >
-                    {initStatus.error.friendlySubtitle}
-                  </div>
-                )}
-                {initStatus.error.technicalMessage && (
-                  <details
-                    style={{
-                      textAlign: "left",
-                      fontSize: "0.8rem",
-                      marginBottom: "12px",
-                      backgroundColor: "#f8f9fa",
-                      borderRadius: "8px",
-                      padding: "8px 12px",
-                      border: "1px solid #dee2e6",
-                    }}
-                  >
-                    <summary style={{ cursor: "pointer", fontWeight: 500 }}>
-                      Technical details
-                    </summary>
-                    <pre
-                      style={{
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
-                        margin: "8px 0 0",
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {initStatus.error.technicalMessage}
-                    </pre>
-                  </details>
-                )}
-                {handleRetry && (
-                  <button
-                    onClick={handleRetry}
-                    style={{
-                      padding: "8px 16px",
-                      cursor: "pointer",
-                      borderRadius: "20px",
-                      border: "none",
-                      backgroundColor: "#1c7ed6",
-                      color: "#fff",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Try again
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <div style={{ fontWeight: 600, marginBottom: "6px" }}>
-                  {initStatus.state === "initializing" &&
-                  initStatus.detail === "created"
-                    ? "Loading page…"
-                    : "Initializing browser…"}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.85rem",
+                    fontSize: "0.9rem",
                     color: "#555",
-                    marginBottom: "16px",
+                    marginBottom: initStatus.error.technicalMessage
+                      ? "12px"
+                      : "16px",
                   }}
                 >
-                  {initStatus.state === "initializing" && initStatus.detail
-                    ? `Status: ${initStatus.detail}`
-                    : "Hang tight, we're getting things ready."}
+                  {initStatus.error.friendlySubtitle}
                 </div>
-              </>
             )}
+            {initStatus.error.technicalMessage && (
+              <details
+                style={{
+                  textAlign: "left",
+                  fontSize: "0.8rem",
+                  marginBottom: "12px",
+                  backgroundColor: "#f8f9fa",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  border: "1px solid #dee2e6",
+                }}
+              >
+                <summary style={{ cursor: "pointer", fontWeight: 500 }}>
+                  Technical details
+                </summary>
+                <pre
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    margin: "8px 0 0",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {initStatus.error.technicalMessage}
+                </pre>
+              </details>
+            )}
+            <button
+              onClick={handleRetry}
+              style={{
+                padding: "8px 16px",
+                cursor: "pointer",
+                borderRadius: "20px",
+                border: "none",
+                backgroundColor: "#315efb",
+                color: "#fff",
+                fontWeight: 600,
+              }}
+            >
+              Try again
+            </button>
           </div>
-        )}
+          ) : (
+            <SiteLoadingState url={url} />
+          ))}
       </div>
     </div>
   );

@@ -19,33 +19,33 @@ export const sidebarButtonColors = {
       border: "#373A40", // dark[4]
     },
   },
-  // Close/back button (returns from browser view) - Amber/Orange theme
+  // Return to notebook - violet represents reflection and synthesis
   close: {
     light: {
-      background: "#fff4e6", // orange[0]
-      hover: "#ffe8cc", // orange[1]
-      text: "#e8590c", // orange[7]
+      background: "#f3f0ff",
+      hover: "#e8e1ff",
+      text: "#7656d6",
       border: "#e0e0e0",
     },
     dark: {
-      background: "#4a3520", // dark orange-brown
-      hover: "#5a4530", // slightly lighter
-      text: "#ffa94d", // orange[4]
-      border: "#373A40", // dark[4]
+      background: "#30284a",
+      hover: "#3d325f",
+      text: "#b9a7f5",
+      border: "#373A40",
     },
   },
-  // Browser history button - a related warm tone that stays distinct from close
+  // Browser history - ultramarine represents links and movement through the web
   browserBack: {
     light: {
-      background: "#fff9db", // yellow[0]
-      hover: "#fff3bf", // yellow[1]
-      text: "#e67700", // yellow[8]
+      background: "#eef2ff",
+      hover: "#dde5ff",
+      text: "#315efb",
       border: "#e0e0e0",
     },
     dark: {
-      background: "#4d4220", // dark ochre
-      hover: "#5d5128",
-      text: "#ffd43b", // yellow[4]
+      background: "#222d52",
+      hover: "#2b3968",
+      text: "#91a8ff",
       border: "#373A40",
     },
   },
