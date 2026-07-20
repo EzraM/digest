@@ -8,7 +8,6 @@ log.debug("Preload script initialized", "preload");
 const EVENTS = {
   BROWSER: {
     INITIALIZED: "browser:initialized",
-    NEW_BLOCK: "browser:new-block",
     NAVIGATION: "browser:navigation-state",
     INSERT_LINK: "browser:insert-link",
     LINK_CAPTURED: "browser:link-captured",
@@ -62,13 +61,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("browser:get-page-info", viewId),
     getLivePages: (): Promise<{ blockIds: string[] }> =>
       ipcRenderer.invoke("browser:get-live-pages"),
-    createBlock: (url: string, sourceBlockId?: string) => {
-      log.debug(
-        `Creating browser block via IPC: ${url}, sourceBlockId: ${sourceBlockId}`,
-        "preload"
-      );
-      ipcRenderer.send("browser:create-block", { url, sourceBlockId });
-    },
     setScrollPercent: (blockId: string, scrollPercent: number) => {
       log.debug(
         `Setting scroll percent for block ${blockId}: ${scrollPercent}`,
@@ -169,32 +161,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const handler = (_: unknown, data: { blockIds: string[] }) => callback(data);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
-  },
-  onNewBrowserBlock: (
-    callback: (data: { url: string; sourceBlockId?: string }) => void
-  ) => {
-    const subscription = (_: any, data: any) => {
-      // Handle both string and object formats
-      const url = typeof data === "string" ? data : data?.url;
-      const sourceBlockId = data?.sourceBlockId;
-
-      if (!url) {
-        console.error("Invalid data format for browser:new-block event:", data);
-        return;
-      }
-
-      log.debug(
-        `Received request to create new browser block with URL: ${url}, sourceBlockId: ${sourceBlockId}`,
-        "preload"
-      );
-      callback({ url, sourceBlockId });
-    };
-
-    ipcRenderer.on(EVENTS.BROWSER.NEW_BLOCK, subscription);
-
-    return () => {
-      ipcRenderer.removeListener(EVENTS.BROWSER.NEW_BLOCK, subscription);
-    };
   },
   onInsertLink: (
     callback: (data: {

@@ -5,10 +5,7 @@ import { log } from "../../utils/mainLogger";
 import { toBlockId } from "../../utils/viewId";
 import { BrowserLoadStatus, BrowserPageInfo } from "../../types/browser";
 
-export function createBrowserHandlers(
-  viewStore: ViewStore,
-  createBrowserBlockCallback?: (url: string, sourceBlockId?: string) => void
-): IPCHandlerMap {
+export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
   const selectionCaptureService = new SelectionCaptureService();
   return {
     "update-browser": {
@@ -114,20 +111,6 @@ export function createBrowserHandlers(
     "browser:get-live-pages": {
       type: "invoke",
       fn: () => ({ blockIds: viewStore.getLivePageBlockIds() }),
-    },
-    "browser:create-block": {
-      type: "on",
-      fn: (_event, data: { url: string; sourceBlockId?: string }) => {
-        log.debug(
-          `Received browser:create-block request: ${data.url}, sourceBlockId: ${data.sourceBlockId}`,
-          "main"
-        );
-        if (createBrowserBlockCallback) {
-          createBrowserBlockCallback(data.url, data.sourceBlockId);
-        } else {
-          log.debug("No createBrowserBlock callback available", "main");
-        }
-      },
     },
     "browser:set-scroll-percent": {
       type: "on",

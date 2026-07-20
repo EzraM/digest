@@ -59,7 +59,6 @@ const EVENTS = {
   },
   BROWSER: {
     INITIALIZED: "browser:initialized",
-    NEW_BLOCK: "browser:new-block",
     INSERT_LINK: "browser:insert-link",
     LINK_CAPTURED: "browser:link-captured",
     IMAGE_CLIPPED: "browser:image-clipped",
@@ -186,16 +185,6 @@ const createWindow = async () => {
     viewLayerManager,
     appViewInstance.webContents
   );
-  // Shared helper to create a new browser block (used by EventTranslator for page context)
-  const createBrowserBlock = (url: string, sourceBlockId?: string) => {
-    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-      globalAppView.webContents.send(EVENTS.BROWSER.NEW_BLOCK, {
-        url,
-        sourceBlockId,
-      });
-    }
-  };
-
   // Helper to navigate to URL route (used by LinkInterceptionService for notebook context)
   const navigateToUrl = (url: string) => {
     if (globalAppView && !globalAppView.webContents.isDestroyed()) {
@@ -286,9 +275,6 @@ const createWindow = async () => {
 
   // Pass download manager to view store so it can attach to browser block sessions
   viewStore.setDownloadManager(downloadManager);
-
-  // Set up the link click callback for ViewStore (page context - still creates blocks for now)
-  viewStore.setLinkClickCallback(createBrowserBlock);
 
   // Set up background link click callback for ViewStore (page context - inserts inline links)
   viewStore.setBackgroundLinkClickCallback(insertInlineLink);
@@ -394,7 +380,6 @@ const createWindow = async () => {
     viewStore,
     services,
     appViewInstance,
-    createBrowserBlock,
     downloadManager
   );
 
@@ -462,7 +447,6 @@ const setupIpcHandlers = (
   viewStore: ViewStore,
   services: ReturnType<typeof getServices>,
   rendererView: WebContentsView,
-  createBrowserBlock: (url: string, sourceBlockId?: string) => void,
   downloadManager: DownloadManager
 ) => {
   const { documentManager, profileManager } = services;
@@ -546,7 +530,7 @@ const setupIpcHandlers = (
     })
   );
 
-  registerMap(createBrowserHandlers(viewStore, createBrowserBlock));
+  registerMap(createBrowserHandlers(viewStore));
   registerMap(
     createBlockHandlers(
       documentManager,

@@ -5,8 +5,7 @@ import { ClipConverter } from "../domains/clip/services/ClipConverter";
 import { log } from "../utils/rendererLogger";
 
 /**
- * Hook to manage clip draft state
- * Similar to useBlockNotification but for clip drafts
+ * Hook to manage clip draft state.
  */
 export const useClipDraft = () => {
   const [drafts, setDrafts] = useState<ClipDraft[]>([]);

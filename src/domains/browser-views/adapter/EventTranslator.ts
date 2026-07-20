@@ -5,7 +5,6 @@ import { toBlockId } from '../../../utils/viewId';
 import { ContextMenuController } from './ContextMenuController';
 
 type CommandDispatcher = (cmd: Command) => void;
-type LinkClickCallback = (url: string, sourceId: string) => void;
 type BackgroundLinkCallback = (url: string, sourceId: string, title: string, profileId: string) => void;
 
 /**
@@ -14,14 +13,9 @@ type BackgroundLinkCallback = (url: string, sourceId: string, title: string, pro
  * This is the only place that knows about Electron event names.
  */
 export class EventTranslator {
-  private onLinkClick?: LinkClickCallback;
   private onBackgroundLinkClick?: BackgroundLinkCallback;
 
   constructor(private contextMenus: ContextMenuController) {}
-
-  setLinkClickCallback(callback: LinkClickCallback): void {
-    this.onLinkClick = callback;
-  }
 
   setBackgroundLinkClickCallback(callback: BackgroundLinkCallback): void {
     this.onBackgroundLinkClick = callback;

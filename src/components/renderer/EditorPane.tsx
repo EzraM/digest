@@ -13,7 +13,6 @@ import React, { useCallback, useMemo, useState } from "react";
 import { CustomBlockNoteEditor } from "../../types/schema";
 import { SlashCommandOption } from "../../types/slashCommand";
 import { useEditorScrollIntoView } from "../../hooks/useEditorScrollIntoView";
-import { BlockNotificationContainer } from "./BlockNotificationContainer";
 
 type EditorPaneProps = {
   editor: CustomBlockNoteEditor;
@@ -31,11 +30,6 @@ export const EditorPane = ({
   focusBlockId,
 }: EditorPaneProps) => {
   useEditorScrollIntoView(focusBlockId, editor);
-
-  // Note: We don't check editor.view availability here because BlockNoteView
-  // creates the view when it mounts. The check would prevent initial render.
-  // Instead, we rely on error boundaries and guards in child components
-  // (like BlockNotificationContainer) that access the editor during render.
 
   return (
     <div className="App">
@@ -57,7 +51,6 @@ export const EditorPane = ({
         </BlockNoteView>
         <div style={{ height: "2000px", width: "100%", color: "gray" }} />
       </EditorErrorBoundary>
-      <BlockNotificationContainer editor={editor} />
     </div>
   );
 };

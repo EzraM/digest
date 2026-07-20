@@ -4,7 +4,6 @@ import { useElementScrollRestoration } from "@tanstack/react-router";
 import { StatusBar } from "./StatusBar";
 import { useStatusBar } from "../../hooks/useStatusBar";
 import { SidebarToggleButton } from "./SidebarToggleButton";
-import { BlockNotificationContext } from "../../context/BlockNotificationContext";
 import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { ScrollContainerProvider } from "../../context/ScrollContainerContext";
 
@@ -12,7 +11,6 @@ const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
 const FOOTER_HEIGHT = 28;
 const TOGGLE_BAR_WIDTH = 32; // 2rem in pixels
-const NOTIFICATION_HEIGHT = 120; // Top bar (~32px) + content (80px) + padding
 const NAVBAR_TRANSITION_MS = 180;
 
 type RendererLayoutProps = {
@@ -41,12 +39,6 @@ export const RendererLayout = ({
     documentTitle,
     onToggleSidebar: onNavbarToggle,
   });
-
-  // Get notification state to add margin when notifications are active
-  const notificationContext = useContext(BlockNotificationContext);
-  const hasActiveNotifications = notificationContext
-    ? notificationContext.pendingBlockIds.length > 0
-    : false;
 
   // Get page tool slot content
   const pageToolContext = useContext(PageToolSlotContext);
@@ -141,9 +133,7 @@ export const RendererLayout = ({
             position: "relative",
             zIndex: 0,
             paddingBottom: FOOTER_HEIGHT + 8,
-            marginBottom: hasActiveNotifications ? NOTIFICATION_HEIGHT : 0,
             overflow: "auto",
-            transition: `margin-bottom 0.3s ease-out`,
           }}
         >
           {main}

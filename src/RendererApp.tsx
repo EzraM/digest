@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useContext } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MantineProvider } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { theme } from "./config/theme";
@@ -22,10 +22,6 @@ import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
 import { AppRouteProvider, useAppRoute, AppRoute } from "./context/AppRouteContext";
-import {
-  BlockNotificationProvider,
-  BlockNotificationContext,
-} from "./context/BlockNotificationContext";
 import { ClipDraftProvider } from "./context/ClipDraftContext";
 import { toFullViewId } from "./utils/viewId";
 import { PageToolSlotProvider } from "./context/PageToolSlotContext";
@@ -51,9 +47,6 @@ const RendererAppContent = () => {
     setActiveProfileId,
   } = useRendererDocuments();
 
-  // Use useContext directly to avoid throwing if context isn't available during initial render
-  const notificationContext = useContext(BlockNotificationContext);
-  const triggerNotification = notificationContext?.triggerNotification;
   const pluginProfile = activeDocument
     ? {
         profileId: activeDocument.profileId,
@@ -62,7 +55,7 @@ const RendererAppContent = () => {
           ?.settings,
       }
     : undefined;
-  const editor = useRendererEditor(triggerNotification, pluginProfile);
+  const editor = useRendererEditor(pluginProfile);
 
   // Listen for browser selection events
   useBrowserSelection();
@@ -476,16 +469,14 @@ const RendererAppWithRouteContext = () => {
 
 export const RendererApp = () => {
   return (
-    <BlockNotificationProvider>
-      <ClipDraftProvider>
-        <LinkCaptureProvider>
-          <DownloadProvider>
-            <PageToolSlotProvider>
-              <RendererAppWithRouteContext />
-            </PageToolSlotProvider>
-          </DownloadProvider>
-        </LinkCaptureProvider>
-      </ClipDraftProvider>
-    </BlockNotificationProvider>
+    <ClipDraftProvider>
+      <LinkCaptureProvider>
+        <DownloadProvider>
+          <PageToolSlotProvider>
+            <RendererAppWithRouteContext />
+          </PageToolSlotProvider>
+        </DownloadProvider>
+      </LinkCaptureProvider>
+    </ClipDraftProvider>
   );
 };

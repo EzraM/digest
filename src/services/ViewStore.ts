@@ -316,16 +316,6 @@ export class ViewStore {
   }
 
   /**
-   * Set callback for link clicks that should open new blocks.
-   * This is external coordination with main.ts, not a state change.
-   */
-  setLinkClickCallback(
-    callback: (url: string, sourceBlockId?: string) => void
-  ): void {
-    this.events.setLinkClickCallback(callback);
-  }
-
-  /**
    * Set callback for background link clicks (cmd+click) that should insert inline links.
    * This is external coordination with main.ts, not a state change.
    */

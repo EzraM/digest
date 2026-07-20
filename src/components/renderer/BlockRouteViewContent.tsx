@@ -6,12 +6,10 @@ import { Page } from "../../Browser/components/Page";
 import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { DocumentProvider } from "../../context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
-import { BlockRouteNotificationsRow } from "./BlockRouteNotificationsRow";
 import { BlockRoutePageToolSlot } from "./BlockRoutePageToolSlot";
 import { LeftRail } from "./LeftRail";
 import { BlockRouteStatusBar } from "./BlockRouteStatusBar";
 import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
-import { BlockNotificationContext } from "../../context/BlockNotificationContext";
 import { useBrowserLoadState } from "../../hooks/useBrowserLoadState";
 
 type BlockRouteViewContentProps = {
@@ -111,18 +109,10 @@ export const BlockRouteViewContent = ({
   const isPageToolVisible = pageToolContext?.isVisible ?? false;
   const hasPageTool = pageToolContent !== null && isPageToolVisible;
 
-  // Get notification state to add an inline notification row when active
-  const notificationContext = useContext(BlockNotificationContext);
-  const hasActiveNotifications = notificationContext
-    ? notificationContext.pendingBlockIds.length > 0
-    : false;
-
   // Build grid template rows conditionally
   const gridTemplateRows = useMemo(() => {
-    return `1fr${hasActiveNotifications ? " auto" : ""} 28px${
-      hasPageTool ? " auto" : ""
-    }`;
-  }, [hasActiveNotifications, hasPageTool]);
+    return `1fr 28px${hasPageTool ? " auto" : ""}`;
+  }, [hasPageTool]);
 
   // Build grid template columns: left toggle bar + main content
   const gridTemplateColumns = "2rem 1fr";
@@ -178,10 +168,6 @@ export const BlockRouteViewContent = ({
             />
           </div>
 
-          <BlockRouteNotificationsRow
-            editor={editor}
-            isVisible={hasActiveNotifications}
-          />
           <BlockRouteStatusBar
             url={displayUrl}
             loadStatus={loadStatus}
