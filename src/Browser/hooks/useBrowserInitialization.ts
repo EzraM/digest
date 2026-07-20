@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { BrowserInitStatus } from "../types";
 import { buildBrowserInitError } from "../utils/errorMessages";
+import { BrowserLifecycleEvent } from "../../types/browser";
 
 /**
  * A custom hook to manage the initialization lifecycle of a browser view.
@@ -10,16 +11,6 @@ import { buildBrowserInitError } from "../utils/errorMessages";
  * @param blockId The ID of the block being initialized.
  * @returns An object with the current initialization state and a retry function.
  */
-type BrowserInitializedEvent = {
-  blockId: string;
-  success: boolean;
-  status?: "created" | "loaded" | "existing";
-  error?: string;
-  errorCode?: number;
-  errorDescription?: string;
-  url?: string;
-};
-
 export const useBrowserInitialization = (blockId: string) => {
   const [initStatus, setInitStatus] = useState<BrowserInitStatus>({
     state: "idle",
@@ -32,7 +23,7 @@ export const useBrowserInitialization = (blockId: string) => {
       `[useBrowserInitialization] Setting up listener for blockId: ${blockId}`
     );
     const unsubscribe = window.electronAPI.onBrowserInitialized(
-      (data: BrowserInitializedEvent) => {
+      (data: BrowserLifecycleEvent) => {
         if (data.blockId === blockId) {
           console.log(
             `[useBrowserInitialization] Received status for ${blockId}:`,
@@ -40,7 +31,7 @@ export const useBrowserInitialization = (blockId: string) => {
           );
 
           if (data.success) {
-            if (data.status === "loaded" || !data.status) {
+            if (data.status === "loaded") {
               console.log(
                 `[useBrowserInitialization] Setting initialized=true for ${blockId}`
               );
@@ -49,10 +40,7 @@ export const useBrowserInitialization = (blockId: string) => {
               console.log(
                 `[useBrowserInitialization] Success but status=${data.status}, setting initializing`
               );
-              setInitStatus({
-                state: "initializing",
-                detail: data.status,
-              });
+              setInitStatus({ state: "initializing" });
             }
           } else {
             console.log(
@@ -63,7 +51,7 @@ export const useBrowserInitialization = (blockId: string) => {
             const errorDetails = buildBrowserInitError({
               code: data.errorCode,
               description: data.errorDescription,
-              url: data.url,
+              url: "browser-initialization",
               rawMessage: data.error || null,
             });
             console.log(

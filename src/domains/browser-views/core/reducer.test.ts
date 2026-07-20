@@ -211,4 +211,39 @@ describe('ViewWorld reducer', () => {
     world = reduce(world, { type: 'retry', id: 'block-1' });
     expect(world.get('block-1')?.loadState).toEqual({ type: 'ready' });
   });
+
+  it('reloads from ready state', () => {
+    let world = reduce(emptyWorld, {
+      type: 'create',
+      id: 'block-1',
+      url: 'https://example.com',
+      bounds: { x: 0, y: 0, width: 800, height: 600 },
+      profile: 'default',
+    });
+    world = reduce(world, { type: 'markReady', id: 'block-1' });
+
+    world = reduce(world, { type: 'reload', id: 'block-1' });
+
+    expect(world.get('block-1')?.loadState).toEqual({ type: 'loading' });
+  });
+
+  it('reloads from error state without error-only retry semantics', () => {
+    let world = reduce(emptyWorld, {
+      type: 'create',
+      id: 'block-1',
+      url: 'https://example.com',
+      bounds: { x: 0, y: 0, width: 800, height: 600 },
+      profile: 'default',
+    });
+    world = reduce(world, {
+      type: 'markError',
+      id: 'block-1',
+      code: -6,
+      message: 'ERR_CONNECTION_REFUSED',
+    });
+
+    world = reduce(world, { type: 'reload', id: 'block-1' });
+
+    expect(world.get('block-1')?.loadState).toEqual({ type: 'loading' });
+  });
 });

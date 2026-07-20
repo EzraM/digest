@@ -45,6 +45,7 @@ export class Interpreter {
         break;
 
       case "retry":
+      case "reload":
         this.reloadView(cmd.id);
         break;
 

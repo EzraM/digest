@@ -25,4 +25,5 @@ export type Command =
   | { type: "markLoading"; id: string }
   | { type: "markReady"; id: string }
   | { type: "markError"; id: string; code: number; message: string }
+  | { type: "reload"; id: string }
   | { type: "retry"; id: string };

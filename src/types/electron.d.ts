@@ -1,5 +1,6 @@
 import { BlockOperation, OperationResult } from "./operations";
 import { DocumentRecord, DocumentTreeNode, ProfileRecord } from "./documents";
+import { BrowserLifecycleEvent, BrowserPageInfo } from "./browser";
 
 interface ElectronAPI {
   clipboard: {
@@ -28,26 +29,16 @@ interface ElectronAPI {
     goBack: (
       viewId: string
     ) => Promise<{ success: boolean; canGoBack: boolean; error?: string }>;
-    getPageInfo: (viewId: string) => Promise<{
-      success: boolean;
-      url?: string;
-      title?: string;
-      error?: string;
-    }>;
+    reload: (
+      viewId: string
+    ) => Promise<{ success: boolean; error?: string }>;
+    getPageInfo: (viewId: string) => Promise<BrowserPageInfo>;
     createBlock: (url: string, sourceBlockId?: string) => void;
     setScrollPercent: (blockId: string, scrollPercent: number) => void;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
   onBrowserInitialized: (
-    callback: (data: {
-      blockId: string;
-      success: boolean;
-      status?: string;
-      error?: string;
-      errorCode?: number;
-      errorDescription?: string;
-      url?: string;
-    }) => void
+    callback: (data: BrowserLifecycleEvent) => void
   ) => () => void;
   onBrowserNavigation: (
     callback: (data: {

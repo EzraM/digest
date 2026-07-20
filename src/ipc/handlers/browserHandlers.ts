@@ -3,6 +3,7 @@ import { ViewStore } from "../../services/ViewStore";
 import { SelectionCaptureService } from "../../services/SelectionCaptureService";
 import { log } from "../../utils/mainLogger";
 import { toBlockId } from "../../utils/viewId";
+import { BrowserLoadStatus, BrowserPageInfo } from "../../types/browser";
 
 export function createBrowserHandlers(
   viewStore: ViewStore,
@@ -53,7 +54,7 @@ export function createBrowserHandlers(
         return viewStore.goBack(blockId);
       },
     },
-    "browser:get-page-info": {
+    "browser:reload": {
       type: "invoke",
       fn: (_event, viewId: string) => {
         const view = viewStore.getHandleRegistry().get(viewId);
@@ -61,10 +62,35 @@ export function createBrowserHandlers(
           return { success: false, error: `No active view found for ${viewId}` };
         }
 
+        log.debug(
+          `Received browser:reload request for view ${viewId}`,
+          "main"
+        );
+        viewStore.reloadView(viewId);
+        return { success: true };
+      },
+    },
+    "browser:get-page-info": {
+      type: "invoke",
+      fn: (_event, viewId: string): BrowserPageInfo => {
+        const view = viewStore.getHandleRegistry().get(viewId);
+        const entry = viewStore.getWorld().get(viewId);
+        if (!view || view.webContents.isDestroyed() || !entry) {
+          return { success: false, error: `No active view found for ${viewId}` };
+        }
+
+        const loadStatus: BrowserLoadStatus =
+          entry.loadState.type === "ready"
+            ? "loaded"
+            : entry.loadState.type === "error"
+              ? "error"
+              : "loading";
+
         return {
           success: true,
           url: view.webContents.getURL(),
           title: view.webContents.getTitle(),
+          loadStatus,
         };
       },
     },

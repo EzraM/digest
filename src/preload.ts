@@ -2,6 +2,7 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 import { clipboard, contextBridge, ipcRenderer, nativeImage } from "electron";
 import { log } from "./utils/mainLogger";
+import { BrowserLifecycleEvent, BrowserPageInfo } from "./types/browser";
 log.debug("Preload script initialized", "preload");
 
 const EVENTS = {
@@ -56,7 +57,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     toggleDevTools: (blockId: string) =>
       ipcRenderer.invoke("browser:toggle-devtools", blockId),
     goBack: (blockId: string) => ipcRenderer.invoke("browser:go-back", blockId),
-    getPageInfo: (viewId: string) =>
+    reload: (viewId: string) => ipcRenderer.invoke("browser:reload", viewId),
+    getPageInfo: (viewId: string): Promise<BrowserPageInfo> =>
       ipcRenderer.invoke("browser:get-page-info", viewId),
     createBlock: (url: string, sourceBlockId?: string) => {
       log.debug(
@@ -81,15 +83,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send(`block-menu:${e.type}`);
   },
   onBrowserInitialized: (
-    callback: (data: {
-      blockId: string;
-      success: boolean;
-      error?: string;
-      status?: "created" | "loaded" | "existing";
-      errorCode?: number;
-      errorDescription?: string;
-      url?: string;
-    }) => void
+    callback: (data: BrowserLifecycleEvent) => void
   ) => {
     const channel = "browser:initialized";
     const handler = (_: any, data: any) => callback(data);

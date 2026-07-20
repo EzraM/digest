@@ -24,7 +24,6 @@ export const AddPageButton = ({ viewId }: AddPageButtonProps) => {
       const pageInfo = await window.electronAPI.browser.getPageInfo(viewId);
       if (
         pageInfo.success &&
-        pageInfo.url &&
         insertInlineLinkAtCurrentCursor(
           pageInfo.url,
           pageInfo.title || pageInfo.url

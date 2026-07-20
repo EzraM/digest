@@ -12,6 +12,7 @@ import { LeftRail } from "./LeftRail";
 import { BlockRouteStatusBar } from "./BlockRouteStatusBar";
 import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
 import { BlockNotificationContext } from "../../context/BlockNotificationContext";
+import { useBrowserLoadState } from "../../hooks/useBrowserLoadState";
 
 type BlockRouteViewContentProps = {
   blockId: string | undefined; // undefined for ephemeral URL routes
@@ -38,6 +39,7 @@ export const BlockRouteViewContent = ({
   onBack,
 }: BlockRouteViewContentProps) => {
   const urlString = url;
+  const loadStatus = useBrowserLoadState(viewId);
 
   const initialUrlRef = useRef(urlString);
   const [currentBrowserUrl, setCurrentBrowserUrl] = useState(urlString);
@@ -91,6 +93,17 @@ export const BlockRouteViewContent = ({
 
     onBack();
   }, [blockId, editor, onBack]);
+
+  const handleReload = useCallback(() => {
+    void window.electronAPI.browser.reload(viewId).then((result) => {
+      if (!result.success) {
+        console.error(
+          "[BlockRouteViewContent] Failed to reload page:",
+          result.error
+        );
+      }
+    });
+  }, [viewId]);
 
   // Get page tool slot content
   const pageToolContext = useContext(PageToolSlotContext);
@@ -171,6 +184,8 @@ export const BlockRouteViewContent = ({
           />
           <BlockRouteStatusBar
             url={displayUrl}
+            loadStatus={loadStatus}
+            onReload={handleReload}
             copied={copied}
             onCopy={handleCopy}
             devToolsAvailable={devToolsAvailable}

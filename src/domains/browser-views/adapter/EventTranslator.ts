@@ -43,7 +43,6 @@ export class EventTranslator {
 
     webContents.on('did-start-loading', () => {
       log.debug(`[${id}] did-start-loading`, 'EventTranslator');
-      hasErrored = false;
       dispatch({ type: 'markLoading', id });
     });
 
@@ -76,13 +75,17 @@ export class EventTranslator {
         'EventTranslator'
       );
 
-      // Only mark as ready if we haven't seen an error
+      // did-finish-load is not guaranteed to pair with did-start-loading.
+      // did-stop-loading below owns the terminal ready transition.
+    });
+
+    webContents.on('did-stop-loading', () => {
+      const url = webContents.getURL();
+      log.debug(`[${id}] did-stop-loading at ${url}`, 'EventTranslator');
+
       if (!hasErrored) {
         updateNavigation(url);
-        dispatch({
-          type: 'markReady',
-          id,
-        });
+        dispatch({ type: 'markReady', id });
       } else {
         log.debug(
           `[${id}] Skipping markReady because hasErrored=true`,

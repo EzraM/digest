@@ -1,0 +1,134 @@
+.browser-load-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0;
+}
+
+.browser-load-indicator {
+  --load-color: #2f9eeb;
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  color: var(--load-color);
+}
+
+.browser-load-control__refresh {
+  box-sizing: border-box;
+  width: 0;
+  height: 18px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  padding: 0;
+  color: #666;
+  font: 16px/18px sans-serif;
+  opacity: 0;
+  transform: translateX(-4px);
+  cursor: pointer;
+  transition:
+    width 140ms ease,
+    margin-left 140ms ease,
+    opacity 100ms ease,
+    transform 140ms ease,
+    background-color 100ms ease;
+}
+
+.browser-load-control:hover .browser-load-control__refresh,
+.browser-load-control:focus-within .browser-load-control__refresh {
+  width: 20px;
+  margin-left: 3px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.browser-load-control__refresh:hover,
+.browser-load-control__refresh:focus-visible {
+  background: #f1f3f5;
+  color: #1c7ed6;
+  outline: none;
+}
+
+.browser-load-control__refresh:active {
+  transform: rotate(35deg);
+}
+
+.browser-load-indicator--loaded {
+  --load-color: #2b8a3e;
+}
+
+.browser-load-indicator--error {
+  --load-color: #e03131;
+}
+
+.browser-load-indicator__globe {
+  position: relative;
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.9;
+}
+
+.browser-load-indicator__latitude,
+.browser-load-indicator__longitude {
+  position: absolute;
+  inset: 50% 1px auto;
+  border-top: 1px solid currentColor;
+  transform: translateY(-50%);
+}
+
+.browser-load-indicator__longitude {
+  inset: 1px auto 1px 50%;
+  width: 5px;
+  border: 0;
+  border-left: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.browser-load-indicator__signal {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  box-sizing: border-box;
+  width: 5px;
+  height: 5px;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.browser-load-indicator--loading .browser-load-indicator__globe {
+  border-right-color: transparent;
+  animation: browser-globe-spin 850ms linear infinite;
+}
+
+.browser-load-indicator--loading .browser-load-indicator__signal {
+  animation: browser-load-pulse 850ms ease-in-out infinite alternate;
+}
+
+@keyframes browser-globe-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes browser-load-pulse {
+  to { transform: scale(0.55); opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-load-indicator--loading .browser-load-indicator__globe,
+  .browser-load-indicator--loading .browser-load-indicator__signal {
+    animation: none;
+  }
+
+  .browser-load-control__refresh {
+    transition: none;
+  }
+}

@@ -1,8 +1,12 @@
 import React from "react";
 import { ClipDraftsButton } from "../clip/ClipDraftsButton";
+import { BrowserLoadStatus } from "../../types/browser";
+import "./BlockRouteStatusBar.css";
 
 type BlockRouteStatusBarProps = {
   url: string;
+  loadStatus: BrowserLoadStatus;
+  onReload: () => void;
   copied: boolean;
   onCopy: () => void;
   devToolsAvailable: boolean;
@@ -13,6 +17,8 @@ type BlockRouteStatusBarProps = {
 
 export const BlockRouteStatusBar = ({
   url,
+  loadStatus,
+  onReload,
   copied,
   onCopy,
   devToolsAvailable,
@@ -36,7 +42,41 @@ export const BlockRouteStatusBar = ({
         color: "#666",
       }}
     >
-      <span aria-hidden="true">🌐</span>
+      <span className="browser-load-control">
+        <span
+          className={`browser-load-indicator browser-load-indicator--${loadStatus}`}
+          role="img"
+          aria-label={
+            loadStatus === "loading"
+              ? "Page loading"
+              : loadStatus === "error"
+                ? "Page failed to load"
+                : "Page loaded"
+          }
+          title={
+            loadStatus === "loading"
+              ? "Loading page"
+              : loadStatus === "error"
+                ? "Page failed to load"
+                : "Page loaded"
+          }
+        >
+          <span className="browser-load-indicator__globe" aria-hidden="true">
+            <span className="browser-load-indicator__latitude" />
+            <span className="browser-load-indicator__longitude" />
+          </span>
+          <span className="browser-load-indicator__signal" aria-hidden="true" />
+        </span>
+        <button
+          className="browser-load-control__refresh"
+          type="button"
+          onClick={onReload}
+          title="Refresh page"
+          aria-label="Refresh page"
+        >
+          <span aria-hidden="true">&#x21bb;</span>
+        </button>
+      </span>
       <button
         type="button"
         onClick={onCopy}

@@ -72,6 +72,15 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
       });
     }
 
+    case "reload": {
+      const existing = world.get(cmd.id);
+      if (!existing) return world;
+      return new Map(world).set(cmd.id, {
+        ...existing,
+        loadState: { type: "loading" },
+      });
+    }
+
     case "retry": {
       const existing = world.get(cmd.id);
       if (!existing) return world;

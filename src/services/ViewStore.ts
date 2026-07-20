@@ -175,6 +175,11 @@ export class ViewStore {
     this.dispatch({ type: "retry", id: blockId });
   }
 
+  reloadView(viewId: string): void {
+    log.debug(`[${viewId}] Reloading view`, "ViewStore");
+    this.dispatch({ type: "reload", id: viewId });
+  }
+
   /**
    * Get the HandleRegistry (for compatibility with existing code that needs WebContentsView access)
    */

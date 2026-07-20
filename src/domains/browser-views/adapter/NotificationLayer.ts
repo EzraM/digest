@@ -1,6 +1,7 @@
 import { WebContents } from "electron";
 import { LoadState, ViewWorld } from "../core/types";
 import { log } from "../../../utils/mainLogger";
+import { BrowserLifecycleEvent } from "../../../types/browser";
 
 const EVENTS = {
   BROWSER: {
@@ -68,7 +69,7 @@ export class NotificationLayer {
     switch (loadState.type) {
       case "loading":
         log.debug(`[${id}] Sending loading notification`, "NotificationLayer");
-        this.rendererWebContents.send(EVENTS.BROWSER.INITIALIZED, {
+        this.sendLifecycleEvent({
           blockId: id,
           success: true,
           status: "loading",
@@ -77,7 +78,7 @@ export class NotificationLayer {
 
       case "ready":
         log.debug(`[${id}] Sending ready notification`, "NotificationLayer");
-        this.rendererWebContents.send(EVENTS.BROWSER.INITIALIZED, {
+        this.sendLifecycleEvent({
           blockId: id,
           success: true,
           status: "loaded",
@@ -89,15 +90,20 @@ export class NotificationLayer {
           `[${id}] Sending error notification: ${loadState.message} (${loadState.code})`,
           "NotificationLayer",
         );
-        this.rendererWebContents.send(EVENTS.BROWSER.INITIALIZED, {
+        this.sendLifecycleEvent({
           blockId: id,
           success: false,
+          status: "error",
           error: `Failed to load: ${loadState.message} (${loadState.code})`,
           errorCode: loadState.code,
           errorDescription: loadState.message,
         });
         break;
     }
+  }
+
+  private sendLifecycleEvent(event: BrowserLifecycleEvent): void {
+    this.rendererWebContents.send(EVENTS.BROWSER.INITIALIZED, event);
   }
 
   private sendNavigationNotification(

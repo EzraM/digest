@@ -9,7 +9,7 @@ export interface PageProps {
 
 export type BrowserInitStatus =
   | { state: "idle" }
-  | { state: "initializing"; detail?: "created" | "existing" | "loaded" }
+  | { state: "initializing" }
   | { state: "initialized" }
   | { state: "error"; error: BrowserInitError };
 
