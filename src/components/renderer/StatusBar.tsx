@@ -1,7 +1,7 @@
 import { Box, Text, Group } from "@mantine/core";
 import { useContext } from "react";
 import { ClipDraftContext } from "../../context/ClipDraftContext";
-import { ClipButtons } from "../clip/ClipButtons";
+import { ClipDraftsButton } from "../clip/ClipDraftsButton";
 
 type StatusBarProps = {
   breadcrumbText: string;
@@ -60,7 +60,7 @@ export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
             {breadcrumbText}
           </Text>
         </Box>
-        <ClipButtons context="notebook" placement="toolbar" />
+        <ClipDraftsButton />
       </Group>
       {hasDrafts && (
         <Box

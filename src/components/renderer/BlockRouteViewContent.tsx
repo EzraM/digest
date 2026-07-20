@@ -132,6 +132,7 @@ export const BlockRouteViewContent = ({
       >
         {/* Left sidebar - minimize/expand toggle */}
         <LeftRail
+          viewId={viewId}
           onBack={handleBack}
           canGoBrowserBack={canGoBack}
           isNavigatingBrowserBack={isNavigatingBack}
@@ -169,7 +170,6 @@ export const BlockRouteViewContent = ({
             isVisible={hasActiveNotifications}
           />
           <BlockRouteStatusBar
-            viewId={viewId}
             url={displayUrl}
             copied={copied}
             onCopy={handleCopy}

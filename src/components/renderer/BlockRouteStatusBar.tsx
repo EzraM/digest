@@ -1,8 +1,7 @@
 import React from "react";
-import { ClipButtons } from "../clip/ClipButtons";
+import { ClipDraftsButton } from "../clip/ClipDraftsButton";
 
 type BlockRouteStatusBarProps = {
-  viewId: string;
   url: string;
   copied: boolean;
   onCopy: () => void;
@@ -13,7 +12,6 @@ type BlockRouteStatusBarProps = {
 };
 
 export const BlockRouteStatusBar = ({
-  viewId,
   url,
   copied,
   onCopy,
@@ -62,7 +60,7 @@ export const BlockRouteStatusBar = ({
         {copied ? "Copied · " : ""}
         {url}
       </button>
-      <ClipButtons context="page" viewId={viewId} placement="toolbar" />
+      <ClipDraftsButton />
       {devToolsAvailable && (
         <button
           type="button"

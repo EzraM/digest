@@ -118,6 +118,20 @@ const insertInlineLinkBlock = (
   return true;
 };
 
+export const insertInlineLinkAtCurrentCursor = (
+  url: string,
+  title: string
+): boolean => {
+  if (!currentEditor) {
+    return false;
+  }
+
+  return insertInlineLinkBlock(currentEditor, {
+    url,
+    title: title.trim() || url,
+  });
+};
+
 const isCurrentBlockRoute = (blockId: string): boolean => {
   const blockRouteMatch = window.location.hash.match(/^#\/block\/([^?/]*)/);
   return blockRouteMatch

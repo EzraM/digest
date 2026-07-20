@@ -34,6 +34,37 @@
   min-height: 0;
 }
 
+.left-rail__add {
+  box-sizing: border-box;
+  flex: 0 0 15%;
+  min-height: 2rem;
+  border: 0;
+  border-right: 1px solid #1864ab;
+  border-bottom: 1px solid #1864ab;
+  background: #228be6;
+  color: #fff;
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+  transition:
+    background-color 150ms ease,
+    transform 100ms ease;
+}
+
+.left-rail__add:hover {
+  background: #1c7ed6;
+}
+
+.left-rail__add:active {
+  background: #1971c2;
+}
+
+.left-rail__add:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .left-rail__browser-back,
   .left-rail__browser-back svg {

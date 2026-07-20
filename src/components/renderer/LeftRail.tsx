@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useMantineColorScheme } from "@mantine/core";
 import { sidebarButtonColors } from "../../config/theme";
+import { AddPageButton } from "../clip/AddPageButton";
 import "./LeftRail.css";
 
 const BrowserBackIcon = () => (
@@ -48,6 +49,7 @@ const NotebookIcon = () => (
 );
 
 type LeftRailProps = {
+  viewId: string;
   onBack: () => void;
   canGoBrowserBack: boolean;
   isNavigatingBrowserBack: boolean;
@@ -55,6 +57,7 @@ type LeftRailProps = {
 };
 
 export const LeftRail = ({
+  viewId,
   onBack,
   canGoBrowserBack,
   isNavigatingBrowserBack,
@@ -80,6 +83,7 @@ export const LeftRail = ({
         flexDirection: "column",
       }}
     >
+      <AddPageButton viewId={viewId} />
       <button
         className="left-rail__browser-back"
         data-available={canGoBrowserBack}
