@@ -44,7 +44,7 @@ The immediate reason Digest loses this state is lifecycle rather than a Chromium
 ### Adding a page
 
 1. A URL is added to the notebook as a site block.
-2. Digest loads a browser view for the page, potentially as part of the existing creation notification.
+2. Digest explicitly warms a browser view for the page if newly inserted pages should become live before first open.
 3. Once the page is ready, the view is associated with the site block.
 4. When no longer visible, the view is detached from the window but remains alive in the cache.
 5. A green dot appears beside the link in the editor.
@@ -307,10 +307,13 @@ The cache should never keep preview-only views that failed to become valid noteb
 
 ### Stage 5: Remove legacy preview notifications
 
-- Remove the site-block preview component and its browser view lifecycle.
-- Remove the old block-notification provider, container, hook, layout reservation, and route row after confirming no remaining producer needs them.
-- Replace any still-reachable background site-block creation feedback with lightweight UI that does not create a browser view.
-- Add an explicit cache warm/create operation for newly added site blocks if they should become live before first open.
+Status: preview cleanup completed July 20, 2026; cache warming and command-click feedback remain separate follow-up work.
+
+- [x] Remove the site-block preview component and its browser view lifecycle.
+- [x] Remove the old block-notification provider, container, hook, layout reservation, and route row.
+- [x] Remove the unreachable `browser:new-block` / `browser:create-block` producer chain and its editor, preload, main-process, and renderer API wiring.
+- [ ] Improve command-click feedback through the existing link-capture path without creating a browser view.
+- [ ] Add an explicit cache warm/create operation for newly added site blocks if they should become live before first open.
 
 ### Stage 6: Add cold restoration
 
@@ -379,7 +382,7 @@ The live-page work exposes two overlapping notification systems and several piec
 
 ### Legacy site-block preview system
 
-These pieces form the old background site-block preview path and are candidates for removal:
+Completed July 20, 2026. The old background site-block preview path was removed:
 
 - `src/Browser/components/SiteBlockNotification.tsx`
 - `src/Browser/components/SiteBlockNotification.css`
@@ -392,15 +395,17 @@ These pieces form the old background site-block preview path and are candidates 
 - Notification-driven grid rows and margins in `RendererLayout.tsx` and `BlockRouteViewContent.tsx`
 - The preview-specific `removeBrowser()` call and `${blockId}-preview` view convention
 
-The old producer chain also needs a reachability decision:
+The old producer chain was confirmed unreachable by repository search and removed:
 
 - `browser:new-block` constants and preload subscription
 - `onNewBrowserBlock` in the renderer API
 - `createNewBrowserBlock()` and the module-level `onBlockCreatedCallback` in `useRendererEditor.ts`
 - `browser:create-block` IPC and `electronAPI.browser.createBlock()`
-- `createBrowserBlock` and `setLinkClickCallback()` wiring in `main.ts` and `ViewStore`
+- `createBrowserBlock` and the preview-path `setLinkClickCallback()` wiring in `main.ts`, `ViewStore`, and `EventTranslator`
 
-Repository search currently finds no renderer caller of `electronAPI.browser.createBlock()`. `EventTranslator` also navigates foreground/new-window dispositions in the current page and sends command-clicks through the inline-link path. That makes the old `browser:new-block` path appear unreachable from current UI, but it should be confirmed with an application smoke test before deletion.
+`EventTranslator` continues to navigate foreground/new-window dispositions in the current page, while command-clicks continue through the inline-link and `browser:link-captured` path. The unrelated notebook-context `LinkInterceptionService.setLinkClickCallback()` remains in place because it routes intercepted links to URL routes rather than creating preview blocks.
+
+Validation for the cleanup included a repository-wide reference search, targeted ESLint with no errors, and `git diff --check`. A full TypeScript check remains blocked by pre-existing errors outside this cleanup. An application smoke test is still recommended alongside the remaining Stage 5 work.
 
 ### Command-click feedback that must replace it
 
