@@ -396,11 +396,16 @@ The first useful vertical slice is working for both legacy site blocks and norma
 - Leaving a retained page detaches its `WebContentsView`; reopening the same normalized URL in the same profile reattaches it without `loadURL()`.
 - Current-document reuse is intentionally distinct from an older URL merely visited by the journey. Older-history restoration is not implemented yet.
 - `ViewStore.openReference()` is the authoritative main-process opening workflow used by the existing renderer update channel.
-- Opening policy and miss classification live in the functional core (`BrowsingJourneyStore` and `LivePageOpenPolicy`); `ViewStore` executes Electron effects and commits placement changes only after attachment succeeds.
+- Opening policy and miss classification live in the functional core (`BrowsingJourneyStore` and `LivePageOpenPolicy`); `ViewStore` orchestrates the workflow, `Interpreter` executes Electron view effects, and placement changes are committed only after attachment succeeds.
 - Attachment failure and destroyed renderer paths discard stale journey state and fall back to fresh creation.
 - Migration 8 creates `live_page_cache_attempts`. Opens record privacy-conscious `hit_current` or `miss` outcomes, miss reasons, hashed URL/profile identity, cache occupancy, and `load_avoided` without storing complete URLs.
 - Application logs confirmed repeated normal-link opens detach and reattach the same live journey with no second `Creating new view` or `Loading URL` event.
+- The renderer now receives a complete runtime-only projection of current live pages keyed by profile and normalized URL. The initial snapshot is fetched through IPC, and the main process republishes it after creation, reuse, navigation, detach, eviction, and destruction.
+- Site blocks and ordinary inline notebook links render a restrained green dot when their profile and URL resolve to a current live page. The indicator has the accessible description and tooltip “Page is kept live.”
+- Liveness is not written into BlockNote props or SQLite notebook content. Journey and handle identity remain main-process implementation details.
+- `NotificationLayer` owns renderer IPC for live-reference, placement-ready, navigation, and browser-selection events. `ViewStore` decides when domain changes warrant notification but does not access renderer `WebContents` or call `send()` directly.
 - Logical Back boundaries are deferred and are no longer required for the next implementation stages.
+- Manual `scrollPercent` capture, persistence, and restoration remain active as a fallback pending the Stage 7 validation and cleanup.
 
 Remaining work is primarily older-history association, richer miss diagnostics and eviction tombstones, reference reconciliation, and removal of manual scroll persistence after broader validation.
 
@@ -442,9 +447,13 @@ Logical Back boundaries are deferred. They should only be reconsidered if preser
 
 ### Stage 5: Surface liveness in the notebook
 
+Status: completed July 21, 2026. The first projection is URL-based within a profile, so references to the same normalized URL share the same live indication. Stable per-inline-reference identity remains unnecessary until references need to distinguish multiple live instances of one URL.
+
 - [x] Replace block-ID snapshots with a profile-and-URL live-reference projection.
 - [x] Render the accessible green dot for site blocks and inline links that resolve to a suitable live association.
 - [x] Keep the projection entirely in runtime IPC/renderer state; notebook persistence includes no live flag, journey ID, or association.
+- [x] Emit refreshed projections after lifecycle and navigation changes so indicators do not become stale.
+- [x] Keep renderer IPC side effects in `NotificationLayer` rather than `ViewStore`.
 
 ### Stage 6: Remove legacy preview notifications
 
@@ -458,10 +467,13 @@ Status: preview cleanup completed July 20, 2026; active-journey association and 
 
 ### Stage 7: Remove manual scroll persistence
 
-- Stop writing `scrollPercent` after validation.
-- Remove injected scroll tracking and restoration.
-- Remove associated IPC and renderer hooks.
-- Retain compatibility with existing documents during migration.
+Status: not started. All capture, persistence, IPC, and restoration paths are still active.
+
+- [ ] Smoke-test live reuse and the fresh-load experience after eviction.
+- [ ] Stop writing `scrollPercent` after validation.
+- [ ] Remove injected scroll tracking and restoration.
+- [ ] Remove associated IPC and renderer hooks.
+- [ ] Retain compatibility with existing documents during migration.
 
 ## Testing strategy
 
