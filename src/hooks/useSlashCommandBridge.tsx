@@ -38,7 +38,12 @@ export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
 
             log.debug("Inserting workspace block", "renderer");
 
-            // Close the suggestion menu - workspace block handles the UI
+            // BlockNote's suggestion-menu selection flow clears the query
+            // before executing an item. This removes the "/" trigger so
+            // insertOrUpdateBlock can replace the now-empty paragraph.
+            editor.suggestionMenus.clearQuery();
+
+            // Close the suggestion menu - workspace block handles the UI.
             editor.suggestionMenus.closeMenu();
 
             // Insert the workspace block at cursor
