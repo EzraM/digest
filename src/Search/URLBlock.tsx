@@ -1,16 +1,17 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { createBlockNoteExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
   CustomBlock,
-  CustomPartialBlock,
 } from "../types/schema";
+import { useAppRoute } from "../context/AppRouteContext";
 import { SearchBlockShell } from "./SearchBlockShell";
 
 export const URLExtensionName = "digest-url";
 const URLBlockTypes = new Set([URLExtensionName, "url"]);
+const navigators = new WeakMap<object, (url: string) => void>();
 
 // Type for inline content items
 interface InlineContentItem {
@@ -34,9 +35,10 @@ function getPlainTextFromInlineContent(content: InlineContentItem[]): string {
 function executeURLLoad(
   url: string,
   block: CustomBlock,
-  editor: CustomBlockNoteEditor
+  editor: CustomBlockNoteEditor,
+  navigateToUrl = navigators.get(editor)
 ): void {
-  if (!url.trim()) {
+  if (!url.trim() || !navigateToUrl) {
     return;
   }
 
@@ -47,12 +49,9 @@ function executeURLLoad(
     finalUrl = `https://${finalUrl}`;
   }
 
-  // Replace the URL block with a site block in place
-  editor.updateBlock(block, {
-    type: "site",
-    props: { url: finalUrl },
-    content: undefined,
-  } as unknown as CustomPartialBlock);
+  // The URL prompt is temporary. The opened page is saved only via the rail +.
+  editor.removeBlocks([block.id]);
+  navigateToUrl(finalUrl);
 }
 
 // Extension for handling Enter key in URLBlock
@@ -89,6 +88,16 @@ export const URL = createReactBlockSpec(
   {
     render: (props) => {
       const { block, editor, contentRef } = props;
+      const { navigateToUrl } = useAppRoute();
+
+      useEffect(() => {
+        navigators.set(editor, navigateToUrl);
+        return () => {
+          if (navigators.get(editor) === navigateToUrl) {
+            navigators.delete(editor);
+          }
+        };
+      }, [editor, navigateToUrl]);
 
       const handleLoad = useCallback(() => {
         // Extract the plain text from the block's inline content
@@ -96,8 +105,8 @@ export const URL = createReactBlockSpec(
           block.content as InlineContentItem[]
         );
 
-        executeURLLoad(url, block as CustomBlock, editor);
-      }, [block, editor]);
+        executeURLLoad(url, block as CustomBlock, editor, navigateToUrl);
+      }, [block, editor, navigateToUrl]);
 
       return (
         <SearchBlockShell

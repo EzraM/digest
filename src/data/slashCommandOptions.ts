@@ -124,7 +124,7 @@ export const slashCommandOptions: SlashCommandOption[] = [
   {
     key: "url",
     title: "URL",
-    subtext: "Load a URL in an embedded browser",
+    subtext: "Open a URL",
     aliases: ["l", "location", "url"],
     group: "Media",
   },
