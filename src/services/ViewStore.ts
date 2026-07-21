@@ -1,5 +1,9 @@
 import { BrowserWindow, WebContents } from "electron";
-import { ViewWorld, emptyWorld } from "../domains/browser-views/core/types";
+import {
+  ViewEntry,
+  ViewWorld,
+  emptyWorld,
+} from "../domains/browser-views/core/types";
 import { Command } from "../domains/browser-views/core/commands";
 import { reduce } from "../domains/browser-views/core/reducer";
 import { Interpreter } from "../domains/browser-views/adapter/Interpreter";
@@ -12,6 +16,15 @@ import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
 import { DownloadManager } from "./DownloadManager";
 import { BrowsingJourneyStore } from "./BrowsingJourneyStore";
+import {
+  CacheAttempt,
+  LivePageCacheTelemetry,
+} from "./LivePageCacheTelemetry";
+import {
+  CacheMissReason,
+  decideOpenReferenceExecution,
+  shouldRetainJourney,
+} from "./LivePageOpenPolicy";
 
 export type OpenReferenceRequest = {
   viewId: string;
@@ -21,6 +34,13 @@ export type OpenReferenceRequest = {
   profileId: string;
   layout?: "inline" | "full";
   referenceKind?: "site-block" | "ephemeral-url";
+};
+
+export type OpenReferenceResult = {
+  journeyId?: string;
+  outcome: "hit_current" | "miss";
+  missReason?: CacheMissReason;
+  loadAvoided: boolean;
 };
 
 /**
@@ -48,7 +68,8 @@ export class ViewStore {
   constructor(
     baseWindow: BrowserWindow,
     layerManager: ViewLayerManager | undefined,
-    rendererWebContents: WebContents
+    rendererWebContents: WebContents,
+    private readonly cacheTelemetry?: LivePageCacheTelemetry
   ) {
     this.notifications = new NotificationLayer(
       rendererWebContents,
@@ -122,129 +143,202 @@ export class ViewStore {
   }
 
   /** Authoritative main-process operation for opening any URL reference. */
-  openReference(update: OpenReferenceRequest): void {
+  openReference(update: OpenReferenceRequest): OpenReferenceResult | undefined {
     const handleId = this.resolveHandleId(update.viewId);
     const existing = this.world.get(handleId);
+    const diagnostics = this.journeys.getDiagnostics(
+      update.profileId,
+      update.url
+    );
 
-    if (!existing) {
-      const openPlan = this.journeys.planOpenReference({
-        placementId: update.viewId,
-        referenceId: update.blockId,
-        profileId: update.profileId,
-        url: update.url,
-      });
-      log.debug(
-        `[${update.viewId}] Open reference plan: ${openPlan.type}${
-          openPlan.type === "create" ? ` (${openPlan.reason})` : ""
-        } [kind=${update.referenceKind ?? "site-block"}]`,
-        "ViewStore"
+    if (existing) {
+      return this.updateExistingReference(
+        update,
+        handleId,
+        existing,
+        diagnostics
       );
-      const reusableView =
-        openPlan.type === "reuse-current"
-          ? this.handles.get(openPlan.handleId)
-          : undefined;
-      if (
-        openPlan.type === "reuse-current" &&
-        (!reusableView || reusableView.webContents.isDestroyed())
-      ) {
-        this.journeys.remove(openPlan.handleId);
-        this.dispatch({ type: "remove", id: openPlan.handleId });
-        this.notifyLivePagesChanged();
-      } else if (openPlan.type === "reuse-current") {
-        log.debug(
-          `[${update.viewId}] Reusing live journey ${openPlan.journeyId} via handle ${openPlan.handleId}`,
-          "ViewStore"
-        );
-        this.journeys.activatePlacement(openPlan);
-        this.interpreter.attachView(openPlan.handleId);
-        this.dispatch({
-          type: "updateBounds",
-          id: openPlan.handleId,
-          bounds: update.bounds,
-          layout: update.layout,
-        });
-        // A cache hit has no new Chromium load event, so explicitly complete
-        // initialization for the renderer placement that requested it.
+    }
+
+    const corePlan = this.journeys.planOpenReference({
+      placementId: update.viewId,
+      referenceId: update.blockId,
+      profileId: update.profileId,
+      url: update.url,
+    });
+    const reusableView =
+      corePlan.type === "reuse-current"
+        ? this.handles.get(corePlan.handleId)
+        : undefined;
+    const execution = decideOpenReferenceExecution(
+      corePlan,
+      diagnostics,
+      Boolean(reusableView && !reusableView.webContents.isDestroyed())
+    );
+
+    if (execution.type === "reuse-current") {
+      const attached = this.interpreter.attachView(execution.plan.handleId);
+      if (attached) {
+        this.journeys.activatePlacement(execution.plan);
+        this.updatePlacementBounds(execution.plan.handleId, update);
         this.notifyPlacementReady(update.viewId);
         this.notifyLivePagesChanged();
-        return;
+        return this.finishCacheAttempt(update, diagnostics, {
+          journeyId: execution.plan.journeyId,
+          outcome: "hit_current",
+          loadAvoided: true,
+        });
       }
+      this.discardJourney(execution.plan.handleId);
+      this.pendingCreates.delete(update.viewId);
+      return this.createReference(update, diagnostics, "attach_failed");
+    }
 
-      // Rate limiting: check if we recently requested to create this view with this URL
-      const pending = this.pendingCreates.get(update.viewId);
-      const now = Date.now();
+    if (execution.staleHandleId) {
+      this.discardJourney(execution.staleHandleId);
+    }
+    return this.createReference(update, diagnostics, execution.missReason);
+  }
 
-      if (pending) {
-        const elapsed = now - pending.timestamp;
-        if (pending.url === update.url && elapsed < ViewStore.CREATE_COOLDOWN_MS) {
-          log.debug(
-            `[${update.viewId}] Skipping duplicate create for ${update.url} (${elapsed}ms since last request)`,
-            "ViewStore"
-          );
-          return;
-        }
-      }
+  private updateExistingReference(
+    update: OpenReferenceRequest,
+    handleId: string,
+    existing: ViewEntry,
+    diagnostics: ReturnType<BrowsingJourneyStore["getDiagnostics"]>
+  ): OpenReferenceResult | undefined {
+    if (!this.journeys.isDetached(handleId)) {
+      this.updatePlacementBounds(handleId, update, existing);
+      return undefined;
+    }
 
-      // Track this create request
-      this.pendingCreates.set(update.viewId, { url: update.url, timestamp: now });
+    if (!this.interpreter.attachView(handleId)) {
+      this.discardJourney(handleId);
+      this.pendingCreates.delete(update.viewId);
+      return this.createReference(update, diagnostics, "attach_failed");
+    }
 
-      log.debug(
-        `[${update.viewId}] Creating new view for ${update.url}`,
-        "ViewStore"
+    // Commit only after the Electron attachment succeeds.
+    this.journeys.markVisible(handleId, update.viewId);
+    this.updatePlacementBounds(handleId, update, existing);
+    this.notifyPlacementReady(update.viewId);
+    this.notifyLivePagesChanged();
+    return this.finishCacheAttempt(update, diagnostics, {
+      journeyId: this.journeys.getJourneyId(handleId),
+      outcome: "hit_current",
+      loadAvoided: true,
+    });
+  }
+
+  private createReference(
+    update: OpenReferenceRequest,
+    diagnostics: ReturnType<BrowsingJourneyStore["getDiagnostics"]>,
+    missReason: CacheMissReason
+  ): OpenReferenceResult | undefined {
+    const pending = this.pendingCreates.get(update.viewId);
+    const now = Date.now();
+    if (
+      pending?.url === update.url &&
+      now - pending.timestamp < ViewStore.CREATE_COOLDOWN_MS
+    ) {
+      return undefined;
+    }
+    this.pendingCreates.set(update.viewId, { url: update.url, timestamp: now });
+    this.dispatch({
+      type: "create",
+      id: update.viewId,
+      url: update.url,
+      bounds: update.bounds,
+      profile: update.profileId,
+      layout: update.layout ?? "inline",
+    });
+
+    const createdView = this.handles.get(update.viewId);
+    const rendererAvailable = Boolean(
+      createdView && !createdView.webContents.isDestroyed()
+    );
+    if (shouldRetainJourney(update.layout) && rendererAvailable) {
+      this.destroyEvictedViews(
+        this.journeys.addVisible(
+          update.viewId,
+          update.profileId,
+          update.url,
+          update.blockId
+        )
       );
+      this.notifyLivePagesChanged();
+    }
+    return this.finishCacheAttempt(update, diagnostics, {
+      journeyId: this.journeys.getJourneyId(update.viewId),
+      outcome: "miss",
+      missReason: rendererAvailable ? missReason : "renderer_unavailable",
+      loadAvoided: false,
+    });
+  }
+
+  private updatePlacementBounds(
+    handleId: string,
+    update: OpenReferenceRequest,
+    existing = this.world.get(handleId)
+  ): void {
+    if (!existing) return;
+    const boundsChanged =
+      existing.bounds.x !== update.bounds.x ||
+      existing.bounds.y !== update.bounds.y ||
+      existing.bounds.width !== update.bounds.width ||
+      existing.bounds.height !== update.bounds.height;
+    const layoutChanged =
+      update.layout !== undefined && existing.layout !== update.layout;
+    if (boundsChanged || layoutChanged) {
       this.dispatch({
-        type: "create",
-        id: update.viewId,
-        url: update.url,
+        type: "updateBounds",
+        id: handleId,
         bounds: update.bounds,
-        profile: update.profileId,
-        layout: update.layout ?? "inline",
+        layout: update.layout,
       });
+    }
+  }
 
-      if (this.isCacheable(update.viewId, update.blockId, update.layout)) {
-        this.destroyEvictedViews(
-          this.journeys.addVisible(
-            update.viewId,
-            update.profileId,
-            update.url,
-            update.blockId
-          )
-        );
-        this.notifyLivePagesChanged();
-      }
-    } else {
-      if (this.journeys.isDetached(handleId)) {
-        log.debug(
-          `[${update.viewId}] Reattaching live journey via handle ${handleId}`,
-          "ViewStore"
-        );
-        this.interpreter.attachView(handleId);
-        this.journeys.markVisible(handleId, update.viewId);
-        this.notifyPlacementReady(update.viewId);
-        this.notifyLivePagesChanged();
-      }
+  private discardJourney(handleId: string): void {
+    this.journeys.remove(handleId);
+    this.dispatch({ type: "remove", id: handleId });
+    this.notifyLivePagesChanged();
+  }
 
-      // Check if we need to update bounds or layout
-      const boundsChanged =
-        existing.bounds.x !== update.bounds.x ||
-        existing.bounds.y !== update.bounds.y ||
-        existing.bounds.width !== update.bounds.width ||
-        existing.bounds.height !== update.bounds.height;
-      const layoutChanged =
-        update.layout !== undefined && existing.layout !== update.layout;
+  private finishCacheAttempt(
+    update: OpenReferenceRequest,
+    diagnostics: ReturnType<BrowsingJourneyStore["getDiagnostics"]>,
+    result: OpenReferenceResult
+  ): OpenReferenceResult {
+    this.recordCacheAttempt(update, diagnostics, result);
+    return result;
+  }
 
-      if (boundsChanged || layoutChanged) {
-        log.debug(
-          `[${update.viewId}] Updating bounds${layoutChanged ? " and layout" : ""}`,
-          "ViewStore"
-        );
-        this.dispatch({
-          type: "updateBounds",
-          id: handleId,
-          bounds: update.bounds,
-          layout: update.layout,
-        });
-      }
+  private recordCacheAttempt(
+    update: OpenReferenceRequest,
+    diagnostics: ReturnType<BrowsingJourneyStore["getDiagnostics"]>,
+    result: OpenReferenceResult
+  ): void {
+    if (!this.cacheTelemetry || update.layout !== "full") return;
+    const finalDiagnostics = this.journeys.getDiagnostics(
+      update.profileId,
+      update.url
+    );
+    const attempt: CacheAttempt = {
+      profileId: update.profileId,
+      referenceKind: update.referenceKind ?? "site-block",
+      requestedUrl: update.url,
+      outcome: result.outcome,
+      missReason: result.missReason,
+      candidateCount: diagnostics.candidateCount,
+      cacheSize: finalDiagnostics.cacheSize,
+      detachedCount: finalDiagnostics.detachedCount,
+      reusedJourney: result.outcome === "hit_current",
+      loadAvoided: result.loadAvoided,
+    };
+    try {
+      this.cacheTelemetry.record(attempt);
+    } catch (error) {
+      log.warn(`Failed to record live page cache attempt: ${error}`, "ViewStore");
     }
   }
 
@@ -274,16 +368,6 @@ export class ViewStore {
 
   getLivePageBlockIds(): string[] {
     return this.journeys.getLiveReferenceIds();
-  }
-
-  private isCacheable(
-    _viewId: string,
-    _blockId: string,
-    layout?: "inline" | "full"
-  ): boolean {
-    // Full-page URL routes are live journeys even when their renderer route ID
-    // is ephemeral. Ephemeral describes notebook durability, not browser state.
-    return layout === "full";
   }
 
   private destroyEvictedViews(viewIds: string[]): void {

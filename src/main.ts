@@ -33,6 +33,8 @@ import { IPCServiceBridge } from "./services/IPCServiceBridge";
 import { ImageProtocolService } from "./services/ImageProtocolService";
 import { fetchPageTitle } from "./domains/link-capture/adapter/fetchPageTitle";
 import { DownloadManager } from "./services/DownloadManager";
+import Database from "better-sqlite3";
+import { LivePageCacheTelemetry } from "./services/LivePageCacheTelemetry";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -183,7 +185,8 @@ const createWindow = async () => {
   const viewStore = new ViewStore(
     baseWindow,
     viewLayerManager,
-    appViewInstance.webContents
+    appViewInstance.webContents,
+    new LivePageCacheTelemetry(services.database as Database.Database)
   );
   // Helper to navigate to URL route (used by LinkInterceptionService for notebook context)
   const navigateToUrl = (url: string) => {

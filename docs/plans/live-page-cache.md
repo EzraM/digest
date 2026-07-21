@@ -6,7 +6,7 @@ Digest is a link-based browser. Notebook references are its durable short- and l
 
 The cache should retain a bounded number of browsing journeys. A journey owns one Electron `WebContentsView`, its navigation history, and the live runtime state of its current document. URLs encountered within that journey are indexed by profile and normalized URL so a notebook link can resume a suitable recently live page when possible.
 
-Opening a notebook link should feel like a fresh entry point even when Digest reuses a journey. Digest should establish a logical back-history boundary for that activation rather than promise that the underlying Chromium history is empty. This preserves live state without exposing unrelated earlier navigation through Digest's Back control.
+Opening a notebook link should feel immediate when Digest can reuse a journey. Logical Back boundaries were part of the original design, but are deferred as of July 21, 2026; the current implementation preserves the journey's Chromium history without adding a Digest-specific activation boundary.
 
 Inline links, legacy site blocks, and ephemeral URL routes are all notebook or route references to URLs. None of them should directly own a `WebContentsView`. A small green dot may indicate that a reference currently resolves to a suitable live page in its profile.
 
@@ -23,7 +23,7 @@ The initial implementation keyed live views by layout-qualified block ID. Furthe
 - The same profile and URL may eventually have more than one independent live instance, so `(profileId, normalizedUrl)` is a lookup index rather than a uniqueness constraint.
 - Layout is placement. Moving a journey between detached, inline, and full presentation must not create a second browser identity.
 
-The existing block-keyed `LivePageCache` remains useful as a prototype of bounded LRU behavior, but it should be replaced or generalized before broader link support is built on top of it.
+The block-keyed `LivePageCache` prototype has now been replaced by `BrowsingJourneyStore`. The implementation still uses Electron handle IDs internally, while opaque journey identity, placement identity, URL associations, and reference associations are maintained separately in the journey core.
 
 ## Motivation
 
@@ -78,8 +78,7 @@ Adding a reference must not create a second `WebContentsView` or reload the page
 1. The user clicks an inline link, legacy site block, or another supported URL reference.
 2. Digest resolves the reference's profile and normalized URL against the live-page index.
 3. If a suitable association exists, Digest activates its journey and selects the associated live page.
-4. Digest records a logical Back boundary for this activation.
-5. If no suitable association exists, Digest creates a fresh journey with fresh Chromium history and loads the URL.
+4. If no suitable association exists, Digest creates a fresh journey with fresh Chromium history and loads the URL.
 
 If the requested URL is already the current live document, the user receives its exact retained runtime state. If it is an older entry in the journey, activation is best-effort because Chromium may have discarded that document from its back/forward cache.
 
@@ -169,7 +168,6 @@ The current remove operation combines different meanings and needs to be split. 
 - Mark the journey `visible`.
 - Update its recency.
 - Do not call `loadURL()` on a cache hit.
-- Establish a logical Back boundary for the notebook-link activation.
 
 ### Destroy
 
@@ -193,7 +191,7 @@ Deleting a notebook reference removes its reference association. It must not aut
 - If the requested URL is the journey's current document, attach it directly.
 - If it corresponds to a retained navigation entry, navigate to that entry and accept best-effort restoration.
 - If the association is stale or ambiguous, load the requested URL in a fresh journey rather than surprising the user with the wrong page state.
-- Set the Digest Back boundary after activation. Digest's Back control must not cross the boundary even if older Chromium entries remain underneath.
+- Preserve the journey's Chromium history. A Digest-specific activation boundary is deferred unless user testing demonstrates a concrete need.
 
 ## Identity and relationships
 
@@ -389,39 +387,58 @@ The primary product metric is `load_avoided`, not the broader lookup hit rate. A
 
 Do not relax URL normalization based on anecdotes. Collect enough reference-open attempts to identify a stable pattern. Known tracking parameters may later be removed through a narrow allowlist if the data shows meaningful benefit. Query strings, fragments, or path components must not be discarded generically because they may represent application state.
 
+## Implementation status: July 21, 2026
+
+The first useful vertical slice is working for both legacy site blocks and normal notebook links:
+
+- `BrowsingJourneyStore` owns opaque journey identity, placement relationships, conservative URL associations, profile isolation, and per-profile bounded LRU policy.
+- Full-page ephemeral URL routes are retained as live journeys. “Ephemeral” now describes route durability rather than whether the browser runtime may be cached.
+- Leaving a retained page detaches its `WebContentsView`; reopening the same normalized URL in the same profile reattaches it without `loadURL()`.
+- Current-document reuse is intentionally distinct from an older URL merely visited by the journey. Older-history restoration is not implemented yet.
+- `ViewStore.openReference()` is the authoritative main-process opening workflow used by the existing renderer update channel.
+- Opening policy and miss classification live in the functional core (`BrowsingJourneyStore` and `LivePageOpenPolicy`); `ViewStore` executes Electron effects and commits placement changes only after attachment succeeds.
+- Attachment failure and destroyed renderer paths discard stale journey state and fall back to fresh creation.
+- Migration 8 creates `live_page_cache_attempts`. Opens record privacy-conscious `hit_current` or `miss` outcomes, miss reasons, hashed URL/profile identity, cache occupancy, and `load_avoided` without storing complete URLs.
+- Application logs confirmed repeated normal-link opens detach and reattach the same live journey with no second `Creating new view` or `Loading URL` event.
+- Logical Back boundaries are deferred and are no longer required for the next implementation stages.
+
+Remaining work is primarily older-history association, richer miss diagnostics and eviction tombstones, inline-link liveness projection, reference reconciliation, and removal of manual scroll persistence after broader validation.
+
 ## Proposed implementation stages
 
 ### Stage 1: Preserve the working lifecycle prototype
 
-- Keep explicit detach and destroy operations.
-- Keep detached views in the handle registry.
-- Retain deterministic LRU tests and the rule that visible views are never evicted.
-- Do not add more block-ID ownership assumptions to the prototype.
+- [x] Keep explicit detach and destroy operations.
+- [x] Keep detached views in the handle registry.
+- [x] Retain deterministic LRU tests and the rule that visible views are never evicted.
+- [x] Do not add more block-ID ownership assumptions to the prototype.
 
 ### Stage 2: Introduce journey identity
 
-- Add opaque `journeyId` identity independent of block ID, URL, and layout.
-- Make `BrowsingJourneyStore` own `WebContentsView` handles and LRU state.
-- Treat detached, inline, and full as placements of the same journey.
-- Scope journey lookup and reuse by profile.
+- [x] Add opaque `journeyId` identity independent of block ID, URL, and layout.
+- [x] Make `BrowsingJourneyStore` own handle associations and LRU state while Electron handles remain in `HandleRegistry`.
+- [x] Treat renderer IDs as placements that may resolve to a retained journey handle.
+- [x] Scope journey lookup and reuse by profile.
 
 ### Stage 3: Add profile/URL associations
 
-- Add a conservative URL normalizer.
-- Index zero or more live associations by `(profileId, normalizedUrl)`.
-- Track navigation entry identity or index where Electron exposes enough information.
-- Update the index as a journey navigates without mutating its originating notebook reference.
-- Prefer the most recent suitable association while allowing multiple instances of one URL.
+- [x] Add a conservative URL normalizer.
+- [x] Index zero or more live associations by `(profileId, normalizedUrl)`.
+- [ ] Track navigation entry identity or index where Electron exposes enough information.
+- [x] Update the index as a journey navigates without mutating its originating notebook reference.
+- [x] Prefer the most recent suitable current-document association while allowing multiple instances of one URL.
 
 ### Stage 4: Unify reference opening
 
-- Route inline links, legacy site blocks, and ephemeral URL routes through one open-reference operation.
-- Add the SQLite cache-attempt migration and record the final outcome at this operation.
-- Add diagnostic-only near-match classification and session-only eviction tombstones.
-- Reuse a suitable live journey or create a fresh journey on a miss.
-- Establish a logical Back boundary on every notebook-link activation.
-- Keep reference deletion and view eviction separate.
-- Validate the telemetry vocabulary with tests before using it to change matching policy.
+- [x] Route legacy site blocks and normal notebook URL routes through one `openReference` operation; inline links currently enter through the URL route.
+- [x] Add the SQLite cache-attempt migration and record the final outcome at this operation.
+- [ ] Add the complete diagnostic near-match classification and session-only eviction tombstones. Current telemetry distinguishes exact candidates from unrelated misses.
+- [x] Reuse a suitable current-document journey or create a fresh journey on a miss.
+- [ ] Restore older navigation entries on best-effort history hits.
+- [ ] Reconcile explicit reference deletion separately from view eviction.
+- [x] Validate core planning, profile diagnostics, retention policy, and telemetry privacy with focused tests and smoke assertions.
+
+Logical Back boundaries are deferred. They should only be reconsidered if preserved Chromium history causes a concrete navigation UX problem.
 
 ### Stage 5: Surface liveness in the notebook
 
@@ -468,7 +485,7 @@ Status: preview cleanup completed July 20, 2026; active-journey association and 
 - Open a page, scroll and interact, leave it, and reopen its reference without another network navigation.
 - Navigate within a page, leave, reopen, and verify back/forward history remains intact.
 - Open A, navigate to B, add B to the notebook, and verify both references associate with the same journey.
-- Open A or B from the notebook and verify Digest Back cannot cross that activation's logical boundary.
+- Deferred: if logical Back boundaries are reintroduced, verify Digest Back cannot cross an activation boundary.
 - Verify internal navigation never mutates the notebook reference that opened the journey.
 - Exceed the journey limit and verify every reference dependent on the evicted journey loses its dot.
 - Reopen an older journey before exceeding the limit and verify a different journey is evicted.
@@ -502,7 +519,7 @@ Status: preview cleanup completed July 20, 2026; active-journey association and 
 - Opaque journey identity independent of references, URLs, and layout.
 - Profile-isolated lookup with a bounded number of live journeys and LRU eviction.
 - `(profileId, normalizedUrl)` as a non-unique, recency-ordered lookup index.
-- Logical Back boundaries for fresh notebook-link activations.
+- Preserve Chromium history on live reuse; defer Digest-specific logical Back boundaries unless user testing demonstrates a need.
 - Reference deletion removes associations rather than automatically destroying journeys.
 - One green dot for both visible and detached live pages.
 - Runtime-only liveness state owned by the main process.

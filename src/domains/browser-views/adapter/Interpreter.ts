@@ -215,25 +215,31 @@ export class Interpreter {
     }
   }
 
-  attachView(id: string): void {
+  attachView(id: string): boolean {
     const view = this.handles.get(id);
     if (
       !view ||
       view.webContents.isDestroyed() ||
       this.baseWindow.isDestroyed()
     ) {
-      return;
+      return false;
     }
 
-    if (this.layerManager) {
-      this.layerManager.addView(
-        `browser-block-${id}`,
-        view,
-        ViewLayer.BROWSER_BLOCKS
-      );
-      this.layerManager.forceReorder();
-    } else {
-      this.baseWindow.contentView.addChildView(view);
+    try {
+      if (this.layerManager) {
+        this.layerManager.addView(
+          `browser-block-${id}`,
+          view,
+          ViewLayer.BROWSER_BLOCKS
+        );
+        this.layerManager.forceReorder();
+      } else {
+        this.baseWindow.contentView.addChildView(view);
+      }
+      return true;
+    } catch (error) {
+      log.warn(`[${id}] Failed to attach browser view: ${error}`, "Interpreter");
+      return false;
     }
   }
 

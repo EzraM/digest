@@ -38,6 +38,13 @@ export type OpenReferencePlan =
       reason: "no-current-association" | "matching-journey-visible";
     };
 
+export type JourneyCacheDiagnostics = {
+  candidateCount: number;
+  cacheSize: number;
+  detachedCount: number;
+  hasCrossProfileMatch: boolean;
+};
+
 /**
  * Serialize a URL without removing application-significant state. URL performs
  * only syntax-level normalization (for example, casing the host and removing a
@@ -159,6 +166,31 @@ export class BrowsingJourneyStore {
 
   getActivePlacementId(handleId: string): string {
     return this.activePlacementIdByHandleId.get(handleId) ?? handleId;
+  }
+
+  getJourneyId(handleId: string): string | undefined {
+    return this.getByHandle(handleId)?.journeyId;
+  }
+
+  getDiagnostics(profileId: string, url: string): JourneyCacheDiagnostics {
+    const normalizedUrl = normalizeJourneyUrl(url);
+    const profileJourneys = Array.from(this.journeys.values()).filter(
+      (journey) => journey.profileId === profileId
+    );
+    return {
+      candidateCount: profileJourneys.filter((journey) =>
+        journey.normalizedUrls.has(normalizedUrl)
+      ).length,
+      cacheSize: profileJourneys.length,
+      detachedCount: profileJourneys.filter(
+        (journey) => journey.placement === "detached"
+      ).length,
+      hasCrossProfileMatch: Array.from(this.journeys.values()).some(
+        (journey) =>
+          journey.profileId !== profileId &&
+          journey.normalizedUrls.has(normalizedUrl)
+      ),
+    };
   }
 
   markDetached(handleId: string): string[] {

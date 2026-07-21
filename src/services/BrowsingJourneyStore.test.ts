@@ -141,6 +141,20 @@ describe("BrowsingJourneyStore", () => {
     });
   });
 
+  it("reports profile-scoped occupancy and cross-profile matches", () => {
+    const store = new BrowsingJourneyStore(3, ids());
+    store.addVisible("a:full", "profile-a", "https://same.test", "a");
+    store.markDetached("a:full");
+    store.addVisible("b:full", "profile-b", "https://same.test", "b");
+
+    expect(store.getDiagnostics("profile-a", "https://same.test")).toEqual({
+      candidateCount: 1,
+      cacheSize: 1,
+      detachedCount: 1,
+      hasCrossProfileMatch: true,
+    });
+  });
+
   it("normalizes syntax without dropping query or fragment state", () => {
     expect(
       normalizeJourneyUrl("HTTPS://Example.COM:443/path?q=1#fragment")
