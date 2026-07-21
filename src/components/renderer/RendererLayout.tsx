@@ -87,6 +87,9 @@ export const RendererLayout = ({
         gridTemplateRows,
         gridTemplateAreas: `"toggle nav main aside" "toggle footer footer footer"${hasPageTool ? ' "toggle tool tool tool"' : ""}`,
         height: "100vh",
+        width: "100%",
+        minWidth: 0,
+        overflow: "hidden",
         position: "relative",
         backgroundColor: "var(--mantine-color-body)",
         transition: `grid-template-columns ${NAVBAR_TRANSITION_MS}ms ease, grid-template-rows ${NAVBAR_TRANSITION_MS}ms ease`,
@@ -132,6 +135,8 @@ export const RendererLayout = ({
             gridArea: "main",
             position: "relative",
             zIndex: 0,
+            minWidth: 0,
+            minHeight: 0,
             paddingBottom: FOOTER_HEIGHT + 8,
             overflow: "auto",
           }}

@@ -3,6 +3,9 @@ body {
   background-color: var(--mantine-color-body);
   color: var(--mantine-color-text);
   transition: background-color 0.2s ease, color 0.2s ease;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -16,6 +19,9 @@ body {
 #root {
   background-color: var(--mantine-color-body);
   color: var(--mantine-color-text);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 .bn-editor.bn-editor {

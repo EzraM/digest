@@ -63,11 +63,20 @@ export const useSize = (
         return null; // Not visible
       }
 
+      // Electron Rect values must be integers. Round the outer edges inward so
+      // the native view can never extend beyond the measured DOM intersection.
+      const x = Math.ceil(left);
+      const y = Math.ceil(top);
+      const roundedRight = Math.floor(right);
+      const roundedBottom = Math.floor(bottom);
+
+      if (roundedRight <= x || roundedBottom <= y) return null;
+
       return {
-        x: left,
-        y: top,
-        width: right - left,
-        height: bottom - top,
+        x,
+        y,
+        width: roundedRight - x,
+        height: roundedBottom - y,
       };
     };
 

@@ -114,19 +114,19 @@ export const BlockRouteViewContent = ({
     return `1fr 28px${hasPageTool ? " auto" : ""}`;
   }, [hasPageTool]);
 
-  // Build grid template columns: left toggle bar + main content
-  const gridTemplateColumns = "2rem 1fr";
-
   const resolvedProfileId = profileId ?? DEFAULT_PROFILE_ID;
 
   return (
     <DocumentProvider profileId={resolvedProfileId} documentId={docId}>
       <div
         style={{
-          height: "100vh",
+          position: "fixed",
+          inset: 0,
+          width: "100%",
+          height: "100%",
           backgroundColor: "#f5f6f8",
           display: "grid",
-          gridTemplateColumns,
+          gridTemplateColumns: `2rem minmax(0, 1fr)`,
           gridTemplateRows: "1fr",
           gap: 0,
           padding: 0,
@@ -147,6 +147,8 @@ export const BlockRouteViewContent = ({
           style={{
             display: "grid",
             gridTemplateRows,
+            minWidth: 0,
+            minHeight: 0,
             gap: 0,
             overflow: "hidden",
             transition: "grid-template-rows 180ms ease",
