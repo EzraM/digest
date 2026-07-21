@@ -2,7 +2,11 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 import { clipboard, contextBridge, ipcRenderer, nativeImage } from "electron";
 import { log } from "./utils/mainLogger";
-import { BrowserLifecycleEvent, BrowserPageInfo } from "./types/browser";
+import {
+  BrowserLifecycleEvent,
+  BrowserPageInfo,
+  LivePagesProjection,
+} from "./types/browser";
 log.debug("Preload script initialized", "preload");
 
 const EVENTS = {
@@ -60,9 +64,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     reload: (viewId: string) => ipcRenderer.invoke("browser:reload", viewId),
     getPageInfo: (viewId: string): Promise<BrowserPageInfo> =>
       ipcRenderer.invoke("browser:get-page-info", viewId),
-    getLivePages: (): Promise<{
-      references: Array<{ profileId: string; url: string }>;
-    }> =>
+    getLivePages: (): Promise<LivePagesProjection> =>
       ipcRenderer.invoke("browser:get-live-pages"),
     setScrollPercent: (blockId: string, scrollPercent: number) => {
       log.debug(
@@ -158,14 +160,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener(channel, handler);
   },
   onLivePagesChanged: (
-    callback: (data: {
-      references: Array<{ profileId: string; url: string }>;
-    }) => void
+    callback: (data: LivePagesProjection) => void
   ) => {
     const channel = "browser:live-pages-changed";
     const handler = (
       _: unknown,
-      data: { references: Array<{ profileId: string; url: string }> }
+      data: LivePagesProjection
     ) => callback(data);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);

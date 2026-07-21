@@ -1,6 +1,10 @@
 import { BlockOperation, OperationResult } from "./operations";
 import { DocumentRecord, DocumentTreeNode, ProfileRecord } from "./documents";
-import { BrowserLifecycleEvent, BrowserPageInfo } from "./browser";
+import {
+  BrowserLifecycleEvent,
+  BrowserPageInfo,
+  LivePagesProjection,
+} from "./browser";
 
 interface ElectronAPI {
   clipboard: {
@@ -34,9 +38,7 @@ interface ElectronAPI {
       viewId: string
     ) => Promise<{ success: boolean; error?: string }>;
     getPageInfo: (viewId: string) => Promise<BrowserPageInfo>;
-    getLivePages: () => Promise<{
-      references: Array<{ profileId: string; url: string }>;
-    }>;
+    getLivePages: () => Promise<LivePagesProjection>;
     setScrollPercent: (blockId: string, scrollPercent: number) => void;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
@@ -91,9 +93,7 @@ interface ElectronAPI {
     callback: (data: { blockId: string; scrollPercent: number }) => void
   ) => () => void;
   onLivePagesChanged: (
-    callback: (data: {
-      references: Array<{ profileId: string; url: string }>;
-    }) => void
+    callback: (data: import("./browser").LivePagesProjection) => void
   ) => () => void;
   onInsertLink: (
     callback: (data: {

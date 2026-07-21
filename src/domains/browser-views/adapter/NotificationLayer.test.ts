@@ -161,15 +161,19 @@ describe("NotificationLayer", () => {
     const messages: SentMessage[] = [];
     const notifications = new NotificationLayer(createRenderer(messages));
 
-    notifications.notifyLiveReferencesChanged([
-      { profileId: "profile-1", url: "https://example.com/" },
-    ]);
+    notifications.notifyLiveReferencesChanged({
+      revision: 7,
+      references: [
+        { profileId: "profile-1", url: "https://example.com/" },
+      ],
+    });
     notifications.notifyPlacementReady("placement-1");
 
     expect(messages).toEqual([
       {
         channel: "browser:live-pages-changed",
         payload: {
+          revision: 7,
           references: [
             { profileId: "profile-1", url: "https://example.com/" },
           ],

@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react";
-
-export type LiveReference = { profileId: string; url: string };
+import { LivePagesProjection } from "../types/browser";
 
 let liveReferenceKeys = new Set<string>();
+let currentRevision = -1;
 let initialized = false;
 const listeners = new Set<() => void>();
 
@@ -16,7 +16,9 @@ export function liveReferenceKey(profileId: string, url: string): string {
   return `${profileId}\u0000${normalizedUrl}`;
 }
 
-function publish(references: LiveReference[]): void {
+function publish({ revision, references }: LivePagesProjection): void {
+  if (revision <= currentRevision) return;
+  currentRevision = revision;
   liveReferenceKeys = new Set(
     references.map(({ profileId, url }) => liveReferenceKey(profileId, url))
   );
@@ -27,10 +29,10 @@ function initialize(): void {
   if (initialized) return;
   initialized = true;
 
-  window.electronAPI.onLivePagesChanged(({ references }) => publish(references));
+  window.electronAPI.onLivePagesChanged(publish);
   void window.electronAPI.browser
     .getLivePages()
-    .then(({ references }) => publish(references))
+    .then(publish)
     .catch((error) => {
       console.error("Failed to read live page cache state:", error);
     });

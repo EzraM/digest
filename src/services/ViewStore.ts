@@ -25,6 +25,8 @@ import {
   decideOpenReferenceExecution,
   shouldRetainJourney,
 } from "./LivePageOpenPolicy";
+import { LivePagesProjection } from "../types/browser";
+import { LivePageProjectionStore } from "./LivePageProjectionStore";
 
 export type OpenReferenceRequest = {
   viewId: string;
@@ -59,6 +61,7 @@ export class ViewStore {
 
   private downloadManager?: DownloadManager;
   private journeys = new BrowsingJourneyStore(10);
+  private livePages = new LivePageProjectionStore();
 
   // Rate limiting: track pending creates to prevent duplicate URL loads
   // Maps viewId -> { url, timestamp } of pending create commands
@@ -110,7 +113,7 @@ export class ViewStore {
 
       if (cmd.type === "updateNavigation") {
         this.journeys.recordNavigation(cmd.id, cmd.url);
-        this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
+        this.publishLiveReferences();
       }
 
       const cmdId = "id" in cmd ? cmd.id : undefined;
@@ -183,7 +186,7 @@ export class ViewStore {
         this.journeys.activatePlacement(execution.plan);
         this.updatePlacementBounds(execution.plan.handleId, update);
         this.notifications.notifyPlacementReady(update.viewId);
-        this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
+        this.publishLiveReferences();
         return this.finishCacheAttempt(update, diagnostics, {
           journeyId: execution.plan.journeyId,
           outcome: "hit_current",
@@ -222,7 +225,7 @@ export class ViewStore {
     this.journeys.markVisible(handleId, update.viewId);
     this.updatePlacementBounds(handleId, update, existing);
     this.notifications.notifyPlacementReady(update.viewId);
-    this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
+    this.publishLiveReferences();
     return this.finishCacheAttempt(update, diagnostics, {
       journeyId: this.journeys.getJourneyId(handleId),
       outcome: "hit_current",
@@ -266,7 +269,7 @@ export class ViewStore {
           update.blockId
         )
       );
-      this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
+      this.publishLiveReferences();
     }
     return this.finishCacheAttempt(update, diagnostics, {
       journeyId: this.journeys.getJourneyId(update.viewId),
@@ -302,7 +305,7 @@ export class ViewStore {
   private discardJourney(handleId: string): void {
     this.journeys.remove(handleId);
     this.dispatch({ type: "remove", id: handleId });
-    this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
+    this.publishLiveReferences();
   }
 
   private finishCacheAttempt(
@@ -351,7 +354,7 @@ export class ViewStore {
     const wasLive = this.journeys.remove(handleId);
     this.dispatch({ type: "remove", id: handleId });
     if (wasLive) {
-      this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
+      this.publishLiveReferences();
     }
   }
 
@@ -366,11 +369,22 @@ export class ViewStore {
     log.debug(`[${viewId}] Detaching live page`, "ViewStore");
     this.interpreter.detachView(handleId);
     this.destroyEvictedViews(this.journeys.markDetached(handleId));
-    this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
+    this.publishLiveReferences();
   }
 
   getLiveReferences(): Array<{ profileId: string; url: string }> {
     return this.journeys.getLiveReferences();
+  }
+
+  getLivePagesProjection(): LivePagesProjection {
+    return this.livePages.getSnapshot();
+  }
+
+  private publishLiveReferences(): void {
+    const projection = this.livePages.sync(this.getLiveReferences());
+    if (projection) {
+      this.notifications.notifyLiveReferencesChanged(projection);
+    }
   }
 
   private destroyEvictedViews(viewIds: string[]): void {

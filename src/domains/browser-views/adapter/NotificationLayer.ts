@@ -1,7 +1,10 @@
 import { WebContents } from "electron";
 import { LoadState, ViewWorld } from "../core/types";
 import { log } from "../../../utils/mainLogger";
-import { BrowserLifecycleEvent } from "../../../types/browser";
+import {
+  BrowserLifecycleEvent,
+  LivePagesProjection,
+} from "../../../types/browser";
 
 const EVENTS = {
   BROWSER: {
@@ -11,8 +14,6 @@ const EVENTS = {
     SELECTION: "browser:selection",
   },
 };
-
-type LiveReference = { profileId: string; url: string };
 
 type BrowserSelection = {
   blockId: string;
@@ -71,8 +72,8 @@ export class NotificationLayer {
     }
   }
 
-  notifyLiveReferencesChanged(references: LiveReference[]): void {
-    this.send(EVENTS.BROWSER.LIVE_PAGES_CHANGED, { references });
+  notifyLiveReferencesChanged(projection: LivePagesProjection): void {
+    this.send(EVENTS.BROWSER.LIVE_PAGES_CHANGED, projection);
   }
 
   notifyPlacementReady(placementId: string): void {

@@ -112,7 +112,7 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "browser:get-live-pages": {
       type: "invoke",
-      fn: () => ({ references: viewStore.getLiveReferences() }),
+      fn: () => viewStore.getLivePagesProjection(),
     },
     "browser:set-scroll-percent": {
       type: "on",

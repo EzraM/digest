@@ -1,5 +1,12 @@
 export type BrowserLoadStatus = "loading" | "loaded" | "error";
 
+export type LiveReference = { profileId: string; url: string };
+
+export type LivePagesProjection = {
+  revision: number;
+  references: LiveReference[];
+};
+
 export type BrowserLifecycleEvent =
   | {
       blockId: string;
