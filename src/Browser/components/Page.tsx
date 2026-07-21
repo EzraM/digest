@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState, useRef } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
 import { PageProps } from "../types";
 import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
 import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
@@ -15,11 +15,9 @@ export function Page({
   layout = "inline",
   scrollPercent,
   viewId: explicitViewId,
-  onReady,
 }: PageProps & {
   layout?: "inline" | "full";
   viewId?: string;
-  onReady?: (viewId: string) => void;
 }) {
   // For ephemeral URL pages (no blockId), generate a synthetic ID based on URL
   const blockId = providedBlockId ?? `ephemeral-${btoa(url).replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -41,18 +39,8 @@ export function Page({
     );
   const { initStatus, retryInitialization, getInitAttemptRef } =
     useBrowserInitialization(viewId);
-  const hasReportedReadyRef = useRef(false);
   const slotRef = useRef<HTMLDivElement>(null);
   const scrollContainer = useScrollContainer();
-
-  // Calculate height based on mode
-  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
-
-  useEffect(() => {
-    const handleResize = () => setViewportHeight(window.innerHeight);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   // For "full" layout, use 100% to fill the grid container (no scrolling on parent)
   // For "inline" layout, use a fixed height
@@ -79,19 +67,6 @@ export function Page({
       handleUrlChange(url);
     }
   }, [url, handleUrlChange]);
-
-  // Reset ready notification when view changes
-  useEffect(() => {
-    hasReportedReadyRef.current = false;
-  }, [viewId]);
-
-  useEffect(() => {
-    if (!onReady) return;
-    if (initStatus.state === "initialized" && !hasReportedReadyRef.current) {
-      hasReportedReadyRef.current = true;
-      onReady(viewId);
-    }
-  }, [initStatus.state, onReady, viewId]);
 
   // Send scrollPercent to main process when component mounts or scrollPercent changes
   useEffect(() => {

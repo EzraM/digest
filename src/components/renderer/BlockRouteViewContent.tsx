@@ -21,7 +21,6 @@ type BlockRouteViewContentProps = {
   viewId: string;
   editor: CustomBlockNoteEditor;
   onUrlChange?: (url: string) => void;
-  onReady?: (viewId: string) => void;
   onBack: () => void;
 };
 
@@ -33,7 +32,6 @@ export const BlockRouteViewContent = ({
   viewId,
   editor,
   onUrlChange,
-  onReady,
   onBack,
 }: BlockRouteViewContentProps) => {
   const urlString = url;
@@ -166,7 +164,6 @@ export const BlockRouteViewContent = ({
               url={urlString}
               layout="full"
               viewId={viewId}
-              onReady={onReady}
             />
           </div>
 

@@ -13,7 +13,6 @@ type BlockRouteViewProps = {
   viewId: string;
   editor: CustomBlockNoteEditor;
   onUrlChange?: (url: string) => void;
-  onReady?: (viewId: string) => void;
 };
 
 export const BlockRouteView = ({
@@ -25,7 +24,6 @@ export const BlockRouteView = ({
   viewId,
   editor,
   onUrlChange,
-  onReady,
 }: BlockRouteViewProps) => {
   const { route, goBack } = useAppRoute();
 
@@ -51,7 +49,6 @@ export const BlockRouteView = ({
       viewId={viewId}
       editor={editor}
       onUrlChange={onUrlChange}
-      onReady={onReady}
       onBack={handleMinimize}
     />
   );

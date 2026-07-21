@@ -21,7 +21,7 @@ import { ProfileDeleteModal } from "./components/renderer/ProfileDeleteModal";
 import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
-import { AppRouteProvider, useAppRoute, AppRoute } from "./context/AppRouteContext";
+import { AppRouteProvider, useAppRoute } from "./context/AppRouteContext";
 import { ClipDraftProvider } from "./context/ClipDraftContext";
 import { toFullViewId } from "./utils/viewId";
 import { PageToolSlotProvider } from "./context/PageToolSlotContext";
@@ -100,9 +100,6 @@ const RendererAppContent = () => {
     editor
   );
 
-  const [displayedRoute, setDisplayedRoute] = useState<AppRoute>(route);
-  const [handoffTarget, setHandoffTarget] = useState<AppRoute | null>(null);
-
   // Sync route with hash on initial load and when activeDocumentId becomes available
   useEffect(() => {
     if (route.kind === "doc" && !route.docId && activeDocumentId) {
@@ -130,43 +127,6 @@ const RendererAppContent = () => {
       // Ignore errors; renderer state will stay as-is
     });
   }, [route, activeDocumentId]);
-
-  useEffect(() => {
-    if (route.kind === "block" || route.kind === "url") {
-      // Entering block/url view; keep doc visible until full view ready
-      if (displayedRoute.kind === "doc") {
-        setHandoffTarget(route);
-      } else {
-        setDisplayedRoute(route);
-        setHandoffTarget(null);
-      }
-    } else {
-      // Doc route: render doc and clear handoff
-      setDisplayedRoute(route);
-      setHandoffTarget(null);
-    }
-  }, [displayedRoute.kind, route]);
-
-  const handleFullscreenReady = useCallback(
-    (viewId: string) => {
-      if (!handoffTarget) return;
-
-      const isBlockHandoff =
-        handoffTarget.kind === "block" &&
-        toFullViewId(handoffTarget.blockId) === viewId;
-
-      // For URL routes, generate synthetic blockId for comparison
-      const isUrlHandoff =
-        handoffTarget.kind === "url" &&
-        toFullViewId(`ephemeral-${btoa(handoffTarget.url).replace(/[^a-zA-Z0-9]/g, '')}`) === viewId;
-
-      if (isBlockHandoff || isUrlHandoff) {
-        setDisplayedRoute(handoffTarget);
-        setHandoffTarget(null);
-      }
-    },
-    [handoffTarget]
-  );
 
   const {
     handleDocumentSelect,
@@ -243,12 +203,6 @@ const RendererAppContent = () => {
   });
 
   const activeDocumentTitle = activeDocument?.title ?? null;
-  const isHandoff =
-    handoffTarget !== null &&
-    (handoffTarget.kind === "block" || handoffTarget.kind === "url") &&
-    displayedRoute.kind === "doc" &&
-    (route.kind === "block" || route.kind === "url");
-
   const showDebug = useCallback(async () => {
     setIsDebugSidebarVisible(true);
 
@@ -350,7 +304,6 @@ const RendererAppContent = () => {
           onUrlChange={(nextUrl) =>
             updateCachedBlockUrl(route.blockId, nextUrl)
           }
-          onReady={handleFullscreenReady}
         />
       )}
       {route.kind === "url" && (
@@ -362,11 +315,9 @@ const RendererAppContent = () => {
           title={route.url}
           viewId={toFullViewId(`ephemeral-${btoa(route.url).replace(/[^a-zA-Z0-9]/g, '')}`)}
           editor={editor}
-          onUrlChange={() => {}} // Ephemeral pages don't update block state
-          onReady={handleFullscreenReady}
         />
       )}
-      {(displayedRoute.kind === "doc" || isHandoff) && (
+      {route.kind === "doc" && (
         <RendererLayout
           isNavbarOpened={isNavbarOpened}
           onNavbarToggle={toggleNavbar}
