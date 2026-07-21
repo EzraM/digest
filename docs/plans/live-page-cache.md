@@ -2,11 +2,28 @@
 
 ## Summary
 
-Digest should treat recently added site blocks like lightweight browser tabs. The last ten recently used pages remain alive as detached Electron `WebContentsView` instances. Reopening one of those blocks reattaches the existing view instead of loading the URL again, preserving the page's real runtime state: scroll position, navigation history, form values, SPA state, and other in-page context.
+Digest is a link-based browser. Notebook references are its durable short- and long-term memory; live browser state is temporary and should remain an implementation detail rather than becoming a user-visible tab system.
 
-A small green dot beside a site link in the BlockNote editor indicates that its page is currently live in memory.
+The cache should retain a bounded number of browsing journeys. A journey owns one Electron `WebContentsView`, its navigation history, and the live runtime state of its current document. URLs encountered within that journey are indexed by profile and normalized URL so a notebook link can resume a suitable recently live page when possible.
 
-The cache is ephemeral. Notebook content remains the durable source of truth, while the dot reports current process state and must not be persisted as a block property.
+Opening a notebook link should feel like a fresh entry point even when Digest reuses a journey. Digest should establish a logical back-history boundary for that activation rather than promise that the underlying Chromium history is empty. This preserves live state without exposing unrelated earlier navigation through Digest's Back control.
+
+Inline links, legacy site blocks, and ephemeral URL routes are all notebook or route references to URLs. None of them should directly own a `WebContentsView`. A small green dot may indicate that a reference currently resolves to a suitable live page in its profile.
+
+The cache and its reference associations are ephemeral. Notebook content remains the durable source of truth, and live state must not be persisted as a block property.
+
+## Design revision: July 21, 2026
+
+The initial implementation keyed live views by layout-qualified block ID. Further design work established that this is the wrong long-term ownership boundary:
+
+- A URL is a destination, not a unique browser-state identity.
+- A notebook block or inline link is a durable reference, not the owner of a browser process.
+- A `WebContentsView` is a browsing journey analogous to a browser tab, although Digest should avoid exposing tabs or contexts as a concept users must manage.
+- One journey may visit many URLs, and several notebook references created from that journey may logically resume positions within it.
+- The same profile and URL may eventually have more than one independent live instance, so `(profileId, normalizedUrl)` is a lookup index rather than a uniqueness constraint.
+- Layout is placement. Moving a journey between detached, inline, and full presentation must not create a second browser identity.
+
+The existing block-keyed `LivePageCache` remains useful as a prototype of bounded LRU behavior, but it should be replaced or generalized before broader link support is built on top of it.
 
 ## Motivation
 
@@ -23,143 +40,187 @@ The immediate reason Digest loses this state is lifecycle rather than a Chromium
 
 ## Goals
 
-- Keep up to ten recently used notebook pages live in memory.
-- Reopen a cached page without reloading it.
+- Keep a bounded number of recently used browsing journeys live in memory, scoped by profile.
+- Reopen a suitable recently live page without reloading it when possible.
 - Preserve scroll, browser navigation, form values, and active page runtime state where possible.
-- Clearly but subtly show which site blocks have a live page.
+- Give each notebook-link activation fresh Back-button semantics through a logical history boundary.
+- Allow inline links, legacy site blocks, and ephemeral URLs to use the same resolution mechanism.
+- Clearly but subtly show which notebook references can resume a live page.
 - Bound memory and process usage with deterministic eviction.
 - Keep cache state separate from the persisted notebook document.
-- Preserve Chromium navigation state before eviction so a later cold restore can be better than a plain `loadURL()`.
 
 ## Non-goals
 
 - Persisting live renderer processes across application restarts.
-- Keeping every site block alive.
+- Restoring an evicted journey or its Chromium navigation state. An evicted page opens as a fresh journey and reloads its URL.
+- Keeping every referenced or visited URL alive.
 - Guaranteeing that all third-party pages resume perfectly after eviction or restart.
+- Guaranteeing exact live state for a non-current navigation entry. Chromium may discard a document from its back/forward cache.
+- Giving users a tab or browsing-context management interface.
+- Treating a URL as a globally unique page-state identity.
 - Treating the persistent Electron `Session` as tab storage. A session is a profile containing cookies, cache, local storage, IndexedDB, service workers, and similar origin data; it does not retain a tab's live document.
 - Displaying the green dot for a page that can merely be reloaded from disk or network.
 
 ## User experience
 
-### Adding a page
+### Adding a reference
 
-1. A URL is added to the notebook as a site block.
-2. Digest explicitly warms a browser view for the page if newly inserted pages should become live before first open.
-3. Once the page is ready, the view is associated with the site block.
-4. When no longer visible, the view is detached from the window but remains alive in the cache.
-5. A green dot appears beside the link in the editor.
+1. The user adds the current page to the notebook as an inline link or another link-bearing block.
+2. Digest records the durable URL and title in the notebook.
+3. Digest may associate that reference with the current journey and navigation entry in ephemeral runtime state.
+4. Returning to the notebook detaches the journey but keeps it alive subject to the cache limit.
+5. A green dot appears if the new reference resolves to a suitable live association.
 
-### Reopening a live page
+Adding a reference must not create a second `WebContentsView` or reload the page solely to warm the cache.
 
-1. The user clicks a dotted site block.
-2. Digest looks up the block ID in the cache.
-3. The existing view is attached at the full-page browser bounds.
-4. The user sees the exact retained page state without a new navigation.
+### Opening a notebook link
+
+1. The user clicks an inline link, legacy site block, or another supported URL reference.
+2. Digest resolves the reference's profile and normalized URL against the live-page index.
+3. If a suitable association exists, Digest activates its journey and selects the associated live page.
+4. Digest records a logical Back boundary for this activation.
+5. If no suitable association exists, Digest creates a fresh journey with fresh Chromium history and loads the URL.
+
+If the requested URL is already the current live document, the user receives its exact retained runtime state. If it is an older entry in the journey, activation is best-effort because Chromium may have discarded that document from its back/forward cache.
 
 ### Leaving a page
 
-When the user returns to the notebook, the view is detached and returned to the cache. It is not closed. Its recency is updated so a page the user just visited is less likely to be evicted.
+When the user returns to the notebook, the active journey is detached and returned to its profile's cache. It is not closed. Its recency is updated so the journey the user just visited is less likely to be evicted.
+
+Following a link inside a page updates the journey's current URL and URL index. It does not mutate the notebook reference that originally opened the journey.
+
+If the user adds a later page from the same journey to the notebook, both references may associate with different positions in that journey. Clicking either reference can therefore resume the shared browsing history without requiring the user to understand or manage contexts.
 
 ### Eviction
 
 When adding or activating a page would exceed the limit:
 
-1. Select the least recently used detached entry.
-2. Capture its Electron navigation history and active index.
-3. Close its `WebContents` and remove its live handle.
-4. Notify the renderer that the block is no longer live.
-5. Remove the green dot.
+1. Select the least recently used detached journey in the relevant profile cache.
+2. Close its `WebContents` and remove its live handle.
+3. Remove associations that depended on the live journey.
+4. Notify the renderer so affected references lose their green dots.
 
 A currently visible page must not be evicted. If no detached entry is available, eviction waits until a view is detached.
 
-Although the feature can be described as the “last ten pages added,” least-recently-used behavior is more useful in practice: reopening an older page makes it recent again. The initial insertion of a page counts as use.
+Least-recently-used behavior applies to journeys, because `WebContents` instances are the expensive resource. Reference count and URL count do not determine the live-cache size.
 
 ## State model
 
 The main process should own the authoritative cache because it owns every `WebContentsView`.
 
 ```ts
-type LivePageState = "visible" | "cached";
+type JourneyPlacement = "visible" | "detached";
 
-type LivePageEntry = {
-  blockId: string;
+type BrowsingJourney = {
+  journeyId: string;
   view: WebContentsView;
   profileId: string;
-  url: string;
-  state: LivePageState;
+  currentUrl: string;
+  placement: JourneyPlacement;
   lastUsedAt: number;
 };
-```
 
-The cache is keyed by stable notebook block ID, not URL. The same URL may appear more than once in a notebook and each occurrence can have independent navigation and page state.
+type LivePageAssociation = {
+  journeyId: string;
+  normalizedUrl: string;
+  navigationEntryKey?: string;
+  navigationEntryIndex?: number;
+  lastSeenAt: number;
+};
 
-The live entry should not be serialized into BlockNote, Y.js, or SQLite. Optional cold-restoration data is separate:
+type ReferenceAssociation = {
+  referenceId: string;
+  profileId: string;
+  normalizedUrl: string;
+  journeyId: string;
+  navigationEntryKey?: string;
+};
 
-```ts
-type SavedNavigationState = {
-  blockId: string;
-  entries: Electron.NavigationEntry[];
-  activeIndex: number;
-  savedAt: number;
+type JourneyActivation = {
+  journeyId: string;
+  backBoundaryIndex: number;
 };
 ```
 
-`NavigationEntry.pageState` is Chromium-owned base64 data. Digest should treat it as opaque and version-sensitive.
+`journeyId` is independent of URL, block ID, and layout. `(profileId, normalizedUrl)` indexes zero or more associations ordered by suitability and recency. It must not enforce permanent uniqueness.
+
+Reference associations are runtime hints. A first implementation may omit durable `referenceId` associations and resolve solely through the profile/URL index, provided it preserves the option to add reference-specific disambiguation later.
+
+URL normalization must be conservative. It may normalize unambiguous syntax such as default ports and URL serialization, but it must not discard fragments, query parameters, or other components that applications may use as state.
+
+The live entry should not be serialized into BlockNote, Y.js, or SQLite. Eviction destroys the journey state; no separate navigation snapshot is retained.
 
 ## Lifecycle operations
 
-The current remove operation combines two different meanings and needs to be split.
+The current remove operation combines different meanings and needs to be split. These operations act on journeys; reference deletion is a separate reconciliation event.
 
 ### Detach
 
 - Remove the view from `BaseWindow.contentView` or `ViewLayerManager`.
-- Retain its `WebContents`, event listeners, handle, and cache entry.
-- Mark the entry `cached`.
+- Retain its `WebContents`, event listeners, handle, journey, and URL associations.
+- Mark the journey `detached`.
 - Update its recency.
 
 ### Attach
 
-- Find the cached entry by block ID.
+- Resolve a suitable journey using profile, normalized URL, and any reference association.
 - Add its existing view to the appropriate view layer.
 - Set the new bounds.
-- Mark it `visible`.
+- Mark the journey `visible`.
 - Update its recency.
 - Do not call `loadURL()` on a cache hit.
+- Establish a logical Back boundary for the notebook-link activation.
 
 ### Destroy
 
 - Detach the view if necessary.
-- Optionally capture `navigationHistory`.
 - Close `webContents`.
-- Remove listeners, handles, world state, and cache metadata.
+- Remove listeners, handles, world state, journey metadata, and live associations.
 - Emit the cache-state change.
 
-Explicit deletion of a site block should destroy its cached view immediately rather than merely detach it.
+Deleting a notebook reference removes its reference association. It must not automatically destroy a shared journey, because other references or recently visited URLs may still resolve to it. A journey becomes eligible for normal eviction when detached; it may be destroyed immediately only when no policy considers it reusable.
 
-## View identity
+### Resolve
 
-Digest currently uses layout-qualified IDs: an inline view uses `blockId`, while a full view uses `blockId:full`. The notification preview uses another synthetic ID ending in `-preview`. This creates multiple browser identities for what the user perceives as one page.
+- Determine the reference's profile and normalized URL.
+- Prefer its last suitable live association when available.
+- Otherwise choose the most recent suitable detached association from the profile/URL index.
+- If no live association is suitable, create a fresh journey and load the URL.
+- Never reuse a journey across profiles.
 
-For live pages, identity and placement should be separate:
+### Activate an older page in a journey
+
+- If the requested URL is the journey's current document, attach it directly.
+- If it corresponds to a retained navigation entry, navigate to that entry and accept best-effort restoration.
+- If the association is stale or ambiguous, load the requested URL in a fresh journey rather than surprising the user with the wrong page state.
+- Set the Digest Back boundary after activation. Digest's Back control must not cross the boundary even if older Chromium entries remain underneath.
+
+## Identity and relationships
+
+Digest currently uses layout-qualified IDs: an inline view uses `blockId`, while a full view uses `blockId:full`. Ephemeral URLs use synthetic IDs derived from URL. These conventions conflate durable references, destinations, browser identity, and placement.
+
+The preferred relationship is:
 
 ```text
-block ID -> one WebContentsView -> zero or one current placement
+notebook reference ── URL ──┐
+                            ├── profile/URL live index ── browsing journey
+ephemeral URL route ── URL ─┘                              │
+                                                          └── placement
+                                                              detached | inline | full
 ```
 
-`inline`, `preview`, and `full` describe bounds and presentation, not distinct tabs. Moving to this model is the largest architectural part of the feature because hooks and IPC currently assume the layout-qualified view ID is also the browser identity.
-
-The preferred end state is:
-
-- Use `blockId` as the stable browser/cache key.
-- Pass layout separately in view updates.
-- Reattach and resize the same view when presentation changes.
-- Keep synthetic IDs only for genuinely ephemeral pages that do not yet have a notebook block.
+- Use an opaque `journeyId` as the browser/cache key.
+- Use a separate stable reference ID where a notebook link or block can provide one.
+- Pass layout and bounds as placement data.
+- Reattach and resize the same journey when presentation changes.
+- Do not derive a unique browser identity from URL; identical URLs can have independent live state.
+- Do not create a new view merely because a page is added to the notebook.
 
 ## Retiring creation previews
 
 The existing site-block notification loads a separate `${blockId}-preview` view and destroys it when the animation ends. It was intended to provide feedback when a page block was created in the background, but command-click no longer follows that path: it inserts an inline link and emits a separate link-capture event.
 
-The preview system should not be adopted into the live-page cache. It creates an extra browser identity and page load for a transient visual. The cache should instead receive an explicit create or warm operation for the final site block when immediate caching of newly added pages is implemented.
+The preview system should not be adopted into the live-page cache. It creates an extra browser identity and page load for transient feedback. Adding a notebook reference should associate it with the active journey when possible, not create or warm a second view for the reference.
 
 Removing the preview system also simplifies the identity consolidation work: there is no `${blockId}-preview` identity to migrate or transfer.
 
@@ -167,29 +228,34 @@ Removing the preview system also simplifies the identity consolidation work: the
 
 The renderer needs a read-only projection of cache membership. It should not infer liveness from mounted React components.
 
-Proposed messages:
+Conceptual messages (final names may follow the existing IPC conventions):
 
 ```ts
 // Renderer -> main
-browser:attach-live-page { blockId, bounds, layout, url, profileId }
-browser:detach-live-page { blockId }
-browser:destroy-live-page { blockId }
-browser:get-live-pages
+browser:open-reference { referenceId?, url, profileId, bounds, layout }
+browser:update-placement { journeyId, bounds, layout }
+browser:detach-journey { journeyId }
+browser:destroy-journey { journeyId }
+browser:get-live-reference-state { references: Array<{ referenceId, url, profileId }> }
 
 // Main -> renderer
-browser:live-pages-changed { blockIds: string[] }
+browser:live-reference-state-changed {
+  references: Array<{ referenceId, isLive }>
+}
 ```
 
-Sending the complete set is preferable while the cache is limited to ten entries. It makes initial synchronization, missed-event recovery, and renderer reloads straightforward.
+The main process must resolve URLs and associations. The renderer should not choose a `journeyId` by deriving it from a block or URL.
+
+Sending a complete projection is preferable while the cache is small. It makes initial synchronization, missed-event recovery, and renderer reloads straightforward. Inline references will require stable renderer-visible reference IDs if their dots need to distinguish identical URLs; URL-only projection is an acceptable early fallback.
 
 A renderer context or external store can expose:
 
 ```ts
-const liveBlockIds = useLivePageCache();
-const isLive = liveBlockIds.has(block.id);
+const liveReferences = useLiveReferenceState();
+const isLive = liveReferences.has(reference.id);
 ```
 
-The main process should send an initial snapshot after the renderer subscribes. It should also emit after cache insertion, eviction, explicit destruction, and renderer/view recovery.
+The main process should send an initial snapshot after the renderer subscribes. It should also emit after journey creation, association changes, eviction, explicit destruction, and renderer/view recovery.
 
 ## Green-dot indicator
 
@@ -205,29 +271,7 @@ Recommended presentation:
 
 The indicator should not mean “online,” “loaded before,” “saved,” or “available offline.” It must disappear as soon as the live `WebContents` is destroyed.
 
-Because the dot represents runtime state, it must be rendered from the live-page store rather than added to the site block prop schema.
-
-## Navigation state and cold restoration
-
-Before eviction, Digest can capture:
-
-```ts
-const entries = view.webContents.navigationHistory.getAllEntries();
-const activeIndex = view.webContents.navigationHistory.getActiveIndex();
-```
-
-A new view can later restore that state before any `loadURL()` call:
-
-```ts
-await view.webContents.navigationHistory.restore({
-  entries,
-  index: activeIndex,
-});
-```
-
-This is a best-effort cold restore. It may recover scroll, form values, and back/forward history, but it is not equivalent to retaining the live DOM and JavaScript heap. It therefore does not earn a green dot.
-
-Cold state can initially remain in memory after eviction. Persisting it across application restarts should be a separate decision because Chromium page-state compatibility, storage size, privacy, and retention policy need explicit treatment.
+Because the dot represents runtime state, it must be rendered from the live-reference projection rather than added to any notebook prop schema.
 
 ## Retiring `scrollPercent`
 
@@ -238,22 +282,21 @@ The custom scroll mechanism currently:
 - persists it in the site's BlockNote props;
 - injects a later `window.scrollTo()` restoration script.
 
-This can be removed after live reuse and navigation-history restoration are proven reliable.
+This can be removed after live reuse is proven reliable and the product accepts that evicted pages reopen without retained scroll state.
 
 A safe migration sequence is:
 
 1. Add the live cache while leaving `scrollPercent` as a fallback.
 2. Use live views on cache hits and skip manual scroll restoration for them.
-3. Use Electron navigation-history restoration on cold hits.
-4. Measure restoration failures and site-specific issues.
-5. Stop writing new `scrollPercent` values.
-6. Remove the prop and injected tracking in a later document/schema migration.
+3. Validate live-cache behavior and explicitly verify the fresh-load experience after eviction.
+4. Stop writing new `scrollPercent` values.
+5. Remove the prop and injected tracking in a later document/schema migration.
 
 Existing blocks containing the prop can tolerate it as ignored legacy data during the transition.
 
 ## Memory and process considerations
 
-Ten live pages may still be expensive. Chromium renderer processes can consume significant memory, and multiple views can share or split processes depending on site isolation.
+Ten live journeys may still be expensive. Chromium renderer processes can consume significant memory, and multiple views can share or split processes depending on site isolation.
 
 The initial policy is a fixed limit of ten because it is predictable and easy to explain. Follow-up safeguards may include:
 
@@ -263,63 +306,138 @@ The initial policy is a fixed limit of ten because it is predictable and easy to
 - Respecting Page Visibility and Electron background throttling.
 - Exposing the limit as an advanced preference only if actual usage shows a need.
 
-The cache should never keep preview-only views that failed to become valid notebook blocks.
+The cache should never create or retain journeys used only for transient preview feedback.
 
 ## Failure handling
 
-- **Cached renderer crashed:** destroy the entry, clear the dot, and fall back to cold restoration or `loadURL()`.
-- **URL or profile changed:** destroy the incompatible cached view and create a new one. A `WebContents` cannot switch Electron session partitions after creation.
-- **Block deleted:** immediately destroy its live and saved state.
-- **Document changed externally:** remove cache entries for block IDs that no longer exist when reconciliation runs.
+- **Cached renderer crashed:** destroy the entry, clear the dot, and open a fresh journey with `loadURL()`.
+- **Profile changed:** never reuse the journey. A `WebContents` cannot switch Electron session partitions after creation.
+- **URL association is stale:** remove the association and open a fresh journey; do not guess at a different page.
+- **Reference deleted:** remove its association without destroying a journey that may be shared or otherwise reusable.
+- **Document changed externally:** reconcile reference associations without making document synchronization own Electron side effects.
 - **Attach failure:** clear the stale entry and retry with a newly created view.
 - **Application shutdown:** close all views normally; dots disappear naturally on the next process start.
-- **Renderer reload:** main remains authoritative and returns a fresh snapshot of live block IDs.
+- **Renderer reload:** main remains authoritative and returns a fresh live-reference projection.
+
+## Measurement and cache effectiveness
+
+The first unified reference-opening implementation must record cache resolution outcomes in SQLite. The purpose is to measure whether retaining live journeys avoids enough page loads to justify its memory cost and to distinguish URL-shape misses from capacity, lifecycle, and correctness failures.
+
+Record one attempt for every user-initiated reference open at the unified `open-reference` decision point. Do not record only inside the URL index's `resolve()` method: the final outcome may change because an association is stale, a renderer crashed, navigation-history restoration failed, or attachment failed.
+
+Suggested schema:
+
+```sql
+CREATE TABLE live_page_cache_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp INTEGER NOT NULL,
+  session_id TEXT NOT NULL,
+  profile_hash TEXT NOT NULL,
+  reference_kind TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  miss_reason TEXT,
+  match_class TEXT NOT NULL,
+  candidate_count INTEGER NOT NULL,
+  cache_size INTEGER NOT NULL,
+  detached_count INTEGER NOT NULL,
+  association_age_ms INTEGER,
+  reused_journey INTEGER NOT NULL,
+  load_avoided INTEGER NOT NULL,
+  requested_url_hash TEXT NOT NULL,
+  normalized_url_hash TEXT NOT NULL,
+  hostname TEXT,
+  has_query INTEGER NOT NULL,
+  query_key_count INTEGER NOT NULL,
+  has_fragment INTEGER NOT NULL
+);
+
+CREATE INDEX idx_live_page_cache_attempts_timestamp
+  ON live_page_cache_attempts(timestamp);
+CREATE INDEX idx_live_page_cache_attempts_outcome
+  ON live_page_cache_attempts(outcome, miss_reason);
+```
+
+Initial outcome vocabulary:
+
+- `hit_current`: the requested page is the journey's current live document and is attached without loading.
+- `hit_history`: a retained navigation entry is selected and restored without a fresh `loadURL()`.
+- `miss`: no suitable live page is reused.
+
+Initial miss reasons:
+
+- `no_association`: the profile/URL index has no exact association and no eviction tombstone.
+- `evicted`: a suitable association existed earlier in the session but its journey was evicted.
+- `profile_mismatch`: a matching URL exists only in another profile and therefore must not be reused.
+- `stale_association`: indexed journey or navigation-entry state is no longer usable.
+- `ambiguous`: available candidates cannot be selected safely.
+- `renderer_unavailable`: the associated renderer crashed or was destroyed.
+- `attach_failed`: reuse was selected but attaching or restoring it failed.
+
+`match_class` is diagnostic and must never change resolution behavior. On a miss, compare the requested URL with live associations in the same profile and classify the nearest structural relationship as `exact`, `fragment_only`, `query_only`, `query_and_fragment`, `path_variant`, or `unrelated`. This will show how many misses might be attributable to URL noise without making aggressive normalization part of the initial cache policy.
+
+Keep lightweight, session-only eviction tombstones containing the profile hash, normalized URL hash, and eviction time. Tombstones make `evicted` distinguishable from `no_association`; they must not retain a `WebContents`, navigation state, or a reusable journey association.
+
+Telemetry must not store complete URLs by default. URLs may contain search text, document identifiers, authentication material, or other private state. Persist hashes for exact correlation plus the hostname and coarse structural fields needed for analysis. If full URLs are temporarily needed during local development, that must be an explicit debug-only option and not the production default.
+
+The primary product metric is `load_avoided`, not the broader lookup hit rate. A nominal association that ultimately calls `loadURL()` did not provide the feature's main benefit. Supporting metrics should include:
+
+- exact hit rate and load-avoided rate;
+- miss reasons and diagnostic match classes;
+- hit rate by cache occupancy, association age, profile, and reference kind;
+- evictions followed by a later request for the evicted URL;
+- the estimated effect of alternative cache limits using recorded occupancy and eviction data.
+
+Do not relax URL normalization based on anecdotes. Collect enough reference-open attempts to identify a stable pattern. Known tracking parameters may later be removed through a narrow allowlist if the data shows meaningful benefit. Query strings, fragments, or path components must not be discarded generically because they may represent application state.
 
 ## Proposed implementation stages
 
-### Stage 1: Separate detach from destroy
+### Stage 1: Preserve the working lifecycle prototype
 
-- Add explicit lifecycle commands and interpreter operations.
+- Keep explicit detach and destroy operations.
 - Keep detached views in the handle registry.
-- Ensure a detached view can be reattached with new bounds.
-- Preserve the current behavior for explicit block deletion.
+- Retain deterministic LRU tests and the rule that visible views are never evicted.
+- Do not add more block-ID ownership assumptions to the prototype.
 
-### Stage 2: Add bounded LRU ownership
+### Stage 2: Introduce journey identity
 
-- Introduce a `LivePageCache` owned by `ViewStore` or a focused service beside it.
-- Enforce a ten-entry limit.
-- Never evict visible entries.
-- Add deterministic tests for recency and eviction.
+- Add opaque `journeyId` identity independent of block ID, URL, and layout.
+- Make `BrowsingJourneyStore` own `WebContentsView` handles and LRU state.
+- Treat detached, inline, and full as placements of the same journey.
+- Scope journey lookup and reuse by profile.
 
-### Stage 3: Consolidate identity
+### Stage 3: Add profile/URL associations
 
-- Make block ID the stable browser identity.
-- Treat layout as placement state.
-- Remove the need for separate inline and `:full` live views.
-- Reconcile notification preview identity.
+- Add a conservative URL normalizer.
+- Index zero or more live associations by `(profileId, normalizedUrl)`.
+- Track navigation entry identity or index where Electron exposes enough information.
+- Update the index as a journey navigates without mutating its originating notebook reference.
+- Prefer the most recent suitable association while allowing multiple instances of one URL.
 
-### Stage 4: Surface liveness in BlockNote
+### Stage 4: Unify reference opening
 
-- Add cache snapshot/change IPC.
-- Add a renderer cache context or store.
-- Render the accessible green dot in `SiteBlock`.
-- Verify that notebook persistence never includes the live flag.
+- Route inline links, legacy site blocks, and ephemeral URL routes through one open-reference operation.
+- Add the SQLite cache-attempt migration and record the final outcome at this operation.
+- Add diagnostic-only near-match classification and session-only eviction tombstones.
+- Reuse a suitable live journey or create a fresh journey on a miss.
+- Establish a logical Back boundary on every notebook-link activation.
+- Keep reference deletion and view eviction separate.
+- Validate the telemetry vocabulary with tests before using it to change matching policy.
 
-### Stage 5: Remove legacy preview notifications
+### Stage 5: Surface liveness in the notebook
 
-Status: preview cleanup completed July 20, 2026; cache warming and command-click feedback remain separate follow-up work.
+- Replace block-ID snapshots with a live-reference projection.
+- Render the accessible green dot for any supported reference that resolves to a suitable live association.
+- Verify that notebook persistence never includes the live flag, journey ID, or association.
+
+### Stage 6: Remove legacy preview notifications
+
+Status: preview cleanup completed July 20, 2026; active-journey association and command-click feedback remain separate follow-up work.
 
 - [x] Remove the site-block preview component and its browser view lifecycle.
 - [x] Remove the old block-notification provider, container, hook, layout reservation, and route row.
 - [x] Remove the unreachable `browser:new-block` / `browser:create-block` producer chain and its editor, preload, main-process, and renderer API wiring.
 - [ ] Improve command-click feedback through the existing link-capture path without creating a browser view.
-- [ ] Add an explicit cache warm/create operation for newly added site blocks if they should become live before first open.
-
-### Stage 6: Add cold restoration
-
-- Capture navigation entries on eviction.
-- Restore them before `loadURL()` on a cold reopen.
-- Bound saved state and clear it when the block is deleted or materially changed.
+- [ ] Associate newly added references with the active journey without creating a preview or second view.
 
 ### Stage 7: Remove manual scroll persistence
 
@@ -332,22 +450,34 @@ Status: preview cleanup completed July 20, 2026; cache warming and command-click
 
 ### Unit tests
 
-- Inserting eleven detached entries evicts the least recently used one.
-- Activating an older entry updates its recency.
-- Visible entries are never selected for eviction.
-- Deleting a block destroys its entry immediately.
-- Cache snapshots contain exactly the live block IDs.
-- Profile or URL incompatibility invalidates an entry.
+- Inserting journeys beyond a profile's limit evicts the least recently used detached journey.
+- Activating an older journey updates its recency.
+- Visible journeys are never selected for eviction.
+- Identical URLs in different profiles never resolve to the same journey.
+- Multiple associations for one profile/URL remain distinguishable and deterministic.
+- Deleting one reference does not destroy a journey shared by another reference.
+- Stale associations are removed without returning the wrong journey.
+- Live-reference projections contain exactly the references that currently resolve to suitable live associations.
+- Cache attempts classify current-document hits, history hits, and each miss reason deterministically.
+- Diagnostic near-match classification never changes the journey selected by exact resolution.
+- Eviction tombstones classify later opens as `evicted` and expire with the application session.
+- Telemetry hashes URLs and does not persist complete paths, queries, or fragments.
 
 ### Integration tests
 
-- Open a page, scroll and interact, leave it, and reopen it without another navigation.
+- Open a page, scroll and interact, leave it, and reopen its reference without another network navigation.
 - Navigate within a page, leave, reopen, and verify back/forward history remains intact.
-- Add eleven pages and verify the first unused block loses its dot.
-- Reopen a cached older page before adding the eleventh and verify a different page is evicted.
+- Open A, navigate to B, add B to the notebook, and verify both references associate with the same journey.
+- Open A or B from the notebook and verify Digest Back cannot cross that activation's logical boundary.
+- Verify internal navigation never mutates the notebook reference that opened the journey.
+- Exceed the journey limit and verify every reference dependent on the evicted journey loses its dot.
+- Reopen an older journey before exceeding the limit and verify a different journey is evicted.
 - Reload the Electron renderer and verify dots resynchronize from main-process state.
-- Delete a dotted block and verify its `WebContents` is destroyed.
+- Delete one of two references into a journey and verify the other association and `WebContents` survive.
 - Verify pages in different profile partitions never reuse the wrong view.
+- Verify every user-initiated reference open produces exactly one final cache-attempt row.
+- Force stale, crashed, ambiguous, evicted, and attach-failure paths and verify their recorded outcomes.
+- Verify `load_avoided` is false whenever reuse falls back to `loadURL()`.
 
 ### Visual/accessibility checks
 
@@ -358,23 +488,30 @@ Status: preview cleanup completed July 20, 2026; cache warming and command-click
 
 ## Open questions
 
-1. Should the fixed limit count a currently visible page, or mean ten detached pages plus the visible one? The simplest rule is ten total live notebook pages.
-2. Should recency update when a page is added, attached, detached, or interacted with? The proposal updates on insertion and attach/detach; actual page interaction is unnecessary complexity initially.
-3. Should cold navigation state be persisted across application restarts? This proposal defers it.
-4. Should users be able to pin a live page against eviction? This is outside the initial scope but compatible with the cache model.
-5. Should the visual indicator distinguish “live and visible” from “live and cached”? A single green dot is simpler; the active route already communicates visibility.
-6. When should a newly added site block be warmed: immediately after insertion or only after first open? This should be explicit cache behavior rather than a side effect of rendering a preview notification.
+1. Should the limit be ten journeys per profile or ten journeys total with profile-aware lookup? Per-profile isolation is required; the memory budget may still need a global ceiling.
+2. Should recency update on attach, detach, navigation, or page interaction? Attach and detach are sufficient initially.
+3. How should Digest identify a repeated URL within one journey when Electron navigation entries do not expose a durable entry ID?
+4. When should a profile/URL association be considered unsuitable despite remaining live?
+5. Should adding a reference capture only the current URL association, or also a reference-specific navigation-entry hint?
+6. Should the visual indicator distinguish an exact current live document from a best-effort older navigation entry? Initially, one green dot is simpler, but its meaning must not overpromise exact state.
+7. How many reference-open attempts are required before changing URL normalization or the cache-size policy?
+8. What retention period should apply to cache-attempt telemetry, and should users have a control to clear or disable it?
 
 ## Recommended initial decisions
 
-- Ten total live notebook pages.
-- LRU eviction rather than strict insertion order.
-- Stable identity by block ID.
+- Opaque journey identity independent of references, URLs, and layout.
+- Profile-isolated lookup with a bounded number of live journeys and LRU eviction.
+- `(profileId, normalizedUrl)` as a non-unique, recency-ordered lookup index.
+- Logical Back boundaries for fresh notebook-link activations.
+- Reference deletion removes associations rather than automatically destroying journeys.
 - One green dot for both visible and detached live pages.
 - Runtime-only liveness state owned by the main process.
-- No cross-restart persistence of Chromium `pageState` initially.
+- No retention or restoration of Chromium navigation state after eviction or restart.
 - Keep `scrollPercent` temporarily as a fallback, then remove it after validation.
 - Remove notification previews rather than adopting their temporary views into the cache.
+- Persist privacy-conscious cache-attempt telemetry from the first unified reference-opening rollout.
+- Treat `load_avoided` as the primary effectiveness metric and keep near-match analysis diagnostic-only.
+- Use session-only eviction tombstones to separate capacity misses from URLs that were never cached.
 
 ## Cleanup inventory
 
@@ -439,7 +576,7 @@ The current link-capture implementation should be audited as part of that fix:
 
 ### Manual scroll restoration
 
-After live reuse and cold navigation restoration are validated, remove:
+After live reuse is validated and fresh loading after eviction is accepted, remove:
 
 - the `scrollPercent` site-block prop;
 - `browser:set-scroll-percent` and `browser:save-scroll-percent` IPC;
@@ -448,4 +585,4 @@ After live reuse and cold navigation restoration are validated, remove:
 - the scroll update effect in `useRendererEditor`;
 - the pending-scroll map and related `ViewStore` methods.
 
-This cleanup remains staged because `scrollPercent` is the current fallback for cold page recreation.
+This cleanup remains staged until the live-cache behavior and the fresh-load experience after eviction are validated.

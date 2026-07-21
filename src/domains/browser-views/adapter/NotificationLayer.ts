@@ -15,13 +15,17 @@ const EVENTS = {
  * Completely decoupled from command handling.
  */
 export class NotificationLayer {
-  constructor(private rendererWebContents: WebContents) {}
+  constructor(
+    private rendererWebContents: WebContents,
+    private notificationIdForHandle: (id: string) => string = (id) => id,
+  ) {}
 
   /**
    * Called after every state change.
    * Compares load and navigation state independently.
    */
   notify(id: string, prevWorld: ViewWorld, nextWorld: ViewWorld): void {
+    const notificationId = this.notificationIdForHandle(id);
     const prev = prevWorld.get(id);
     const next = nextWorld.get(id);
 
@@ -42,12 +46,12 @@ export class NotificationLayer {
         `[${id}] Load state transition: ${prevLoadState} → ${nextLoadState}`,
         "NotificationLayer",
       );
-      this.sendLoadStateNotification(id, next.loadState);
+      this.sendLoadStateNotification(notificationId, next.loadState);
     }
 
     if (navigationChanged) {
       this.sendNavigationNotification(
-        id,
+        notificationId,
         next.url,
         next.history.canGoBack,
       );

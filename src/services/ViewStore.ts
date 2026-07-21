@@ -11,8 +11,17 @@ import { HandleOperations } from "../domains/browser-views/adapter/HandleOperati
 import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
 import { DownloadManager } from "./DownloadManager";
-import { LivePageCache } from "./LivePageCache";
-import { toBlockId } from "../utils/viewId";
+import { BrowsingJourneyStore } from "./BrowsingJourneyStore";
+
+export type OpenReferenceRequest = {
+  viewId: string;
+  blockId: string;
+  url: string;
+  bounds: { x: number; y: number; width: number; height: number };
+  profileId: string;
+  layout?: "inline" | "full";
+  referenceKind?: "site-block" | "ephemeral-url";
+};
 
 /**
  * The ViewStore orchestrates the pure core with Electron adapters.
@@ -29,7 +38,7 @@ export class ViewStore {
   private operations: HandleOperations;
 
   private downloadManager?: DownloadManager;
-  private livePages = new LivePageCache(10);
+  private journeys = new BrowsingJourneyStore(10);
 
   // Rate limiting: track pending creates to prevent duplicate URL loads
   // Maps viewId -> { url, timestamp } of pending create commands
@@ -41,7 +50,10 @@ export class ViewStore {
     layerManager: ViewLayerManager | undefined,
     rendererWebContents: WebContents
   ) {
-    this.notifications = new NotificationLayer(rendererWebContents);
+    this.notifications = new NotificationLayer(
+      rendererWebContents,
+      (handleId) => this.journeys.getActivePlacementId(handleId)
+    );
     this.contextMenus = new ContextMenuController();
     this.events = new EventTranslator(this.contextMenus);
     this.operations = new HandleOperations(this.handles);
@@ -75,6 +87,10 @@ export class ViewStore {
     if (prevWorld !== nextWorld) {
       this.world = nextWorld;
 
+      if (cmd.type === "updateNavigation") {
+        this.journeys.recordNavigation(cmd.id, cmd.url);
+      }
+
       const cmdId = "id" in cmd ? cmd.id : undefined;
       log.debug(
         `[${cmdId ?? "unknown"}] Command dispatched: ${cmd.type}`,
@@ -100,17 +116,60 @@ export class ViewStore {
 
   // Public API methods that dispatch commands
 
-  handleBlockViewUpdate(update: {
-    viewId: string;
-    blockId: string;
-    url: string;
-    bounds: { x: number; y: number; width: number; height: number };
-    profileId: string;
-    layout?: "inline" | "full";
-  }): void {
-    const existing = this.world.get(update.viewId);
+  /** Compatibility adapter for the existing renderer update channel. */
+  handleBlockViewUpdate(update: OpenReferenceRequest): void {
+    this.openReference(update);
+  }
+
+  /** Authoritative main-process operation for opening any URL reference. */
+  openReference(update: OpenReferenceRequest): void {
+    const handleId = this.resolveHandleId(update.viewId);
+    const existing = this.world.get(handleId);
 
     if (!existing) {
+      const openPlan = this.journeys.planOpenReference({
+        placementId: update.viewId,
+        referenceId: update.blockId,
+        profileId: update.profileId,
+        url: update.url,
+      });
+      log.debug(
+        `[${update.viewId}] Open reference plan: ${openPlan.type}${
+          openPlan.type === "create" ? ` (${openPlan.reason})` : ""
+        } [kind=${update.referenceKind ?? "site-block"}]`,
+        "ViewStore"
+      );
+      const reusableView =
+        openPlan.type === "reuse-current"
+          ? this.handles.get(openPlan.handleId)
+          : undefined;
+      if (
+        openPlan.type === "reuse-current" &&
+        (!reusableView || reusableView.webContents.isDestroyed())
+      ) {
+        this.journeys.remove(openPlan.handleId);
+        this.dispatch({ type: "remove", id: openPlan.handleId });
+        this.notifyLivePagesChanged();
+      } else if (openPlan.type === "reuse-current") {
+        log.debug(
+          `[${update.viewId}] Reusing live journey ${openPlan.journeyId} via handle ${openPlan.handleId}`,
+          "ViewStore"
+        );
+        this.journeys.activatePlacement(openPlan);
+        this.interpreter.attachView(openPlan.handleId);
+        this.dispatch({
+          type: "updateBounds",
+          id: openPlan.handleId,
+          bounds: update.bounds,
+          layout: update.layout,
+        });
+        // A cache hit has no new Chromium load event, so explicitly complete
+        // initialization for the renderer placement that requested it.
+        this.notifyPlacementReady(update.viewId);
+        this.notifyLivePagesChanged();
+        return;
+      }
+
       // Rate limiting: check if we recently requested to create this view with this URL
       const pending = this.pendingCreates.get(update.viewId);
       const now = Date.now();
@@ -144,14 +203,24 @@ export class ViewStore {
 
       if (this.isCacheable(update.viewId, update.blockId, update.layout)) {
         this.destroyEvictedViews(
-          this.livePages.addVisible(update.viewId, update.blockId)
+          this.journeys.addVisible(
+            update.viewId,
+            update.profileId,
+            update.url,
+            update.blockId
+          )
         );
         this.notifyLivePagesChanged();
       }
     } else {
-      if (this.livePages.isCached(update.viewId)) {
-        this.interpreter.attachView(update.viewId);
-        this.livePages.markVisible(update.viewId);
+      if (this.journeys.isDetached(handleId)) {
+        log.debug(
+          `[${update.viewId}] Reattaching live journey via handle ${handleId}`,
+          "ViewStore"
+        );
+        this.interpreter.attachView(handleId);
+        this.journeys.markVisible(handleId, update.viewId);
+        this.notifyPlacementReady(update.viewId);
         this.notifyLivePagesChanged();
       }
 
@@ -171,7 +240,7 @@ export class ViewStore {
         );
         this.dispatch({
           type: "updateBounds",
-          id: update.viewId,
+          id: handleId,
           bounds: update.bounds,
           layout: update.layout,
         });
@@ -180,41 +249,41 @@ export class ViewStore {
   }
 
   handleRemoveView(viewId: string): void {
+    const handleId = this.resolveHandleId(viewId);
     log.debug(`[${viewId}] Removing view`, "ViewStore");
     // Clean up rate limiting state
     this.pendingCreates.delete(viewId);
-    const wasLive = this.livePages.remove(viewId);
-    this.dispatch({ type: "remove", id: viewId });
+    const wasLive = this.journeys.remove(handleId);
+    this.dispatch({ type: "remove", id: handleId });
     if (wasLive) this.notifyLivePagesChanged();
   }
 
   /** Detach a notebook page while retaining its live WebContents. */
   handleDetachView(viewId: string): void {
-    if (!this.livePages.has(viewId)) {
+    const handleId = this.resolveHandleId(viewId);
+    if (!this.journeys.has(handleId)) {
       this.handleRemoveView(viewId);
       return;
     }
 
     log.debug(`[${viewId}] Detaching live page`, "ViewStore");
-    this.interpreter.detachView(viewId);
-    this.destroyEvictedViews(this.livePages.markCached(viewId));
+    this.interpreter.detachView(handleId);
+    this.destroyEvictedViews(this.journeys.markDetached(handleId));
     this.notifyLivePagesChanged();
   }
 
   getLivePageBlockIds(): string[] {
-    return this.livePages.getLiveBlockIds();
+    return this.journeys.getLiveReferenceIds();
   }
 
   private isCacheable(
-    viewId: string,
-    blockId: string,
+    _viewId: string,
+    _blockId: string,
     layout?: "inline" | "full"
   ): boolean {
-    return (
-      layout === "full" &&
-      !blockId.startsWith("ephemeral-") &&
-      toBlockId(viewId) === blockId
-    );
+    // Full-page URL routes are live journeys even when their renderer route ID
+    // is ephemeral. Ephemeral describes notebook durability, not browser state.
+    return layout === "full";
   }
 
   private destroyEvictedViews(viewIds: string[]): void {
@@ -234,14 +303,29 @@ export class ViewStore {
     }
   }
 
+  private notifyPlacementReady(placementId: string): void {
+    const renderer = this.interpreter.getRendererWebContents();
+    if (!renderer.isDestroyed()) {
+      renderer.send("browser:initialized", {
+        blockId: placementId,
+        success: true,
+        status: "loaded",
+      });
+    }
+  }
+
   retryView(blockId: string): void {
     log.debug(`[${blockId}] Retrying view`, "ViewStore");
-    this.dispatch({ type: "retry", id: blockId });
+    this.dispatch({ type: "retry", id: this.resolveHandleId(blockId) });
   }
 
   reloadView(viewId: string): void {
     log.debug(`[${viewId}] Reloading view`, "ViewStore");
-    this.dispatch({ type: "reload", id: viewId });
+    this.dispatch({ type: "reload", id: this.resolveHandleId(viewId) });
+  }
+
+  resolveHandleId(viewId: string): string {
+    return this.journeys.resolveHandleId(viewId);
   }
 
   /**
@@ -269,7 +353,9 @@ export class ViewStore {
     isOpen: boolean;
     error?: string;
   } {
-    const result = this.operations.getDevToolsState(blockId);
+    const result = this.operations.getDevToolsState(
+      this.resolveHandleId(blockId)
+    );
     if (result.success === false) {
       return { success: false, isOpen: false, error: result.error };
     }
@@ -285,7 +371,7 @@ export class ViewStore {
     isOpen: boolean;
     error?: string;
   } {
-    const result = this.operations.toggleDevTools(blockId);
+    const result = this.operations.toggleDevTools(this.resolveHandleId(blockId));
     if (result.success === false) {
       return { success: false, isOpen: false, error: result.error };
     }
@@ -301,7 +387,7 @@ export class ViewStore {
     canGoBack: boolean;
     error?: string;
   } {
-    const result = this.operations.goBack(blockId);
+    const result = this.operations.goBack(this.resolveHandleId(blockId));
     if (result.success === false) {
       return { success: false, canGoBack: false, error: result.error };
     }

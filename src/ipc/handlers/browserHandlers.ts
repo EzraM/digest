@@ -54,7 +54,8 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     "browser:reload": {
       type: "invoke",
       fn: (_event, viewId: string) => {
-        const view = viewStore.getHandleRegistry().get(viewId);
+        const handleId = viewStore.resolveHandleId(viewId);
+        const view = viewStore.getHandleRegistry().get(handleId);
         if (!view || view.webContents.isDestroyed()) {
           return { success: false, error: `No active view found for ${viewId}` };
         }
@@ -70,8 +71,9 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     "browser:get-page-info": {
       type: "invoke",
       fn: (_event, viewId: string): BrowserPageInfo => {
-        const view = viewStore.getHandleRegistry().get(viewId);
-        const entry = viewStore.getWorld().get(viewId);
+        const handleId = viewStore.resolveHandleId(viewId);
+        const view = viewStore.getHandleRegistry().get(handleId);
+        const entry = viewStore.getWorld().get(handleId);
         if (!view || view.webContents.isDestroyed() || !entry) {
           return { success: false, error: `No active view found for ${viewId}` };
         }
@@ -98,7 +100,7 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
           `Received update-browser-view event for view ${data.viewId}`,
           "main"
         );
-        viewStore.handleBlockViewUpdate(data);
+        viewStore.openReference(data);
       },
     },
     "remove-view": {

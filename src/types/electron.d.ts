@@ -16,6 +16,7 @@ interface ElectronAPI {
     bounds: { x: number; y: number; width: number; height: number };
     profileId: string;
     layout?: "inline" | "full";
+    referenceKind?: "site-block" | "ephemeral-url";
   }) => void;
   removeBrowser: (blockId: string) => void;
   removeView: (viewId: string) => void;

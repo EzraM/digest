@@ -16,7 +16,8 @@ type Bounds = { x: number; y: number; width: number; height: number };
 export const useBrowserViewUpdater = (
   viewId: string,
   blockId: string,
-  layout?: "inline" | "full"
+  layout?: "inline" | "full",
+  referenceKind: "site-block" | "ephemeral-url" = "site-block"
 ) => {
   const { profileId } = useDocumentContext();
   const urlRef = useRef<string | null>(null);
@@ -38,9 +39,10 @@ export const useBrowserViewUpdater = (
         bounds: boundsRef.current,
         profileId,
         layout: layoutRef.current,
+        referenceKind,
       });
     }
-  }, [viewId, blockId, profileId]);
+  }, [viewId, blockId, profileId, referenceKind]);
 
   const handleUrlChange = useCallback(
     (url: string | null) => {

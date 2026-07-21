@@ -33,7 +33,12 @@ export function Page({
   );
 
   const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
-    useBrowserViewUpdater(viewId, blockId, layout);
+    useBrowserViewUpdater(
+      viewId,
+      blockId,
+      layout,
+      providedBlockId ? "site-block" : "ephemeral-url"
+    );
   const { initStatus, retryInitialization, getInitAttemptRef } =
     useBrowserInitialization(viewId);
   const hasReportedReadyRef = useRef(false);
@@ -98,12 +103,12 @@ export function Page({
     }
   }, [blockId, scrollPercent]);
 
-  // View lifecycle: destroy view immediately on unmount
+  // View lifecycle: release the placement on unmount. Main decides whether the
+  // journey is detached for reuse or destroyed.
   useEffect(() => {
     console.log(`[Page] Mount effect: viewId=${viewId}, layout=${layout}`);
     return () => {
       console.log(`[Page] Unmount cleanup: viewId=${viewId}, layout=${layout}`);
-      // Destroy view immediately on unmount
       window.electronAPI.removeView(viewId);
     };
   }, [viewId, layout]);
