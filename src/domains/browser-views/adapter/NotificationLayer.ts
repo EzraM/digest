@@ -7,7 +7,20 @@ const EVENTS = {
   BROWSER: {
     INITIALIZED: "browser:initialized",
     NAVIGATION: "browser:navigation-state",
+    LIVE_PAGES_CHANGED: "browser:live-pages-changed",
+    SELECTION: "browser:selection",
   },
+};
+
+type LiveReference = { profileId: string; url: string };
+
+type BrowserSelection = {
+  blockId: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  selectionText: string;
+  selectionHtml: string;
+  capturedAt: number;
 };
 
 /**
@@ -56,6 +69,22 @@ export class NotificationLayer {
         next.history.canGoBack,
       );
     }
+  }
+
+  notifyLiveReferencesChanged(references: LiveReference[]): void {
+    this.send(EVENTS.BROWSER.LIVE_PAGES_CHANGED, { references });
+  }
+
+  notifyPlacementReady(placementId: string): void {
+    this.sendLifecycleEvent({
+      blockId: placementId,
+      success: true,
+      status: "loaded",
+    });
+  }
+
+  notifyBrowserSelection(selection: BrowserSelection): void {
+    this.send(EVENTS.BROWSER.SELECTION, selection);
   }
 
   private sendLoadStateNotification(
@@ -107,7 +136,18 @@ export class NotificationLayer {
   }
 
   private sendLifecycleEvent(event: BrowserLifecycleEvent): void {
-    this.rendererWebContents.send(EVENTS.BROWSER.INITIALIZED, event);
+    this.send(EVENTS.BROWSER.INITIALIZED, event);
+  }
+
+  private send(channel: string, payload: object): void {
+    if (this.rendererWebContents.isDestroyed()) {
+      log.warn(
+        `Renderer WebContents destroyed, skipping ${channel}`,
+        "NotificationLayer",
+      );
+      return;
+    }
+    this.rendererWebContents.send(channel, payload);
   }
 
   private sendNavigationNotification(
@@ -115,18 +155,11 @@ export class NotificationLayer {
     url: string,
     canGoBack: boolean,
   ): void {
-    if (this.rendererWebContents.isDestroyed()) {
-      log.warn(
-        `[${id}] Renderer WebContents destroyed, skipping navigation notification`,
-        "NotificationLayer",
-      );
-      return;
-    }
     log.debug(
       `[${id}] Sending navigation notification for ${url}`,
       "NotificationLayer",
     );
-    this.rendererWebContents.send(EVENTS.BROWSER.NAVIGATION, {
+    this.send(EVENTS.BROWSER.NAVIGATION, {
       blockId: id,
       url,
       canGoBack,

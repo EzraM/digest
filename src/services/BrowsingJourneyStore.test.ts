@@ -9,6 +9,18 @@ const ids = () => {
 };
 
 describe("BrowsingJourneyStore", () => {
+  it("projects only current live URLs by profile without journey identity", () => {
+    const store = new BrowsingJourneyStore(2, ids());
+    store.addVisible("handle-1", "profile-a", "https://example.com/first");
+    store.recordNavigation("handle-1", "https://example.com/current");
+    store.addVisible("handle-2", "profile-b", "https://example.com/current");
+
+    expect(store.getLiveReferences()).toEqual([
+      { profileId: "profile-a", url: "https://example.com/current" },
+      { profileId: "profile-b", url: "https://example.com/current" },
+    ]);
+  });
+
   it("evicts the least recently used detached journey per profile", () => {
     const store = new BrowsingJourneyStore(2, ids());
     store.addVisible("a:full", "profile-a", "https://a.test", "a");

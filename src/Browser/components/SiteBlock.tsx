@@ -24,9 +24,9 @@ export const site = createReactBlockSpec(
     render: (props) => {
       const { block } = props;
       const { url } = block.props;
-      const { documentId } = useDocumentContext();
+      const { documentId, profileId } = useDocumentContext();
       const { navigateToBlock } = useAppRoute();
-      const isLive = useIsLivePage(block.id);
+      const isLive = useIsLivePage(profileId, url);
 
       const openInFullView = () => {
         navigateToBlock(block.id, documentId ?? undefined);

@@ -34,7 +34,9 @@ interface ElectronAPI {
       viewId: string
     ) => Promise<{ success: boolean; error?: string }>;
     getPageInfo: (viewId: string) => Promise<BrowserPageInfo>;
-    getLivePages: () => Promise<{ blockIds: string[] }>;
+    getLivePages: () => Promise<{
+      references: Array<{ profileId: string; url: string }>;
+    }>;
     setScrollPercent: (blockId: string, scrollPercent: number) => void;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
@@ -89,7 +91,9 @@ interface ElectronAPI {
     callback: (data: { blockId: string; scrollPercent: number }) => void
   ) => () => void;
   onLivePagesChanged: (
-    callback: (data: { blockIds: string[] }) => void
+    callback: (data: {
+      references: Array<{ profileId: string; url: string }>;
+    }) => void
   ) => () => void;
   onInsertLink: (
     callback: (data: {

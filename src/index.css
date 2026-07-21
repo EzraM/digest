@@ -30,3 +30,15 @@ body {
   color: #8a6500;
   font-style: normal;
 }
+
+.bn-editor a[data-digest-live-page="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background-color: #2f9e44;
+  box-shadow: 0 0 0 1px rgba(47, 158, 68, 0.18);
+  vertical-align: 0.08em;
+}

@@ -60,7 +60,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     reload: (viewId: string) => ipcRenderer.invoke("browser:reload", viewId),
     getPageInfo: (viewId: string): Promise<BrowserPageInfo> =>
       ipcRenderer.invoke("browser:get-page-info", viewId),
-    getLivePages: (): Promise<{ blockIds: string[] }> =>
+    getLivePages: (): Promise<{
+      references: Array<{ profileId: string; url: string }>;
+    }> =>
       ipcRenderer.invoke("browser:get-live-pages"),
     setScrollPercent: (blockId: string, scrollPercent: number) => {
       log.debug(
@@ -156,10 +158,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener(channel, handler);
   },
   onLivePagesChanged: (
-    callback: (data: { blockIds: string[] }) => void
+    callback: (data: {
+      references: Array<{ profileId: string; url: string }>;
+    }) => void
   ) => {
     const channel = "browser:live-pages-changed";
-    const handler = (_: unknown, data: { blockIds: string[] }) => callback(data);
+    const handler = (
+      _: unknown,
+      data: { references: Array<{ profileId: string; url: string }> }
+    ) => callback(data);
     ipcRenderer.on(channel, handler);
     return () => ipcRenderer.removeListener(channel, handler);
   },

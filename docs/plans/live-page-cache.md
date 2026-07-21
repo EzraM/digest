@@ -402,7 +402,7 @@ The first useful vertical slice is working for both legacy site blocks and norma
 - Application logs confirmed repeated normal-link opens detach and reattach the same live journey with no second `Creating new view` or `Loading URL` event.
 - Logical Back boundaries are deferred and are no longer required for the next implementation stages.
 
-Remaining work is primarily older-history association, richer miss diagnostics and eviction tombstones, inline-link liveness projection, reference reconciliation, and removal of manual scroll persistence after broader validation.
+Remaining work is primarily older-history association, richer miss diagnostics and eviction tombstones, reference reconciliation, and removal of manual scroll persistence after broader validation.
 
 ## Proposed implementation stages
 
@@ -442,9 +442,9 @@ Logical Back boundaries are deferred. They should only be reconsidered if preser
 
 ### Stage 5: Surface liveness in the notebook
 
-- Replace block-ID snapshots with a live-reference projection.
-- Render the accessible green dot for any supported reference that resolves to a suitable live association.
-- Verify that notebook persistence never includes the live flag, journey ID, or association.
+- [x] Replace block-ID snapshots with a profile-and-URL live-reference projection.
+- [x] Render the accessible green dot for site blocks and inline links that resolve to a suitable live association.
+- [x] Keep the projection entirely in runtime IPC/renderer state; notebook persistence includes no live flag, journey ID, or association.
 
 ### Stage 6: Remove legacy preview notifications
 

@@ -156,4 +156,33 @@ describe("NotificationLayer", () => {
 
     expect(messages).toEqual([]);
   });
+
+  it("owns live-reference and placement-ready renderer notifications", () => {
+    const messages: SentMessage[] = [];
+    const notifications = new NotificationLayer(createRenderer(messages));
+
+    notifications.notifyLiveReferencesChanged([
+      { profileId: "profile-1", url: "https://example.com/" },
+    ]);
+    notifications.notifyPlacementReady("placement-1");
+
+    expect(messages).toEqual([
+      {
+        channel: "browser:live-pages-changed",
+        payload: {
+          references: [
+            { profileId: "profile-1", url: "https://example.com/" },
+          ],
+        },
+      },
+      {
+        channel: "browser:initialized",
+        payload: {
+          blockId: "placement-1",
+          success: true,
+          status: "loaded",
+        },
+      },
+    ]);
+  });
 });

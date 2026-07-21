@@ -112,7 +112,7 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "browser:get-live-pages": {
       type: "invoke",
-      fn: () => ({ blockIds: viewStore.getLivePageBlockIds() }),
+      fn: () => ({ references: viewStore.getLiveReferences() }),
     },
     "browser:set-scroll-percent": {
       type: "on",
@@ -168,18 +168,14 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
           if (result.success) {
             const blockId = toBlockId(viewId);
 
-            // Emit browser:selection event to renderer
-            const rendererWebContents = viewStore.getRendererWebContents();
-            if (rendererWebContents && !rendererWebContents.isDestroyed()) {
-              rendererWebContents.send("browser:selection", {
-                blockId,
-                sourceUrl: url,
-                sourceTitle: title || url,
-                selectionText: result.selectionText || "",
-                selectionHtml: result.selectionHtml || "",
-                capturedAt: Date.now(),
-              });
-            }
+            viewStore.notifyBrowserSelection({
+              blockId,
+              sourceUrl: url,
+              sourceTitle: title || url,
+              selectionText: result.selectionText || "",
+              selectionHtml: result.selectionHtml || "",
+              capturedAt: Date.now(),
+            });
 
             return {
               success: true,

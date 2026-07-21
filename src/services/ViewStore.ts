@@ -110,6 +110,7 @@ export class ViewStore {
 
       if (cmd.type === "updateNavigation") {
         this.journeys.recordNavigation(cmd.id, cmd.url);
+        this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
       }
 
       const cmdId = "id" in cmd ? cmd.id : undefined;
@@ -181,8 +182,8 @@ export class ViewStore {
       if (attached) {
         this.journeys.activatePlacement(execution.plan);
         this.updatePlacementBounds(execution.plan.handleId, update);
-        this.notifyPlacementReady(update.viewId);
-        this.notifyLivePagesChanged();
+        this.notifications.notifyPlacementReady(update.viewId);
+        this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
         return this.finishCacheAttempt(update, diagnostics, {
           journeyId: execution.plan.journeyId,
           outcome: "hit_current",
@@ -220,8 +221,8 @@ export class ViewStore {
     // Commit only after the Electron attachment succeeds.
     this.journeys.markVisible(handleId, update.viewId);
     this.updatePlacementBounds(handleId, update, existing);
-    this.notifyPlacementReady(update.viewId);
-    this.notifyLivePagesChanged();
+    this.notifications.notifyPlacementReady(update.viewId);
+    this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
     return this.finishCacheAttempt(update, diagnostics, {
       journeyId: this.journeys.getJourneyId(handleId),
       outcome: "hit_current",
@@ -265,7 +266,7 @@ export class ViewStore {
           update.blockId
         )
       );
-      this.notifyLivePagesChanged();
+      this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
     }
     return this.finishCacheAttempt(update, diagnostics, {
       journeyId: this.journeys.getJourneyId(update.viewId),
@@ -301,7 +302,7 @@ export class ViewStore {
   private discardJourney(handleId: string): void {
     this.journeys.remove(handleId);
     this.dispatch({ type: "remove", id: handleId });
-    this.notifyLivePagesChanged();
+    this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
   }
 
   private finishCacheAttempt(
@@ -349,7 +350,9 @@ export class ViewStore {
     this.pendingCreates.delete(viewId);
     const wasLive = this.journeys.remove(handleId);
     this.dispatch({ type: "remove", id: handleId });
-    if (wasLive) this.notifyLivePagesChanged();
+    if (wasLive) {
+      this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
+    }
   }
 
   /** Detach a notebook page while retaining its live WebContents. */
@@ -363,11 +366,11 @@ export class ViewStore {
     log.debug(`[${viewId}] Detaching live page`, "ViewStore");
     this.interpreter.detachView(handleId);
     this.destroyEvictedViews(this.journeys.markDetached(handleId));
-    this.notifyLivePagesChanged();
+    this.notifications.notifyLiveReferencesChanged(this.getLiveReferences());
   }
 
-  getLivePageBlockIds(): string[] {
-    return this.journeys.getLiveReferenceIds();
+  getLiveReferences(): Array<{ profileId: string; url: string }> {
+    return this.journeys.getLiveReferences();
   }
 
   private destroyEvictedViews(viewIds: string[]): void {
@@ -375,26 +378,6 @@ export class ViewStore {
       log.debug(`[${viewId}] Evicting live page`, "ViewStore");
       this.pendingCreates.delete(viewId);
       this.dispatch({ type: "remove", id: viewId });
-    }
-  }
-
-  private notifyLivePagesChanged(): void {
-    const renderer = this.interpreter.getRendererWebContents();
-    if (!renderer.isDestroyed()) {
-      renderer.send("browser:live-pages-changed", {
-        blockIds: this.getLivePageBlockIds(),
-      });
-    }
-  }
-
-  private notifyPlacementReady(placementId: string): void {
-    const renderer = this.interpreter.getRendererWebContents();
-    if (!renderer.isDestroyed()) {
-      renderer.send("browser:initialized", {
-        blockId: placementId,
-        success: true,
-        status: "loaded",
-      });
     }
   }
 
@@ -419,11 +402,15 @@ export class ViewStore {
     return this.handles;
   }
 
-  /**
-   * Get the renderer WebContents (for sending events to renderer)
-   */
-  getRendererWebContents(): WebContents {
-    return this.interpreter.getRendererWebContents();
+  notifyBrowserSelection(selection: {
+    blockId: string;
+    sourceUrl: string;
+    sourceTitle: string;
+    selectionText: string;
+    selectionHtml: string;
+    capturedAt: number;
+  }): void {
+    this.notifications.notifyBrowserSelection(selection);
   }
 
   // Handle operations (direct queries/effects on views, no state change)

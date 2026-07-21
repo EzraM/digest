@@ -45,6 +45,11 @@ export type JourneyCacheDiagnostics = {
   hasCrossProfileMatch: boolean;
 };
 
+export type LiveReference = {
+  profileId: string;
+  url: string;
+};
+
 /**
  * Serialize a URL without removing application-significant state. URL performs
  * only syntax-level normalization (for example, casing the host and removing a
@@ -287,6 +292,19 @@ export class BrowsingJourneyStore {
         )
       )
     );
+  }
+
+  /** Runtime-only projection of pages that can be resumed without loading. */
+  getLiveReferences(): LiveReference[] {
+    const references = new Map<string, LiveReference>();
+    for (const journey of this.journeys.values()) {
+      const url = normalizeJourneyUrl(journey.currentUrl);
+      references.set(this.urlKey(journey.profileId, url), {
+        profileId: journey.profileId,
+        url,
+      });
+    }
+    return Array.from(references.values());
   }
 
   private getByHandle(handleId: string): BrowsingJourney | undefined {

@@ -1,11 +1,25 @@
 import { useSyncExternalStore } from "react";
 
-let liveBlockIds = new Set<string>();
+export type LiveReference = { profileId: string; url: string };
+
+let liveReferenceKeys = new Set<string>();
 let initialized = false;
 const listeners = new Set<() => void>();
 
-function publish(blockIds: string[]): void {
-  liveBlockIds = new Set(blockIds);
+export function liveReferenceKey(profileId: string, url: string): string {
+  let normalizedUrl = url.trim();
+  try {
+    normalizedUrl = new URL(normalizedUrl).href;
+  } catch {
+    // Keep invalid or application-specific URLs byte-for-byte after trimming.
+  }
+  return `${profileId}\u0000${normalizedUrl}`;
+}
+
+function publish(references: LiveReference[]): void {
+  liveReferenceKeys = new Set(
+    references.map(({ profileId, url }) => liveReferenceKey(profileId, url))
+  );
   for (const listener of listeners) listener();
 }
 
@@ -13,10 +27,10 @@ function initialize(): void {
   if (initialized) return;
   initialized = true;
 
-  window.electronAPI.onLivePagesChanged(({ blockIds }) => publish(blockIds));
+  window.electronAPI.onLivePagesChanged(({ references }) => publish(references));
   void window.electronAPI.browser
     .getLivePages()
-    .then(({ blockIds }) => publish(blockIds))
+    .then(({ references }) => publish(references))
     .catch((error) => {
       console.error("Failed to read live page cache state:", error);
     });
@@ -29,10 +43,14 @@ function subscribe(listener: () => void): () => void {
 }
 
 function getSnapshot(): ReadonlySet<string> {
-  return liveBlockIds;
+  return liveReferenceKeys;
 }
 
-export function useIsLivePage(blockId: string): boolean {
-  const blockIds = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  return blockIds.has(blockId);
+export function useLiveReferenceKeys(): ReadonlySet<string> {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useIsLivePage(profileId: string, url: string): boolean {
+  const referenceKeys = useLiveReferenceKeys();
+  return referenceKeys.has(liveReferenceKey(profileId, url));
 }

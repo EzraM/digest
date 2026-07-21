@@ -9,10 +9,12 @@ import {
   useSelectedBlocks,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { CustomBlockNoteEditor } from "../../types/schema";
 import { SlashCommandOption } from "../../types/slashCommand";
 import { useEditorScrollIntoView } from "../../hooks/useEditorScrollIntoView";
+import { useDocumentContext } from "../../context/DocumentContext";
+import { useLiveInlineLinkIndicators } from "../../Browser/useLiveInlineLinkIndicators";
 
 type EditorPaneProps = {
   editor: CustomBlockNoteEditor;
@@ -30,9 +32,12 @@ export const EditorPane = ({
   focusBlockId,
 }: EditorPaneProps) => {
   useEditorScrollIntoView(focusBlockId, editor);
+  const { profileId } = useDocumentContext();
+  const editorRootRef = useRef<HTMLDivElement>(null);
+  useLiveInlineLinkIndicators(editorRootRef, profileId);
 
   return (
-    <div className="App">
+    <div className="App" ref={editorRootRef}>
       <EditorErrorBoundary>
         <BlockNoteView
           editor={editor}
