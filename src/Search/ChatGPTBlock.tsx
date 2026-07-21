@@ -1,16 +1,17 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { createBlockNoteExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
   CustomBlock,
-  CustomPartialBlock,
 } from "../types/schema";
+import { useAppRoute } from "../context/AppRouteContext";
 import { SearchBlockShell } from "./SearchBlockShell";
 
 export const ChatGPTExtensionName = "digest-chatgpt";
 const ChatGPTBlockTypes = new Set([ChatGPTExtensionName, "chatGPT"]);
+const navigators = new WeakMap<object, (url: string) => void>();
 
 // Type for inline content items
 interface InlineContentItem {
@@ -34,21 +35,19 @@ function getPlainTextFromInlineContent(content: InlineContentItem[]): string {
 function executeChatGPTQuery(
   query: string,
   block: CustomBlock,
-  editor: CustomBlockNoteEditor
+  editor: CustomBlockNoteEditor,
+  navigateToUrl = navigators.get(editor)
 ): void {
-  if (!query.trim()) {
+  if (!query.trim() || !navigateToUrl) {
     return;
   }
 
   const encodedQuery = encodeURIComponent(query.trim());
   const chatGPTUrl = `https://chatgpt.com/?q=${encodedQuery}`;
 
-  // Replace the query block with a site block in place
-  editor.updateBlock(block, {
-    type: "site",
-    props: { url: chatGPTUrl },
-    content: undefined,
-  } as unknown as CustomPartialBlock);
+  // The prompt is temporary: remove it from the notebook before opening ChatGPT.
+  editor.removeBlocks([block.id]);
+  navigateToUrl(chatGPTUrl);
 }
 
 // Extension for handling Enter key in ChatGPTBlock
@@ -85,6 +84,16 @@ export const ChatGPT = createReactBlockSpec(
   {
     render: (props) => {
       const { block, editor, contentRef } = props;
+      const { navigateToUrl } = useAppRoute();
+
+      useEffect(() => {
+        navigators.set(editor, navigateToUrl);
+        return () => {
+          if (navigators.get(editor) === navigateToUrl) {
+            navigators.delete(editor);
+          }
+        };
+      }, [editor, navigateToUrl]);
 
       const handleQuery = useCallback(() => {
         // Extract the plain text from the block's inline content
@@ -92,8 +101,13 @@ export const ChatGPT = createReactBlockSpec(
           block.content as InlineContentItem[]
         );
 
-        executeChatGPTQuery(query, block as CustomBlock, editor);
-      }, [block, editor]);
+        executeChatGPTQuery(
+          query,
+          block as CustomBlock,
+          editor,
+          navigateToUrl
+        );
+      }, [block, editor, navigateToUrl]);
 
       return (
         <SearchBlockShell

@@ -1,15 +1,16 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { createBlockNoteExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
   CustomBlock,
-  CustomPartialBlock,
 } from "../types/schema";
+import { useAppRoute } from "../context/AppRouteContext";
 import { SearchBlockShell } from "./SearchBlockShell";
 
 export const GoogleSearchExtensionName = "digest-google-search";
+const navigators = new WeakMap<object, (url: string) => void>();
 
 // Type for inline content items
 interface InlineContentItem {
@@ -33,21 +34,19 @@ function getPlainTextFromInlineContent(content: InlineContentItem[]): string {
 function executeGoogleSearch(
   query: string,
   block: CustomBlock,
-  editor: CustomBlockNoteEditor
+  editor: CustomBlockNoteEditor,
+  navigateToUrl = navigators.get(editor)
 ): void {
-  if (!query.trim()) {
+  if (!query.trim() || !navigateToUrl) {
     return;
   }
 
   const encodedQuery = encodeURIComponent(query.trim());
   const googleUrl = `https://www.google.com/search?q=${encodedQuery}`;
 
-  // Replace the search block with a site block in place
-  editor.updateBlock(block, {
-    type: "site",
-    props: { url: googleUrl },
-    content: undefined,
-  } as unknown as CustomPartialBlock);
+  // The prompt is temporary: remove it from the notebook before opening Google.
+  editor.removeBlocks([block.id]);
+  navigateToUrl(googleUrl);
 }
 
 // Extension for handling Enter key in GoogleSearchBlock
@@ -84,6 +83,16 @@ export const GoogleSearch = createReactBlockSpec(
   {
     render: (props) => {
       const { block, editor, contentRef } = props;
+      const { navigateToUrl } = useAppRoute();
+
+      useEffect(() => {
+        navigators.set(editor, navigateToUrl);
+        return () => {
+          if (navigators.get(editor) === navigateToUrl) {
+            navigators.delete(editor);
+          }
+        };
+      }, [editor, navigateToUrl]);
 
       const handleSearch = useCallback(() => {
         // Extract the plain text from the block's inline content
@@ -91,9 +100,13 @@ export const GoogleSearch = createReactBlockSpec(
           block.content as InlineContentItem[]
         );
 
-        // Use the well-factored search execution logic
-        executeGoogleSearch(query, block as CustomBlock, editor);
-      }, [block, editor]);
+        executeGoogleSearch(
+          query,
+          block as CustomBlock,
+          editor,
+          navigateToUrl
+        );
+      }, [block, editor, navigateToUrl]);
 
       return (
         <SearchBlockShell

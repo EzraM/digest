@@ -110,7 +110,7 @@ export const slashCommandOptions: SlashCommandOption[] = [
   {
     key: "google_search",
     title: "Google Search",
-    subtext: "Search Google and view results",
+    subtext: "Search Google from a prompt",
     aliases: ["g", "google", "search"],
     group: "Media",
   },
