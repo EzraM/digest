@@ -106,6 +106,47 @@ describe("BrowsingJourneyStore", () => {
     ).toMatchObject({ isCurrentDocument: true });
   });
 
+  it("plans restoration of a recorded older history entry", () => {
+    const store = new BrowsingJourneyStore(2, ids());
+    store.addVisible("a:full", "profile-a", "https://a.test", "a");
+    store.recordNavigation("a:full", "https://a.test", 0);
+    store.recordNavigation("a:full", "https://b.test", 1);
+    store.markDetached("a:full");
+
+    expect(
+      store.planOpenReference({
+        placementId: "a-again:full",
+        referenceId: "a-again",
+        profileId: "profile-a",
+        url: "https://a.test",
+      })
+    ).toEqual({
+      type: "reuse-history",
+      journeyId: "journey-1",
+      handleId: "a:full",
+      placementId: "a-again:full",
+      referenceId: "a-again",
+      requestedUrl: "https://a.test",
+      historyIndex: 0,
+    });
+  });
+
+  it("does not plan a history hit when no entry index was observed", () => {
+    const store = new BrowsingJourneyStore(2, ids());
+    store.addVisible("a:full", "profile-a", "https://a.test", "a");
+    store.recordNavigation("a:full", "https://b.test", 1);
+    store.markDetached("a:full");
+
+    expect(
+      store.planOpenReference({
+        placementId: "a-again:full",
+        referenceId: "a-again",
+        profileId: "profile-a",
+        url: "https://a.test",
+      })
+    ).toMatchObject({ type: "create" });
+  });
+
   it("plans and commits current-document reuse as an atomic placement transition", () => {
     const store = new BrowsingJourneyStore(2, ids());
     store.addVisible("a:full", "profile-a", "https://same.test", "a");
@@ -123,6 +164,7 @@ describe("BrowsingJourneyStore", () => {
       journeyId: "journey-1",
       handleId: "a:full",
       placementId: "b:full",
+      requestedUrl: "https://same.test",
     });
     if (plan.type !== "reuse-current") throw new Error("expected reuse plan");
 

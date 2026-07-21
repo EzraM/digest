@@ -394,7 +394,7 @@ The first useful vertical slice is working for both legacy site blocks and norma
 - `BrowsingJourneyStore` owns opaque journey identity, placement relationships, conservative URL associations, profile isolation, and per-profile bounded LRU policy.
 - Full-page ephemeral URL routes are retained as live journeys. “Ephemeral” now describes route durability rather than whether the browser runtime may be cached.
 - Leaving a retained page detaches its `WebContentsView`; reopening the same normalized URL in the same profile reattaches it without `loadURL()`.
-- Current-document reuse is intentionally distinct from an older URL merely visited by the journey. Older-history restoration is not implemented yet.
+- Current-document reuse is intentionally distinct from an older URL merely visited by the journey. Older entries are reused only when their recorded Chromium history index still contains the exact normalized URL.
 - `ViewStore.openReference()` is the authoritative main-process opening workflow used by the existing renderer update channel.
 - Opening policy and miss classification live in the functional core (`BrowsingJourneyStore` and `LivePageOpenPolicy`); `ViewStore` orchestrates the workflow, `Interpreter` executes Electron view effects, and placement changes are committed only after attachment succeeds.
 - Attachment failure and destroyed renderer paths discard stale journey state and fall back to fresh creation.
@@ -407,7 +407,7 @@ The first useful vertical slice is working for both legacy site blocks and norma
 - Logical Back boundaries are deferred and are no longer required for the next implementation stages.
 - Manual `scrollPercent` capture, persistence, and restoration remain active as a fallback pending the Stage 7 validation and cleanup.
 
-Remaining work is primarily older-history association, richer miss diagnostics and eviction tombstones, reference reconciliation, and removal of manual scroll persistence after broader validation.
+Remaining work is primarily richer miss diagnostics and eviction tombstones, reference reconciliation, and removal of manual scroll persistence after broader validation.
 
 ## Proposed implementation stages
 
@@ -429,7 +429,7 @@ Remaining work is primarily older-history association, richer miss diagnostics a
 
 - [x] Add a conservative URL normalizer.
 - [x] Index zero or more live associations by `(profileId, normalizedUrl)`.
-- [ ] Track navigation entry identity or index where Electron exposes enough information.
+- [x] Track the last observed navigation index for each exact URL association and revalidate it against Electron before reuse.
 - [x] Update the index as a journey navigates without mutating its originating notebook reference.
 - [x] Prefer the most recent suitable current-document association while allowing multiple instances of one URL.
 
@@ -439,7 +439,7 @@ Remaining work is primarily older-history association, richer miss diagnostics a
 - [x] Add the SQLite cache-attempt migration and record the final outcome at this operation.
 - [ ] Add the complete diagnostic near-match classification and session-only eviction tombstones. Current telemetry distinguishes exact candidates from unrelated misses.
 - [x] Reuse a suitable current-document journey or create a fresh journey on a miss.
-- [ ] Restore older navigation entries on best-effort history hits.
+- [x] Restore older navigation entries on best-effort history hits, falling back to a fresh view when the recorded index is stale.
 - [ ] Reconcile explicit reference deletion separately from view eviction.
 - [x] Validate core planning, profile diagnostics, retention policy, and telemetry privacy with focused tests and smoke assertions.
 

@@ -40,7 +40,7 @@ export type OpenReferenceRequest = {
 
 export type OpenReferenceResult = {
   journeyId?: string;
-  outcome: "hit_current" | "miss";
+  outcome: "hit_current" | "hit_history" | "miss";
   missReason?: CacheMissReason;
   loadAvoided: boolean;
 };
@@ -112,7 +112,12 @@ export class ViewStore {
       this.world = nextWorld;
 
       if (cmd.type === "updateNavigation") {
-        this.journeys.recordNavigation(cmd.id, cmd.url);
+        const position = this.operations.getNavigationPosition(cmd.id);
+        this.journeys.recordNavigation(
+          cmd.id,
+          cmd.url,
+          position.success ? position.value.activeIndex : undefined
+        );
         this.publishLiveReferences();
       }
 
@@ -171,7 +176,7 @@ export class ViewStore {
       url: update.url,
     });
     const reusableView =
-      corePlan.type === "reuse-current"
+      corePlan.type === "reuse-current" || corePlan.type === "reuse-history"
         ? this.handles.get(corePlan.handleId)
         : undefined;
     const execution = decideOpenReferenceExecution(
@@ -181,6 +186,22 @@ export class ViewStore {
     );
 
     if (execution.type === "reuse-current") {
+      const targetIndex =
+        execution.plan.type === "reuse-history"
+          ? execution.plan.historyIndex
+          : undefined;
+      const prepared = this.operations.prepareNavigationEntry(
+        execution.plan.handleId,
+        execution.plan.requestedUrl,
+        targetIndex
+      );
+      if (!prepared.success) {
+        this.journeys.forgetHistoryAssociation(
+          execution.plan.handleId,
+          execution.plan.requestedUrl
+        );
+        return this.createReference(update, diagnostics, "stale_association");
+      }
       const attached = this.interpreter.attachView(execution.plan.handleId);
       if (attached) {
         this.journeys.activatePlacement(execution.plan);
@@ -189,7 +210,10 @@ export class ViewStore {
         this.publishLiveReferences();
         return this.finishCacheAttempt(update, diagnostics, {
           journeyId: execution.plan.journeyId,
-          outcome: "hit_current",
+          outcome:
+            execution.plan.type === "reuse-history"
+              ? "hit_history"
+              : "hit_current",
           loadAvoided: true,
         });
       }
@@ -215,6 +239,25 @@ export class ViewStore {
       return undefined;
     }
 
+    const historyMatch = this.journeys.resolveHistory(
+      update.profileId,
+      update.url
+    );
+    const targetIndex =
+      historyMatch?.handleId === handleId
+        ? historyMatch.historyIndex
+        : undefined;
+    const prepared = this.operations.prepareNavigationEntry(
+      handleId,
+      update.url,
+      targetIndex
+    );
+    if (!prepared.success) {
+      this.discardJourney(handleId);
+      this.pendingCreates.delete(update.viewId);
+      return this.createReference(update, diagnostics, "stale_association");
+    }
+
     if (!this.interpreter.attachView(handleId)) {
       this.discardJourney(handleId);
       this.pendingCreates.delete(update.viewId);
@@ -228,7 +271,7 @@ export class ViewStore {
     this.publishLiveReferences();
     return this.finishCacheAttempt(update, diagnostics, {
       journeyId: this.journeys.getJourneyId(handleId),
-      outcome: "hit_current",
+      outcome: targetIndex === undefined ? "hit_current" : "hit_history",
       loadAvoided: true,
     });
   }
@@ -336,7 +379,8 @@ export class ViewStore {
       candidateCount: diagnostics.candidateCount,
       cacheSize: finalDiagnostics.cacheSize,
       detachedCount: finalDiagnostics.detachedCount,
-      reusedJourney: result.outcome === "hit_current",
+      reusedJourney:
+        result.outcome === "hit_current" || result.outcome === "hit_history",
       loadAvoided: result.loadAvoided,
     };
     try {

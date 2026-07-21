@@ -8,12 +8,13 @@ export type CacheMissReason =
   | "profile_mismatch"
   | "renderer_unavailable"
   | "attach_failed"
+  | "stale_association"
   | "ambiguous";
 
 export type OpenReferenceExecution =
   | {
       type: "reuse-current";
-      plan: Extract<OpenReferencePlan, { type: "reuse-current" }>;
+      plan: Extract<OpenReferencePlan, { type: "reuse-current" | "reuse-history" }>;
     }
   | {
       type: "create";
@@ -26,7 +27,7 @@ export function decideOpenReferenceExecution(
   diagnostics: JourneyCacheDiagnostics,
   reusableHandleAvailable: boolean
 ): OpenReferenceExecution {
-  if (plan.type === "reuse-current") {
+  if (plan.type === "reuse-current" || plan.type === "reuse-history") {
     return reusableHandleAvailable
       ? { type: "reuse-current", plan }
       : {

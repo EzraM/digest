@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 import { normalizeJourneyUrl } from "./BrowsingJourneyStore";
 import type { CacheMissReason } from "./LivePageOpenPolicy";
 
-export type CacheAttemptOutcome = "hit_current" | "miss";
+export type CacheAttemptOutcome = "hit_current" | "hit_history" | "miss";
 export type CacheAttempt = {
   profileId: string;
   referenceKind: "site-block" | "ephemeral-url";

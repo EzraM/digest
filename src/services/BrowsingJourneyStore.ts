@@ -11,6 +11,7 @@ export type BrowsingJourney = {
   lastUsedAt: number;
   referenceIds: Set<string>;
   normalizedUrls: Set<string>;
+  historyIndexByNormalizedUrl: Map<string, number>;
 };
 
 export type JourneyMatch = {
@@ -31,6 +32,16 @@ export type OpenReferencePlan =
       handleId: string;
       placementId: string;
       referenceId: string;
+      requestedUrl: string;
+    }
+  | {
+      type: "reuse-history";
+      journeyId: string;
+      handleId: string;
+      placementId: string;
+      referenceId: string;
+      requestedUrl: string;
+      historyIndex: number;
     }
   | {
       type: "create";
@@ -106,6 +117,7 @@ export class BrowsingJourneyStore {
       lastUsedAt: this.nextTimestamp(),
       referenceIds: new Set(referenceId ? [referenceId] : []),
       normalizedUrls: new Set(),
+      historyIndexByNormalizedUrl: new Map(),
     };
     this.journeys.set(journey.journeyId, journey);
     this.journeyIdByHandle.set(handleId, journey.journeyId);
@@ -130,31 +142,42 @@ export class BrowsingJourneyStore {
     url: string;
   }): OpenReferencePlan {
     const reusable = this.resolveCurrent(input.profileId, input.url);
-    if (!reusable) {
+    const historyReusable = reusable
+      ? undefined
+      : this.resolveHistory(input.profileId, input.url);
+    const candidate = reusable ?? historyReusable;
+    if (!candidate) {
       return {
         type: "create",
         placementId: input.placementId,
         reason: "no-current-association",
       };
     }
-    if (!this.isDetached(reusable.handleId)) {
+    if (!this.isDetached(candidate.handleId)) {
       return {
         type: "create",
         placementId: input.placementId,
         reason: "matching-journey-visible",
       };
     }
-    return {
-      type: "reuse-current",
-      journeyId: reusable.journeyId,
-      handleId: reusable.handleId,
+    const base = {
+      journeyId: candidate.journeyId,
+      handleId: candidate.handleId,
       placementId: input.placementId,
       referenceId: input.referenceId,
+      requestedUrl: input.url,
     };
+    return historyReusable
+      ? {
+          ...base,
+          type: "reuse-history",
+          historyIndex: historyReusable.historyIndex,
+        }
+      : { ...base, type: "reuse-current" };
   }
 
   activatePlacement(
-    plan: Extract<OpenReferencePlan, { type: "reuse-current" }>
+    plan: Extract<OpenReferencePlan, { type: "reuse-current" | "reuse-history" }>
   ): void {
     const journey = this.getByHandle(plan.handleId);
     if (!journey || journey.journeyId !== plan.journeyId) return;
@@ -211,10 +234,16 @@ export class BrowsingJourneyStore {
     return this.enforceLimit(journey.profileId);
   }
 
-  recordNavigation(handleId: string, url: string): void {
+  recordNavigation(handleId: string, url: string, historyIndex?: number): void {
     const journey = this.getByHandle(handleId);
     if (!journey) return;
-    this.associateUrl(journey, url);
+    this.associateUrl(journey, url, historyIndex);
+  }
+
+  forgetHistoryAssociation(handleId: string, url: string): void {
+    this.getByHandle(handleId)?.historyIndexByNormalizedUrl.delete(
+      normalizeJourneyUrl(url)
+    );
   }
 
   /**
@@ -269,6 +298,35 @@ export class BrowsingJourneyStore {
     };
   }
 
+  /** Resolve a previously visited entry that is no longer the current document. */
+  resolveHistory(
+    profileId: string,
+    url: string
+  ): (JourneyMatch & { historyIndex: number }) | undefined {
+    const normalizedUrl = normalizeJourneyUrl(url);
+    const ids = this.journeyIdsByProfileUrl.get(this.urlKey(profileId, url));
+    if (!ids) return undefined;
+
+    const journey = Array.from(ids, (id) => this.journeys.get(id))
+      .filter(
+        (entry): entry is BrowsingJourney =>
+          entry !== undefined &&
+          normalizeJourneyUrl(entry.currentUrl) !== normalizedUrl &&
+          entry.historyIndexByNormalizedUrl.has(normalizedUrl)
+      )
+      .sort((a, b) => b.lastUsedAt - a.lastUsedAt)[0];
+    const historyIndex = journey?.historyIndexByNormalizedUrl.get(normalizedUrl);
+    if (!journey || historyIndex === undefined) return undefined;
+
+    return {
+      journeyId: journey.journeyId,
+      handleId: journey.handleId,
+      profileId: journey.profileId,
+      currentUrl: journey.currentUrl,
+      historyIndex,
+    };
+  }
+
   remove(handleId: string): boolean {
     const journey = this.getByHandle(handleId);
     if (!journey) return false;
@@ -312,9 +370,16 @@ export class BrowsingJourneyStore {
     return journeyId ? this.journeys.get(journeyId) : undefined;
   }
 
-  private associateUrl(journey: BrowsingJourney, url: string): void {
+  private associateUrl(
+    journey: BrowsingJourney,
+    url: string,
+    historyIndex?: number
+  ): void {
     journey.currentUrl = url;
     const normalizedUrl = normalizeJourneyUrl(url);
+    if (historyIndex !== undefined) {
+      journey.historyIndexByNormalizedUrl.set(normalizedUrl, historyIndex);
+    }
     if (journey.normalizedUrls.has(normalizedUrl)) return;
     journey.normalizedUrls.add(normalizedUrl);
     const key = this.urlKey(journey.profileId, normalizedUrl);

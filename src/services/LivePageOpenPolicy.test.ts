@@ -15,6 +15,23 @@ describe("LivePageOpenPolicy", () => {
       handleId: "handle-1",
       placementId: "placement-1",
       referenceId: "reference-1",
+      requestedUrl: "https://example.test",
+    };
+    expect(decideOpenReferenceExecution(plan, diagnostics, true)).toEqual({
+      type: "reuse-current",
+      plan,
+    });
+  });
+
+  it("passes an available history-entry plan through for restoration", () => {
+    const plan = {
+      type: "reuse-history" as const,
+      journeyId: "journey-1",
+      handleId: "handle-1",
+      placementId: "placement-1",
+      referenceId: "reference-1",
+      requestedUrl: "https://example.test/earlier",
+      historyIndex: 2,
     };
     expect(decideOpenReferenceExecution(plan, diagnostics, true)).toEqual({
       type: "reuse-current",
@@ -29,6 +46,7 @@ describe("LivePageOpenPolicy", () => {
       handleId: "handle-1",
       placementId: "placement-1",
       referenceId: "reference-1",
+      requestedUrl: "https://example.test",
     };
     expect(
       decideOpenReferenceExecution(reusePlan, diagnostics, false)

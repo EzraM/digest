@@ -1,5 +1,6 @@
 import { HandleRegistry } from './HandleRegistry';
 import { log } from '../../../utils/mainLogger';
+import { normalizeJourneyUrl } from '../../../services/BrowsingJourneyStore';
 
 export type Result<T> = { success: true; value: T } | { success: false; error: string };
 
@@ -14,6 +15,48 @@ export type Result<T> = { success: true; value: T } | { success: false; error: s
  */
 export class HandleOperations {
   constructor(private handles: HandleRegistry) {}
+
+  getNavigationPosition(id: string): Result<{ activeIndex: number; url: string }> {
+    const view = this.handles.get(id);
+    if (!view || view.webContents.isDestroyed()) {
+      return { success: false, error: `No live WebContents for ${id}` };
+    }
+    const history = view.webContents.navigationHistory;
+    const activeIndex = history.getActiveIndex();
+    const entry = history.getEntryAtIndex(activeIndex);
+    if (!entry) return { success: false, error: `No active history entry for ${id}` };
+    return { success: true, value: { activeIndex, url: entry.url } };
+  }
+
+  /** Validate the live entry and, for a history hit, select it before attachment. */
+  prepareNavigationEntry(
+    id: string,
+    requestedUrl: string,
+    historyIndex?: number
+  ): Result<{ activeIndex: number }> {
+    const view = this.handles.get(id);
+    if (!view || view.webContents.isDestroyed()) {
+      return { success: false, error: `No live WebContents for ${id}` };
+    }
+    const history = view.webContents.navigationHistory;
+    const index = historyIndex ?? history.getActiveIndex();
+    const entry = history.getEntryAtIndex(index);
+    if (
+      !entry ||
+      normalizeJourneyUrl(entry.url) !== normalizeJourneyUrl(requestedUrl)
+    ) {
+      return { success: false, error: `History entry ${index} is stale for ${id}` };
+    }
+    try {
+      if (history.getActiveIndex() !== index) history.goToIndex(index);
+      return { success: true, value: { activeIndex: index } };
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to select history entry ${index} for ${id}: ${error}`,
+      };
+    }
+  }
 
   /**
    * Query the DevTools state for a view.
