@@ -1,4 +1,11 @@
-import { createContext, useContext, ReactNode, useState, useCallback } from "react";
+import {
+  createContext,
+  Fragment,
+  useContext,
+  ReactNode,
+  useState,
+  useCallback,
+} from "react";
 
 type PageToolSlotContextType = {
   content: ReactNode | null;
@@ -51,7 +58,14 @@ export const PageToolSlotProvider = ({
   }, []);
 
   // Compose all registered tools into a single content node
-  const content = tools.size > 0 ? <>{Array.from(tools.values())}</> : null;
+  const content =
+    tools.size > 0 ? (
+      <>
+        {Array.from(tools, ([id, tool]) => (
+          <Fragment key={id}>{tool}</Fragment>
+        ))}
+      </>
+    ) : null;
 
   return (
     <PageToolSlotContext.Provider

@@ -27,6 +27,7 @@ import {
 } from "./LivePageOpenPolicy";
 import { LivePagesProjection } from "../types/browser";
 import { LivePageProjectionStore } from "./LivePageProjectionStore";
+import { PlacementGenerationStore } from "./PlacementGenerationStore";
 
 export type OpenReferenceRequest = {
   viewId: string;
@@ -36,6 +37,7 @@ export type OpenReferenceRequest = {
   profileId: string;
   layout?: "inline" | "full";
   referenceKind?: "site-block" | "ephemeral-url";
+  placementGeneration?: number;
 };
 
 export type OpenReferenceResult = {
@@ -43,6 +45,12 @@ export type OpenReferenceResult = {
   outcome: "hit_current" | "hit_history" | "miss";
   missReason?: CacheMissReason;
   loadAvoided: boolean;
+};
+
+export type ViewStoreDependencies = {
+  now?: () => number;
+  journeys?: BrowsingJourneyStore;
+  livePages?: LivePageProjectionStore;
 };
 
 /**
@@ -58,10 +66,13 @@ export class ViewStore {
   private events: EventTranslator;
   private contextMenus: ContextMenuController;
   private operations: HandleOperations;
+  private eventDisposers = new Map<string, () => void>();
 
   private downloadManager?: DownloadManager;
-  private journeys = new BrowsingJourneyStore(10);
-  private livePages = new LivePageProjectionStore();
+  private journeys: BrowsingJourneyStore;
+  private livePages: LivePageProjectionStore;
+  private readonly now: () => number;
+  private placementGenerations = new PlacementGenerationStore();
 
   // Rate limiting: track pending creates to prevent duplicate URL loads
   // Maps viewId -> { url, timestamp } of pending create commands
@@ -72,8 +83,12 @@ export class ViewStore {
     baseWindow: BrowserWindow,
     layerManager: ViewLayerManager | undefined,
     rendererWebContents: WebContents,
-    private readonly cacheTelemetry?: LivePageCacheTelemetry
+    private readonly cacheTelemetry?: LivePageCacheTelemetry,
+    dependencies: ViewStoreDependencies = {}
   ) {
+    this.now = dependencies.now ?? Date.now;
+    this.journeys = dependencies.journeys ?? new BrowsingJourneyStore(10);
+    this.livePages = dependencies.livePages ?? new LivePageProjectionStore();
     this.notifications = new NotificationLayer(
       rendererWebContents,
       (handleId) => this.journeys.getActivePlacementId(handleId)
@@ -88,7 +103,11 @@ export class ViewStore {
       rendererWebContents,
       (id, view, profileId) => {
         // When a view is created, attach event listeners
-        this.events.attach(id, view, (cmd) => this.dispatch(cmd), profileId);
+        this.eventDisposers.get(id)?.();
+        this.eventDisposers.set(
+          id,
+          this.events.attach(id, view, (cmd) => this.dispatch(cmd), profileId)
+        );
         // Attach download handling to the view's session
         if (this.downloadManager) {
           this.downloadManager.attachToWebContents(view.webContents);
@@ -128,6 +147,10 @@ export class ViewStore {
       );
 
       // Execute side effects
+      if (cmd.type === "remove") {
+        this.eventDisposers.get(cmd.id)?.();
+        this.eventDisposers.delete(cmd.id);
+      }
       this.interpreter.interpret(cmd);
 
       // Notify renderer of changes
@@ -153,6 +176,18 @@ export class ViewStore {
 
   /** Authoritative main-process operation for opening any URL reference. */
   openReference(update: OpenReferenceRequest): OpenReferenceResult | undefined {
+    if (
+      !this.placementGenerations.acceptUpdate(
+        update.viewId,
+        update.placementGeneration
+      )
+    ) {
+      log.debug(
+        `[${update.viewId}] Ignoring stale placement update generation ${update.placementGeneration}`,
+        "ViewStore"
+      );
+      return undefined;
+    }
     const handleId = this.resolveHandleId(update.viewId);
     const existing = this.world.get(handleId);
     const diagnostics = this.journeys.getDiagnostics(
@@ -282,7 +317,7 @@ export class ViewStore {
     missReason: CacheMissReason
   ): OpenReferenceResult | undefined {
     const pending = this.pendingCreates.get(update.viewId);
-    const now = Date.now();
+    const now = this.now();
     if (
       pending?.url === update.url &&
       now - pending.timestamp < ViewStore.CREATE_COOLDOWN_MS
@@ -395,6 +430,9 @@ export class ViewStore {
     log.debug(`[${viewId}] Removing view`, "ViewStore");
     // Clean up rate limiting state
     this.pendingCreates.delete(viewId);
+    this.placementGenerations.remove(viewId);
+    this.eventDisposers.get(handleId)?.();
+    this.eventDisposers.delete(handleId);
     const wasLive = this.journeys.remove(handleId);
     this.dispatch({ type: "remove", id: handleId });
     if (wasLive) {
@@ -403,7 +441,16 @@ export class ViewStore {
   }
 
   /** Detach a notebook page while retaining its live WebContents. */
-  handleDetachView(viewId: string): void {
+  handleDetachView(viewId: string, placementGeneration?: number): void {
+    if (
+      !this.placementGenerations.acceptDetach(viewId, placementGeneration)
+    ) {
+      log.debug(
+        `[${viewId}] Ignoring stale detach generation ${placementGeneration}`,
+        "ViewStore"
+      );
+      return;
+    }
     const handleId = this.resolveHandleId(viewId);
     if (!this.journeys.has(handleId)) {
       this.handleRemoveView(viewId);

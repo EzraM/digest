@@ -47,13 +47,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     profileId: string;
     layout?: "inline" | "full";
     referenceKind?: "site-block" | "ephemeral-url";
+    placementGeneration?: number;
   }) => ipcRenderer.send("update-browser-view", data),
   removeBrowser: (blockId: string) => {
     ipcRenderer.send("remove-browser", blockId);
   },
-  removeView: (viewId: string) => {
+  removeView: (viewId: string, placementGeneration?: number) => {
     log.debug(`Removing view ${viewId}`, "preload");
-    ipcRenderer.send("remove-view", viewId);
+    ipcRenderer.send("remove-view", { viewId, placementGeneration });
   },
   browser: {
     getDevToolsState: (blockId: string) =>

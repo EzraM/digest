@@ -1,4 +1,4 @@
-import { app, BrowserWindow, DownloadItem, WebContents, shell } from "electron";
+import { app, DownloadItem, Session, WebContents, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { log } from "../utils/mainLogger";
@@ -34,6 +34,7 @@ export class DownloadManager {
   private onProgress?: DownloadEventCallback;
   private onCompleted?: DownloadEventCallback;
   private onFailed?: DownloadEventCallback;
+  private attachedSessions = new WeakSet<Session>();
 
   setOnStarted(cb: DownloadEventCallback): void {
     this.onStarted = cb;
@@ -48,14 +49,13 @@ export class DownloadManager {
     this.onFailed = cb;
   }
 
-  /**
-   * Attach download handling to a WebContents session.
-   * Call this for each browser block's webContents.
-   */
+  /** Attach download handling once to the profile session shared by views. */
   attachToWebContents(webContents: WebContents): void {
     const ses = webContents.session;
+    if (this.attachedSessions.has(ses)) return;
+    this.attachedSessions.add(ses);
 
-    ses.on("will-download", (_event, item, _webContents) => {
+    ses.on("will-download", (_event, item) => {
       this.handleDownload(item);
     });
   }

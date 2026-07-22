@@ -105,9 +105,15 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "remove-view": {
       type: "on",
-      fn: (_event, viewId: string) => {
+      fn: (
+        _event,
+        data: { viewId: string; placementGeneration?: number } | string
+      ) => {
+        const viewId = typeof data === "string" ? data : data.viewId;
+        const placementGeneration =
+          typeof data === "string" ? undefined : data.placementGeneration;
         log.debug(`Received detach request for view ${viewId}`, "main");
-        viewStore.handleDetachView(viewId);
+        viewStore.handleDetachView(viewId, placementGeneration);
       },
     },
     "browser:get-live-pages": {

@@ -409,6 +409,13 @@ The first useful vertical slice is working for both legacy site blocks and norma
 
 Remaining work is primarily richer miss diagnostics and eviction tombstones, reference reconciliation, and broader runtime validation of live scroll retention and fresh loads after eviction.
 
+### Lifecycle verification update: July 22, 2026
+
+- Renderer placements carry monotonically increasing generations. The main process rejects delayed updates and detach messages from older React mounts, retaining a high-water mark after detach so stale updates cannot resurrect a view.
+- Browser event attachment now returns an explicit disposer, and `ViewStore` disposes a view's Electron listeners before destruction.
+- Download handling is owned once per Electron profile session rather than installed once per `WebContentsView`.
+- Seeded tests now cover queued renderer/main lifecycle delivery in addition to pure journey-store transitions.
+
 ## Proposed implementation stages
 
 ### Stage 1: Preserve the working lifecycle prototype

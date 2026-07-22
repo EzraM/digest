@@ -21,9 +21,10 @@ interface ElectronAPI {
     profileId: string;
     layout?: "inline" | "full";
     referenceKind?: "site-block" | "ephemeral-url";
+    placementGeneration?: number;
   }) => void;
   removeBrowser: (blockId: string) => void;
-  removeView: (viewId: string) => void;
+  removeView: (viewId: string, placementGeneration?: number) => void;
   browser: {
     getDevToolsState: (
       viewId: string

@@ -21,8 +21,21 @@ export class EventTranslator {
     this.onBackgroundLinkClick = callback;
   }
 
-  attach(id: string, view: WebContentsView, dispatch: CommandDispatcher, profileId: string): void {
+  attach(
+    id: string,
+    view: WebContentsView,
+    dispatch: CommandDispatcher,
+    profileId: string
+  ): () => void {
     const { webContents } = view;
+    const listeners: Array<{
+      event: string;
+      listener: (...args: any[]) => void;
+    }> = [];
+    const listen = (event: string, listener: (...args: any[]) => void) => {
+      webContents.on(event as any, listener as any);
+      listeners.push({ event, listener });
+    };
 
     // Track if we've seen an error for this load
     let hasErrored = false;
@@ -35,12 +48,12 @@ export class EventTranslator {
       });
     };
 
-    webContents.on('did-start-loading', () => {
+    listen('did-start-loading', () => {
       log.debug(`[${id}] did-start-loading`, 'EventTranslator');
       dispatch({ type: 'markLoading', id });
     });
 
-    webContents.on('did-start-navigation', (_event, url, isInPlace, isMainFrame) => {
+    listen('did-start-navigation', (_event, url, isInPlace, isMainFrame) => {
       log.debug(
         `[${id}] Navigation started: ${url} [inPlace: ${isInPlace}, mainFrame: ${isMainFrame}]`,
         'EventTranslator'
@@ -53,15 +66,15 @@ export class EventTranslator {
       }
     });
 
-    webContents.on('dom-ready', () => {
+    listen('dom-ready', () => {
       log.debug(`[${id}] DOM ready for ${webContents.getURL()}`, 'EventTranslator');
     });
 
-    webContents.on('context-menu', (_event, params) => {
+    listen('context-menu', (_event, params) => {
       this.contextMenus.open(id, webContents, params);
     });
 
-    webContents.on('did-finish-load', () => {
+    listen('did-finish-load', () => {
       const url = webContents.getURL();
       const title = webContents.getTitle();
       log.debug(
@@ -73,7 +86,7 @@ export class EventTranslator {
       // did-stop-loading below owns the terminal ready transition.
     });
 
-    webContents.on('did-stop-loading', () => {
+    listen('did-stop-loading', () => {
       const url = webContents.getURL();
       log.debug(`[${id}] did-stop-loading at ${url}`, 'EventTranslator');
 
@@ -88,7 +101,7 @@ export class EventTranslator {
       }
     });
 
-    webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    listen('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       // Only handle main frame errors (ignore iframe errors)
       if (!isMainFrame) {
         log.debug(
@@ -121,12 +134,12 @@ export class EventTranslator {
       });
     });
 
-    webContents.on('did-navigate', (_event, url) => {
+    listen('did-navigate', (_event, url) => {
       log.debug(`[${id}] did-navigate to ${url}`, 'EventTranslator');
       updateNavigation(url);
     });
 
-    webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+    listen('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (isMainFrame) {
         log.debug(`[${id}] did-navigate-in-page to ${url}`, 'EventTranslator');
         updateNavigation(url);
@@ -134,7 +147,7 @@ export class EventTranslator {
     });
 
     // Handle redirects that happen in the main frame
-    webContents.on('did-redirect-navigation', (_event, url, isInPlace, isMainFrame) => {
+    listen('did-redirect-navigation', (_event, url, isInPlace, isMainFrame) => {
       if (isMainFrame) {
         log.debug(
           `[${id}] Redirect to ${url} [inPlace: ${isInPlace}, mainFrame: ${isMainFrame}]`,
@@ -205,6 +218,15 @@ export class EventTranslator {
     });
 
     log.debug(`[${id}] Event listeners attached`, 'EventTranslator');
+    return () => {
+      for (const { event, listener } of listeners) {
+        webContents.removeListener(event as any, listener as any);
+      }
+      if (!webContents.isDestroyed()) {
+        webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      }
+      log.debug(`[${id}] Event listeners disposed`, 'EventTranslator');
+    };
   }
 
 }

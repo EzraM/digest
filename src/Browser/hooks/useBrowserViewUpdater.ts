@@ -23,6 +23,10 @@ export const useBrowserViewUpdater = (
   const urlRef = useRef<string | null>(null);
   const boundsRef = useRef<Bounds | null>(null);
   const layoutRef = useRef<"inline" | "full" | undefined>(layout);
+  const placementGenerationRef = useRef<number | undefined>(undefined);
+  if (placementGenerationRef.current === undefined) {
+    placementGenerationRef.current = nextPlacementGeneration();
+  }
 
   // Update layout ref when it changes
   useEffect(() => {
@@ -40,6 +44,7 @@ export const useBrowserViewUpdater = (
         profileId,
         layout: layoutRef.current,
         referenceKind,
+        placementGeneration: placementGenerationRef.current,
       });
     }
   }, [viewId, blockId, profileId, referenceKind]);
@@ -73,5 +78,18 @@ export const useBrowserViewUpdater = (
     [sendUpdate]
   );
 
-  return { handleUrlChange, handleBoundsChange };
+  return {
+    handleUrlChange,
+    handleBoundsChange,
+    placementGeneration: placementGenerationRef.current,
+  };
 };
+
+let placementGeneration = 0;
+function nextPlacementGeneration(): number {
+  placementGeneration = Math.max(
+    placementGeneration + 1,
+    Date.now() * 1000
+  );
+  return placementGeneration;
+}

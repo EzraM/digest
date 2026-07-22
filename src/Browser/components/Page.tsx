@@ -29,7 +29,11 @@ export function Page({
     `[Page] Render: blockId=${blockId}, layout=${layout}, viewId=${viewId}`
   );
 
-  const { handleUrlChange, handleBoundsChange: handleBoundsChangeUpdater } =
+  const {
+    handleUrlChange,
+    handleBoundsChange: handleBoundsChangeUpdater,
+    placementGeneration,
+  } =
     useBrowserViewUpdater(
       viewId,
       blockId,
@@ -73,9 +77,9 @@ export function Page({
     console.log(`[Page] Mount effect: viewId=${viewId}, layout=${layout}`);
     return () => {
       console.log(`[Page] Unmount cleanup: viewId=${viewId}, layout=${layout}`);
-      window.electronAPI.removeView(viewId);
+      window.electronAPI.removeView(viewId, placementGeneration);
     };
-  }, [viewId, layout]);
+  }, [viewId, layout, placementGeneration]);
 
   const handleRetry = () => {
     retryInitialization();
