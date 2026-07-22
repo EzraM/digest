@@ -405,9 +405,9 @@ The first useful vertical slice is working for both legacy site blocks and norma
 - Liveness is not written into BlockNote props or SQLite notebook content. Journey and handle identity remain main-process implementation details.
 - `NotificationLayer` owns renderer IPC for live-reference, placement-ready, navigation, and browser-selection events. `ViewStore` decides when domain changes warrant notification but does not access renderer `WebContents` or call `send()` directly.
 - Logical Back boundaries are deferred and are no longer required for the next implementation stages.
-- Manual `scrollPercent` capture, persistence, and restoration remain active as a fallback pending the Stage 7 validation and cleanup.
+- Manual `scrollPercent` capture, persistence, IPC, and restoration have been removed. Existing document properties are tolerated as ignored legacy data.
 
-Remaining work is primarily richer miss diagnostics and eviction tombstones, reference reconciliation, and removal of manual scroll persistence after broader validation.
+Remaining work is primarily richer miss diagnostics and eviction tombstones, reference reconciliation, and broader runtime validation of live scroll retention and fresh loads after eviction.
 
 ## Proposed implementation stages
 
@@ -467,13 +467,13 @@ Status: preview cleanup completed July 20, 2026; active-journey association and 
 
 ### Stage 7: Remove manual scroll persistence
 
-Status: not started. All capture, persistence, IPC, and restoration paths are still active.
+Status: implementation completed July 22, 2026; runtime smoke testing remains.
 
 - [ ] Smoke-test live reuse and the fresh-load experience after eviction.
-- [ ] Stop writing `scrollPercent` after validation.
-- [ ] Remove injected scroll tracking and restoration.
-- [ ] Remove associated IPC and renderer hooks.
-- [ ] Retain compatibility with existing documents during migration.
+- [x] Stop writing `scrollPercent`.
+- [x] Remove injected scroll tracking and restoration.
+- [x] Remove associated IPC and renderer hooks.
+- [x] Retain compatibility with existing documents by ignoring the legacy property.
 
 ## Testing strategy
 

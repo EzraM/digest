@@ -195,6 +195,120 @@ describe("BrowsingJourneyStore", () => {
     });
   });
 
+  it("does not leave a stale placement alias after competing activations", () => {
+    const store = new BrowsingJourneyStore(2, ids());
+    store.addVisible("handle", "profile-a", "https://same.test", "original");
+    store.markDetached("handle");
+
+    const first = store.planOpenReference({
+      placementId: "first:full",
+      referenceId: "first",
+      profileId: "profile-a",
+      url: "https://same.test",
+    });
+    const second = store.planOpenReference({
+      placementId: "second:full",
+      referenceId: "second",
+      profileId: "profile-a",
+      url: "https://same.test",
+    });
+    if (first.type !== "reuse-current" || second.type !== "reuse-current") {
+      throw new Error("expected competing reuse plans");
+    }
+
+    store.activatePlacement(first);
+    store.activatePlacement(second);
+
+    expect(store.resolveHandleId("first:full")).toBe("first:full");
+    expect(store.resolveHandleId("second:full")).toBe("handle");
+    expect(store.getActivePlacementId("handle")).toBe("second:full");
+  });
+
+  it("survives seeded randomized lifecycle interleavings", () => {
+    const configuredSeed = Number(process.env.DIGEST_FUZZ_SEED);
+    const firstSeed = Number.isInteger(configuredSeed) ? configuredSeed : 1;
+    const seedCount = Number.isInteger(configuredSeed) ? 1 : 100;
+
+    for (let seed = firstSeed; seed < firstSeed + seedCount; seed += 1) {
+      let state = seed >>> 0;
+      const random = (max: number) => {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        return state % max;
+      };
+      const store = new BrowsingJourneyStore(4, ids());
+      const handles = Array.from({ length: 6 }, (_, index) => `handle-${index}`);
+      const placements = Array.from(
+        { length: 8 },
+        (_, index) => `placement-${index}`
+      );
+      const urls = Array.from(
+        { length: 4 },
+        (_, index) => `https://site-${index}.test/`
+      );
+
+      try {
+        for (let step = 0; step < 500; step += 1) {
+          const handle = handles[random(handles.length)];
+          const placement = placements[random(placements.length)];
+          const url = urls[random(urls.length)];
+          switch (random(6)) {
+            case 0:
+              store.addVisible(handle, "profile-a", url, `ref-${random(12)}`);
+              break;
+            case 1:
+              store.markDetached(handle);
+              break;
+            case 2:
+              store.markVisible(handle, placement);
+              break;
+            case 3:
+              store.recordNavigation(handle, url, random(5));
+              break;
+            case 4: {
+              const plan = store.planOpenReference({
+                placementId: placement,
+                referenceId: `ref-${random(12)}`,
+                profileId: "profile-a",
+                url,
+              });
+              if (
+                plan.type === "reuse-current" ||
+                plan.type === "reuse-history"
+              ) {
+                store.activatePlacement(plan);
+              }
+              break;
+            }
+            case 5:
+              store.remove(handle);
+              break;
+          }
+
+          for (const candidateHandle of handles) {
+            const activePlacement = store.getActivePlacementId(candidateHandle);
+            if (activePlacement !== candidateHandle) {
+              expect(store.resolveHandleId(activePlacement)).toBe(
+                candidateHandle
+              );
+            }
+          }
+          for (const candidatePlacement of placements) {
+            const resolvedHandle = store.resolveHandleId(candidatePlacement);
+            if (resolvedHandle !== candidatePlacement) {
+              expect(store.getActivePlacementId(resolvedHandle)).toBe(
+                candidatePlacement
+              );
+            }
+          }
+        }
+      } catch (error) {
+        throw new Error(
+          `Lifecycle fuzz failed with DIGEST_FUZZ_SEED=${seed}: ${error}`
+        );
+      }
+    }
+  });
+
   it("reports profile-scoped occupancy and cross-profile matches", () => {
     const store = new BrowsingJourneyStore(3, ids());
     store.addVisible("a:full", "profile-a", "https://same.test", "a");

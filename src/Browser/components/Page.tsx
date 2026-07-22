@@ -13,7 +13,6 @@ export function Page({
   blockId: providedBlockId,
   url,
   layout = "inline",
-  scrollPercent,
   viewId: explicitViewId,
 }: PageProps & {
   layout?: "inline" | "full";
@@ -67,16 +66,6 @@ export function Page({
       handleUrlChange(url);
     }
   }, [url, handleUrlChange]);
-
-  // Send scrollPercent to main process when component mounts or scrollPercent changes
-  useEffect(() => {
-    if (scrollPercent !== undefined) {
-      console.log(
-        `[Browser] Setting scroll percent for blockId: ${blockId}, scrollPercent: ${scrollPercent}`
-      );
-      window.electronAPI.browser.setScrollPercent(blockId, scrollPercent);
-    }
-  }, [blockId, scrollPercent]);
 
   // View lifecycle: release the placement on unmount. Main decides whether the
   // journey is detached for reuse or destroyed.

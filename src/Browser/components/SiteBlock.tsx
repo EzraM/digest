@@ -8,9 +8,6 @@ const sitePropSchema = {
   url: {
     default: "" as const,
   },
-  scrollPercent: {
-    default: undefined as number | undefined,
-  },
 } as const;
 
 // Create a type-safe site block spec

@@ -4,7 +4,6 @@ export interface PageProps {
   url: string;
   heightMode?: "normal" | "expanded";
   layout?: "inline" | "full";
-  scrollPercent?: number;
 }
 
 export type BrowserInitStatus =

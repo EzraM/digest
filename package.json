@@ -9,6 +9,8 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
+    "test": "node scripts/test.cjs",
+    "test:fuzz": "node scripts/test.cjs src/services/BrowsingJourneyStore.test.ts",
     "lint": "eslint --ext .ts,.tsx .",
     "clean": "rm -rf ./vite && rm -rf ./node_modules/.vite"
   },

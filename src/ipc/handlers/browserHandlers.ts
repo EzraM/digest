@@ -114,16 +114,6 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
       type: "invoke",
       fn: () => viewStore.getLivePagesProjection(),
     },
-    "browser:set-scroll-percent": {
-      type: "on",
-      fn: (_event, data: { blockId: string; scrollPercent: number }) => {
-        log.debug(
-          `Received browser:set-scroll-percent for block ${data.blockId}: ${data.scrollPercent}`,
-          "main"
-        );
-        viewStore.setScrollPercent(data.blockId, data.scrollPercent);
-      },
-    },
     "browser:capture-selection": {
       type: "invoke",
       fn: async (_event, viewId: string) => {

@@ -102,7 +102,7 @@ export class BrowsingJourneyStore {
     if (existing) {
       existing.placement = "visible";
       existing.lastUsedAt = this.nextTimestamp();
-      this.activePlacementIdByHandleId.set(handleId, handleId);
+      this.bindPlacement(handleId, handleId);
       if (referenceId) existing.referenceIds.add(referenceId);
       this.associateUrl(existing, url);
       return this.enforceLimit(profileId);
@@ -131,8 +131,7 @@ export class BrowsingJourneyStore {
     if (!journey) return;
     journey.placement = "visible";
     journey.lastUsedAt = this.nextTimestamp();
-    this.handleIdByPlacementId.set(placementId, handleId);
-    this.activePlacementIdByHandleId.set(handleId, placementId);
+    this.bindPlacement(handleId, placementId);
   }
 
   planOpenReference(input: {
@@ -181,8 +180,7 @@ export class BrowsingJourneyStore {
   ): void {
     const journey = this.getByHandle(plan.handleId);
     if (!journey || journey.journeyId !== plan.journeyId) return;
-    this.handleIdByPlacementId.set(plan.placementId, plan.handleId);
-    this.activePlacementIdByHandleId.set(plan.handleId, plan.placementId);
+    this.bindPlacement(plan.handleId, plan.placementId);
     journey.referenceIds.add(plan.referenceId);
     journey.placement = "visible";
     journey.lastUsedAt = this.nextTimestamp();
@@ -421,6 +419,22 @@ export class BrowsingJourneyStore {
       ids?.delete(journey.journeyId);
       if (ids?.size === 0) this.journeyIdsByProfileUrl.delete(key);
     }
+  }
+
+  /** Keep the handle/placement relationship one-to-one across stale events. */
+  private bindPlacement(handleId: string, placementId: string): void {
+    const previousPlacement = this.activePlacementIdByHandleId.get(handleId);
+    if (previousPlacement && previousPlacement !== placementId) {
+      this.handleIdByPlacementId.delete(previousPlacement);
+    }
+
+    const previousHandle = this.handleIdByPlacementId.get(placementId);
+    if (previousHandle && previousHandle !== handleId) {
+      this.activePlacementIdByHandleId.delete(previousHandle);
+    }
+
+    this.handleIdByPlacementId.set(placementId, handleId);
+    this.activePlacementIdByHandleId.set(handleId, placementId);
   }
 
   private urlKey(profileId: string, url: string): string {

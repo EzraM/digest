@@ -39,7 +39,6 @@ interface ElectronAPI {
     ) => Promise<{ success: boolean; error?: string }>;
     getPageInfo: (viewId: string) => Promise<BrowserPageInfo>;
     getLivePages: () => Promise<LivePagesProjection>;
-    setScrollPercent: (blockId: string, scrollPercent: number) => void;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
   onBrowserInitialized: (
@@ -89,9 +88,6 @@ interface ElectronAPI {
     selectionHtml?: string;
     error?: string;
   }>;
-  onBrowserScrollPercent: (
-    callback: (data: { blockId: string; scrollPercent: number }) => void
-  ) => () => void;
   onLivePagesChanged: (
     callback: (data: import("./browser").LivePagesProjection) => void
   ) => () => void;

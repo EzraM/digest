@@ -66,16 +66,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("browser:get-page-info", viewId),
     getLivePages: (): Promise<LivePagesProjection> =>
       ipcRenderer.invoke("browser:get-live-pages"),
-    setScrollPercent: (blockId: string, scrollPercent: number) => {
-      log.debug(
-        `Setting scroll percent for block ${blockId}: ${scrollPercent}`,
-        "preload"
-      );
-      ipcRenderer.send("browser:set-scroll-percent", {
-        blockId,
-        scrollPercent,
-      });
-    },
   },
   addBlockEvent: (e: { type: "open" | "close" }) => {
     log.debug(`Sending event: block-menu:${e.type}`, "preload");
@@ -150,14 +140,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   captureBrowserSelection: (blockId: string) => {
     log.debug(`Capturing selection for block ${blockId}`, "preload");
     return ipcRenderer.invoke("browser:capture-selection", blockId);
-  },
-  onBrowserScrollPercent: (
-    callback: (data: { blockId: string; scrollPercent: number }) => void
-  ) => {
-    const channel = "browser:save-scroll-percent";
-    const handler = (_: any, data: any) => callback(data);
-    ipcRenderer.on(channel, handler);
-    return () => ipcRenderer.removeListener(channel, handler);
   },
   onLivePagesChanged: (
     callback: (data: LivePagesProjection) => void
