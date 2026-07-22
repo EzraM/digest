@@ -12,7 +12,6 @@ import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry"
 import { EventTranslator } from "../domains/browser-views/adapter/EventTranslator";
 import { ContextMenuController } from "../domains/browser-views/adapter/ContextMenuController";
 import { HandleOperations } from "../domains/browser-views/adapter/HandleOperations";
-import type { Result } from "../domains/browser-views/adapter/HandleOperations";
 import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
 import { DownloadManager } from "./DownloadManager";
@@ -29,98 +28,16 @@ import {
 import { LivePagesProjection } from "../types/browser";
 import { LivePageProjectionStore } from "./LivePageProjectionStore";
 import { PlacementGenerationStore } from "./PlacementGenerationStore";
-import type { ImageContextCallback } from "../domains/browser-views/adapter/ContextMenuController";
-
-export type OpenReferenceRequest = {
-  viewId: string;
-  blockId: string;
-  url: string;
-  bounds: { x: number; y: number; width: number; height: number };
-  profileId: string;
-  layout?: "inline" | "full";
-  referenceKind?: "site-block" | "ephemeral-url";
-  placementGeneration?: number;
-};
-
-export type OpenReferenceResult = {
-  journeyId?: string;
-  outcome: "hit_current" | "hit_history" | "miss";
-  missReason?: CacheMissReason;
-  loadAvoided: boolean;
-};
-
-export type ViewStoreDependencies = {
-  now?: () => number;
-  journeys?: BrowsingJourneyStore;
-  livePages?: LivePageProjectionStore;
-  handles?: HandleRegistry;
-  notifications?: ViewNotifications;
-  events?: ViewEvents;
-  contextMenus?: ViewContextMenus;
-  operations?: ViewHandleOperations;
-  createEffects?: (
-    onViewCreated: (
-      id: string,
-      view: WebContentsView,
-      profileId: string
-    ) => void
-  ) => ViewEffects;
-};
-
-export interface ViewEffects {
-  interpret(command: Command): void;
-  attachView(id: string): boolean;
-  detachView(id: string): void;
-}
-
-export interface ViewNotifications {
-  notify(id: string, previous: ViewWorld, next: ViewWorld): void;
-  notifyPlacementReady(placementId: string): void;
-  notifyLiveReferencesChanged(projection: LivePagesProjection): void;
-  notifyBrowserSelection(selection: {
-    blockId: string;
-    sourceUrl: string;
-    sourceTitle: string;
-    selectionText: string;
-    selectionHtml: string;
-    capturedAt: number;
-  }): void;
-}
-
-export interface ViewEvents {
-  attach(
-    id: string,
-    view: WebContentsView,
-    dispatch: (command: Command) => void,
-    profileId: string
-  ): () => void;
-  setBackgroundLinkClickCallback(
-    callback: (
-      url: string,
-      sourceBlockId: string,
-      title: string,
-      profileId: string
-    ) => void
-  ): void;
-}
-
-export interface ViewContextMenus {
-  setImageContextCallback(callback: ImageContextCallback): void;
-}
-
-export interface ViewHandleOperations {
-  getNavigationPosition(
-    id: string
-  ): Result<{ activeIndex: number; url: string }>;
-  prepareNavigationEntry(
-    id: string,
-    requestedUrl: string,
-    historyIndex?: number
-  ): Result<{ activeIndex: number }>;
-  getDevToolsState(id: string): Result<{ isOpen: boolean }>;
-  toggleDevTools(id: string): Result<{ isOpen: boolean }>;
-  goBack(id: string): Result<{ canGoBack: boolean }>;
-}
+import type {
+  OpenReferenceRequest,
+  OpenReferenceResult,
+  ViewContextMenus,
+  ViewEffects,
+  ViewEvents,
+  ViewHandleOperations,
+  ViewNotifications,
+  ViewStoreDependencies,
+} from "./ViewStoreContracts";
 
 /**
  * The ViewStore orchestrates the pure core with Electron adapters.
@@ -168,7 +85,7 @@ export class ViewStore {
       dependencies.contextMenus ?? new ContextMenuController();
     this.events =
       dependencies.events ??
-      new EventTranslator(this.contextMenus as ContextMenuController);
+      new EventTranslator(this.contextMenus);
     this.operations =
       dependencies.operations ?? new HandleOperations(this.handles);
     const onViewCreated = (
@@ -212,6 +129,14 @@ export class ViewStore {
     if (prevWorld !== nextWorld) {
       this.world = nextWorld;
 
+      if (cmd.type === "rendererGone") {
+        const placementId = this.journeys.getActivePlacementId(cmd.id);
+        this.journeys.remove(cmd.id);
+        this.placementGenerations.remove(placementId);
+        this.pendingCreates.delete(placementId);
+        this.pendingCreates.delete(cmd.id);
+      }
+
       if (cmd.type === "updateNavigation") {
         const position = this.operations.getNavigationPosition(cmd.id);
         this.journeys.recordNavigation(
@@ -229,7 +154,7 @@ export class ViewStore {
       );
 
       // Execute side effects
-      if (cmd.type === "remove") {
+      if (cmd.type === "remove" || cmd.type === "rendererGone") {
         this.eventDisposers.get(cmd.id)?.();
         this.eventDisposers.delete(cmd.id);
       }
@@ -238,6 +163,9 @@ export class ViewStore {
       // Notify renderer of changes
       if (cmdId) {
         this.notifications.notify(cmdId, prevWorld, nextWorld);
+      }
+      if (cmd.type === "rendererGone") {
+        this.publishLiveReferences();
       }
     }
   }

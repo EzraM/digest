@@ -38,6 +38,7 @@ export class Interpreter {
         break;
 
       case "remove":
+      case "rendererGone":
         this.removeView(cmd.id);
         break;
 
@@ -274,10 +275,9 @@ export class Interpreter {
       }
 
       // Clean up any event listeners or resources
-      view.webContents.close();
-
-      // Remove from our registry
-      this.handles.delete(id);
+      if (!view.webContents.isDestroyed()) {
+        view.webContents.close();
+      }
 
       log.debug(
         `Successfully removed WebContentsView for blockId: ${id}`,
@@ -288,6 +288,10 @@ export class Interpreter {
         `Failed to remove WebContentsView for blockId: ${id}. Error: ${error}`,
         "Interpreter"
       );
+    } finally {
+      // A crashed renderer may throw during native cleanup. Registry ownership
+      // must still end even when the native handle is already unusable.
+      this.handles.delete(id);
     }
   }
 

@@ -33,6 +33,9 @@ The current work establishes the first testing seams:
   handle registry, and context-menu registration are also injectable ports.
 - A fake-native integration test drives the complete `ViewStore` orchestration
   through create, resize, detach, cache hit, reattach, and destroy.
+- The integration harness also covers renderer loss and immediate recovery,
+  delayed post-crash load events, failed attachment fallback, capacity eviction,
+  and stale cleanup from a pre-reload renderer generation.
 - The fast suite includes deterministic queued-delivery tests as well as pure
   store tests.
 

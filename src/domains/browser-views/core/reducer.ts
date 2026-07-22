@@ -35,7 +35,8 @@ export function reduce(world: ViewWorld, cmd: Command): ViewWorld {
       });
     }
 
-    case "remove": {
+    case "remove":
+    case "rendererGone": {
       const next = new Map(world);
       next.delete(cmd.id);
       return next;

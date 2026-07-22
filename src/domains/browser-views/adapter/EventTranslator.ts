@@ -2,7 +2,7 @@ import { WebContentsView } from 'electron';
 import { Command } from '../core/commands';
 import { log } from '../../../utils/mainLogger';
 import { toBlockId } from '../../../utils/viewId';
-import { ContextMenuController } from './ContextMenuController';
+import type { ViewContextMenus } from '../../../services/ViewStoreContracts';
 
 type CommandDispatcher = (cmd: Command) => void;
 type BackgroundLinkCallback = (url: string, sourceId: string, title: string, profileId: string) => void;
@@ -15,7 +15,7 @@ type BackgroundLinkCallback = (url: string, sourceId: string, title: string, pro
 export class EventTranslator {
   private onBackgroundLinkClick?: BackgroundLinkCallback;
 
-  constructor(private contextMenus: ContextMenuController) {}
+  constructor(private contextMenus: ViewContextMenus) {}
 
   setBackgroundLinkClickCallback(callback: BackgroundLinkCallback): void {
     this.onBackgroundLinkClick = callback;
@@ -156,6 +156,18 @@ export class EventTranslator {
         // Only update URL for main frame redirects, don't change loading state
         updateNavigation(url);
       }
+    });
+
+    listen('render-process-gone', (_event, details) => {
+      log.warn(
+        `[${id}] Renderer process gone: ${details.reason}`,
+        'EventTranslator'
+      );
+      dispatch({
+        type: 'rendererGone',
+        id,
+        reason: details.reason,
+      });
     });
 
     // Handle new window requests (link clicks that should open new blocks or insert links)

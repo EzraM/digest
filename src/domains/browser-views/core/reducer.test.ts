@@ -130,6 +130,24 @@ describe('ViewWorld reducer', () => {
     expect(world.size).toBe(0);
   });
 
+  it('removes a crashed renderer from the world', () => {
+    let world = reduce(emptyWorld, {
+      type: 'create',
+      id: 'block-1',
+      url: 'https://example.com',
+      bounds: { x: 0, y: 0, width: 800, height: 600 },
+      profile: 'default',
+    });
+
+    world = reduce(world, {
+      type: 'rendererGone',
+      id: 'block-1',
+      reason: 'crashed',
+    });
+
+    expect(world.get('block-1')).toBeUndefined();
+  });
+
   it('does not override error with loading', () => {
     let world = reduce(emptyWorld, {
       type: 'create',

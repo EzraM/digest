@@ -36,4 +36,22 @@ describe("EventTranslator listener ownership", () => {
     dispose();
     expect(webContents.eventNames()).toEqual([]);
   });
+
+  it("translates renderer loss into an explicit lifecycle command", () => {
+    const webContents = new FakeWebContents();
+    const commands: Array<{ type: string; id?: string }> = [];
+    const translator = new EventTranslator(new ContextMenuController());
+    translator.attach(
+      "view",
+      { webContents } as unknown as WebContentsView,
+      (command) => commands.push(command),
+      "profile"
+    );
+
+    webContents.emit("render-process-gone", {}, { reason: "crashed" });
+
+    expect(commands).toEqual([
+      { type: "rendererGone", id: "view", reason: "crashed" },
+    ]);
+  });
 });
