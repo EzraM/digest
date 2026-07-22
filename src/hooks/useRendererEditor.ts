@@ -15,6 +15,7 @@ import {
   NotebookBlockSnapshot,
   NotebookPluginOperation,
 } from "../domains/notebook-plugins/core/types";
+import { createMiddleClickDeleteExtension } from "../domains/blocks/adapters/createMiddleClickDeleteExtension";
 
 let currentEditor: CustomBlockNoteEditor | null = null;
 
@@ -103,6 +104,7 @@ export const useRendererEditor = (
   const editor = useCreateBlockNote({
     schema,
     initialContent: undefined,
+    extensions: [createMiddleClickDeleteExtension],
     pasteHandler: (context) => handleElectronPaste(context),
     uploadFile: async (file: File): Promise<string> => {
       // Read file as ArrayBuffer
