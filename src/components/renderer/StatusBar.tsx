@@ -1,7 +1,4 @@
 import { Box, Text, Group } from "@mantine/core";
-import { useContext } from "react";
-import { ClipDraftContext } from "../../context/ClipDraftContext";
-import { ClipDraftsButton } from "../clip/ClipDraftsButton";
 
 type StatusBarProps = {
   breadcrumbText: string;
@@ -9,11 +6,6 @@ type StatusBarProps = {
 };
 
 export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
-  const clipDraftContext = useContext(ClipDraftContext);
-  const hasDrafts = clipDraftContext
-    ? clipDraftContext.drafts.length > 0
-    : false;
-
   return (
     <Box
       h="100%"
@@ -60,24 +52,7 @@ export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
             {breadcrumbText}
           </Text>
         </Box>
-        <ClipDraftsButton />
       </Group>
-      {hasDrafts && (
-        <Box
-          style={{
-            padding: "2px 8px",
-            borderRadius: "4px",
-            backgroundColor: "var(--mantine-color-blue-1)",
-            color: "var(--mantine-color-blue-7)",
-            fontSize: "11px",
-            fontWeight: 500,
-            userSelect: "none",
-          }}
-          title={`${clipDraftContext?.drafts.length || 0} clip draft${(clipDraftContext?.drafts.length || 0) !== 1 ? "s" : ""} pending`}
-        >
-          📎 {clipDraftContext?.drafts.length || 0}
-        </Box>
-      )}
     </Box>
   );
 };

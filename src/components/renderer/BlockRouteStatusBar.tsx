@@ -1,5 +1,4 @@
 import React from "react";
-import { ClipDraftsButton } from "../clip/ClipDraftsButton";
 import { BrowserLoadStatus } from "../../types/browser";
 import "./BlockRouteStatusBar.css";
 
@@ -100,7 +99,6 @@ export const BlockRouteStatusBar = ({
         {copied ? "Copied · " : ""}
         {url}
       </button>
-      <ClipDraftsButton />
       {devToolsAvailable && (
         <button
           type="button"

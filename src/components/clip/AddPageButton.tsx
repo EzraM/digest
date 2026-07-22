@@ -1,5 +1,4 @@
-import { useContext, useState } from "react";
-import { PageToolSlotContext } from "../../context/PageToolSlotContext";
+import { useState } from "react";
 import { useClipCapture } from "../../hooks/useClipCapture";
 import { insertInlineLinkAtCurrentCursor } from "../../hooks/useRendererEditor";
 
@@ -8,7 +7,6 @@ type AddPageButtonProps = {
 };
 
 export const AddPageButton = ({ viewId }: AddPageButtonProps) => {
-  const pageToolContext = useContext(PageToolSlotContext);
   const { isCapturing, captureSelection } = useClipCapture();
   const [didAddPage, setDidAddPage] = useState(false);
 
@@ -16,7 +14,8 @@ export const AddPageButton = ({ viewId }: AddPageButtonProps) => {
     const result = await captureSelection(viewId);
 
     if (result.success) {
-      pageToolContext?.setVisibility(true);
+      setDidAddPage(true);
+      window.setTimeout(() => setDidAddPage(false), 1500);
       return;
     }
 

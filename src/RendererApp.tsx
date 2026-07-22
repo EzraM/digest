@@ -22,10 +22,8 @@ import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
 import { AppRouteProvider, useAppRoute } from "./context/AppRouteContext";
-import { ClipDraftProvider } from "./context/ClipDraftContext";
 import { toFullViewId } from "./utils/viewId";
 import { PageToolSlotProvider } from "./context/PageToolSlotContext";
-import { ClipInbox } from "./components/clip/ClipInbox";
 import { useBrowserSelection } from "./hooks/useBrowserSelection";
 import { useBrowserImageClips } from "./hooks/useBrowserImageClips";
 import { LinkCaptureProvider } from "./domains/link-capture/ui/LinkCaptureContext";
@@ -396,7 +394,6 @@ const RendererAppContent = () => {
         onClose={closeDeleteProfileModal}
         onConfirm={handleConfirmDeleteProfile}
       />
-      <ClipInbox />
       <LinkCaptureNotification />
       <DownloadNotification />
     </MantineProvider>
@@ -420,14 +417,12 @@ const RendererAppWithRouteContext = () => {
 
 export const RendererApp = () => {
   return (
-    <ClipDraftProvider>
-      <LinkCaptureProvider>
-        <DownloadProvider>
-          <PageToolSlotProvider>
-            <RendererAppWithRouteContext />
-          </PageToolSlotProvider>
-        </DownloadProvider>
-      </LinkCaptureProvider>
-    </ClipDraftProvider>
+    <LinkCaptureProvider>
+      <DownloadProvider>
+        <PageToolSlotProvider>
+          <RendererAppWithRouteContext />
+        </PageToolSlotProvider>
+      </DownloadProvider>
+    </LinkCaptureProvider>
   );
 };

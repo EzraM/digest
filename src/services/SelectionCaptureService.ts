@@ -38,6 +38,13 @@ export class SelectionCaptureService {
             }
 
             const range = selection.getRangeAt(0);
+            if (selection.isCollapsed || range.collapsed) {
+              return {
+                success: false,
+                error: 'No selection found'
+              };
+            }
+
             const text = selection.toString();
             
             // Clone the selected content to extract HTML
@@ -102,6 +109,5 @@ export class SelectionCaptureService {
     }
   }
 }
-
 
 

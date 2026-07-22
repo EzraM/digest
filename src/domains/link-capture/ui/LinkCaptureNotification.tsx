@@ -7,7 +7,7 @@ import { LinkCaptureItem } from "./LinkCaptureItem";
  * Component that manages link capture notification lifecycle
  * - Shows all captured links stacked in PageToolSlot
  * - Auto-dismisses each notification after 3 seconds
- * - Registers with unique ID to coexist with ClipInbox
+ * - Registers with a unique ID so it can coexist with other notifications
  */
 export const LinkCaptureNotification = (): null => {
   const { notifications, removeNotification } = useLinkCaptureContext();
