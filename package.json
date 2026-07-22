@@ -10,7 +10,7 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "test": "node scripts/test.cjs",
-    "test:fuzz": "node scripts/test.cjs src/services/BrowsingJourneyStore.test.ts src/services/PlacementGenerationStore.test.ts src/services/BrowserLifecycleQueue.test.ts",
+    "test:fuzz": "node scripts/test.cjs src/services/BrowsingJourneyStore.test.ts src/services/PlacementGenerationStore.test.ts src/services/BrowserLifecycleQueue.test.ts src/services/ViewStore.integration.test.ts",
     "lint": "eslint --ext .ts,.tsx .",
     "clean": "rm -rf ./vite && rm -rf ./node_modules/.vite"
   },

@@ -29,13 +29,26 @@ The current work establishes the first testing seams:
 - Download handling attaches once per Electron `Session`, not once per
   `WebContentsView`.
 - `ViewStore` accepts an injected clock, journey store, and live-page projection
-  store.
+  store. Its native effects, notifications, event attachment, handle operations,
+  handle registry, and context-menu registration are also injectable ports.
+- A fake-native integration test drives the complete `ViewStore` orchestration
+  through create, resize, detach, cache hit, reattach, and destroy.
 - The fast suite includes deterministic queued-delivery tests as well as pure
   store tests.
 
 The fast fuzz suite currently runs 100 deterministic seeds with 500 operations
 per randomized lifecycle test. This is useful regression coverage, but it does
 not yet simulate a real Electron process or renderer.
+
+All randomized lifecycle tests use the same replay controls:
+
+```bash
+DIGEST_FUZZ_SEED=4001 DIGEST_FUZZ_STEPS=1000 yarn test:fuzz
+DIGEST_FUZZ_SEEDS=1000 DIGEST_FUZZ_STEPS=500 yarn test:fuzz
+```
+
+An explicit seed runs one replayable schedule. Without one, `DIGEST_FUZZ_SEEDS`
+controls the consecutive range beginning at seed 1.
 
 ## Required invariants
 

@@ -1,4 +1,5 @@
 import { PlacementGenerationStore } from "./PlacementGenerationStore";
+import { getFuzzConfig, seededIndex } from "../testing/FuzzConfig";
 
 describe("PlacementGenerationStore", () => {
   it("rejects cleanup from an older React mount", () => {
@@ -13,17 +14,14 @@ describe("PlacementGenerationStore", () => {
   });
 
   it("survives randomized delivery while preserving the newest mount", () => {
-    for (let seed = 1; seed <= 100; seed += 1) {
-      let state = seed >>> 0;
-      const random = (max: number) => {
-        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-        return state % max;
-      };
+    const { firstSeed, seedCount, operationCount } = getFuzzConfig();
+    for (let seed = firstSeed; seed < firstSeed + seedCount; seed += 1) {
+      const random = seededIndex(seed);
       const generations = new PlacementGenerationStore();
       let newestActive = 0;
       let highestSeen = 0;
 
-      for (let step = 0; step < 500; step += 1) {
+      for (let step = 0; step < operationCount; step += 1) {
         const generation = random(20) + 1;
         if (random(3) < 2) {
           const accepted = generations.acceptUpdate("page:full", generation);

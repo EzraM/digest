@@ -2,6 +2,7 @@ import {
   BrowsingJourneyStore,
   normalizeJourneyUrl,
 } from "./BrowsingJourneyStore";
+import { getFuzzConfig, seededIndex } from "../testing/FuzzConfig";
 
 const ids = () => {
   let next = 0;
@@ -225,16 +226,10 @@ describe("BrowsingJourneyStore", () => {
   });
 
   it("survives seeded randomized lifecycle interleavings", () => {
-    const configuredSeed = Number(process.env.DIGEST_FUZZ_SEED);
-    const firstSeed = Number.isInteger(configuredSeed) ? configuredSeed : 1;
-    const seedCount = Number.isInteger(configuredSeed) ? 1 : 100;
+    const { firstSeed, seedCount, operationCount } = getFuzzConfig();
 
     for (let seed = firstSeed; seed < firstSeed + seedCount; seed += 1) {
-      let state = seed >>> 0;
-      const random = (max: number) => {
-        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-        return state % max;
-      };
+      const random = seededIndex(seed);
       const store = new BrowsingJourneyStore(4, ids());
       const handles = Array.from({ length: 6 }, (_, index) => `handle-${index}`);
       const placements = Array.from(
@@ -247,7 +242,7 @@ describe("BrowsingJourneyStore", () => {
       );
 
       try {
-        for (let step = 0; step < 500; step += 1) {
+        for (let step = 0; step < operationCount; step += 1) {
           const handle = handles[random(handles.length)];
           const placement = placements[random(placements.length)];
           const url = urls[random(urls.length)];

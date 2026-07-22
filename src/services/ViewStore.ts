@@ -1,4 +1,4 @@
-import { BrowserWindow, WebContents } from "electron";
+import { BrowserWindow, WebContents, WebContentsView } from "electron";
 import {
   ViewEntry,
   ViewWorld,
@@ -12,6 +12,7 @@ import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry"
 import { EventTranslator } from "../domains/browser-views/adapter/EventTranslator";
 import { ContextMenuController } from "../domains/browser-views/adapter/ContextMenuController";
 import { HandleOperations } from "../domains/browser-views/adapter/HandleOperations";
+import type { Result } from "../domains/browser-views/adapter/HandleOperations";
 import { ViewLayerManager } from "./ViewLayerManager";
 import { log } from "../utils/mainLogger";
 import { DownloadManager } from "./DownloadManager";
@@ -28,6 +29,7 @@ import {
 import { LivePagesProjection } from "../types/browser";
 import { LivePageProjectionStore } from "./LivePageProjectionStore";
 import { PlacementGenerationStore } from "./PlacementGenerationStore";
+import type { ImageContextCallback } from "../domains/browser-views/adapter/ContextMenuController";
 
 export type OpenReferenceRequest = {
   viewId: string;
@@ -51,7 +53,74 @@ export type ViewStoreDependencies = {
   now?: () => number;
   journeys?: BrowsingJourneyStore;
   livePages?: LivePageProjectionStore;
+  handles?: HandleRegistry;
+  notifications?: ViewNotifications;
+  events?: ViewEvents;
+  contextMenus?: ViewContextMenus;
+  operations?: ViewHandleOperations;
+  createEffects?: (
+    onViewCreated: (
+      id: string,
+      view: WebContentsView,
+      profileId: string
+    ) => void
+  ) => ViewEffects;
 };
+
+export interface ViewEffects {
+  interpret(command: Command): void;
+  attachView(id: string): boolean;
+  detachView(id: string): void;
+}
+
+export interface ViewNotifications {
+  notify(id: string, previous: ViewWorld, next: ViewWorld): void;
+  notifyPlacementReady(placementId: string): void;
+  notifyLiveReferencesChanged(projection: LivePagesProjection): void;
+  notifyBrowserSelection(selection: {
+    blockId: string;
+    sourceUrl: string;
+    sourceTitle: string;
+    selectionText: string;
+    selectionHtml: string;
+    capturedAt: number;
+  }): void;
+}
+
+export interface ViewEvents {
+  attach(
+    id: string,
+    view: WebContentsView,
+    dispatch: (command: Command) => void,
+    profileId: string
+  ): () => void;
+  setBackgroundLinkClickCallback(
+    callback: (
+      url: string,
+      sourceBlockId: string,
+      title: string,
+      profileId: string
+    ) => void
+  ): void;
+}
+
+export interface ViewContextMenus {
+  setImageContextCallback(callback: ImageContextCallback): void;
+}
+
+export interface ViewHandleOperations {
+  getNavigationPosition(
+    id: string
+  ): Result<{ activeIndex: number; url: string }>;
+  prepareNavigationEntry(
+    id: string,
+    requestedUrl: string,
+    historyIndex?: number
+  ): Result<{ activeIndex: number }>;
+  getDevToolsState(id: string): Result<{ isOpen: boolean }>;
+  toggleDevTools(id: string): Result<{ isOpen: boolean }>;
+  goBack(id: string): Result<{ canGoBack: boolean }>;
+}
 
 /**
  * The ViewStore orchestrates the pure core with Electron adapters.
@@ -60,12 +129,12 @@ export type ViewStoreDependencies = {
  */
 export class ViewStore {
   private world: ViewWorld = emptyWorld;
-  private handles = new HandleRegistry();
-  private interpreter: Interpreter;
-  private notifications: NotificationLayer;
-  private events: EventTranslator;
-  private contextMenus: ContextMenuController;
-  private operations: HandleOperations;
+  private handles: HandleRegistry;
+  private interpreter: ViewEffects;
+  private notifications: ViewNotifications;
+  private events: ViewEvents;
+  private contextMenus: ViewContextMenus;
+  private operations: ViewHandleOperations;
   private eventDisposers = new Map<string, () => void>();
 
   private downloadManager?: DownloadManager;
@@ -89,19 +158,24 @@ export class ViewStore {
     this.now = dependencies.now ?? Date.now;
     this.journeys = dependencies.journeys ?? new BrowsingJourneyStore(10);
     this.livePages = dependencies.livePages ?? new LivePageProjectionStore();
-    this.notifications = new NotificationLayer(
-      rendererWebContents,
-      (handleId) => this.journeys.getActivePlacementId(handleId)
-    );
-    this.contextMenus = new ContextMenuController();
-    this.events = new EventTranslator(this.contextMenus);
-    this.operations = new HandleOperations(this.handles);
-    this.interpreter = new Interpreter(
-      baseWindow,
-      layerManager,
-      this.handles,
-      rendererWebContents,
-      (id, view, profileId) => {
+    this.handles = dependencies.handles ?? new HandleRegistry();
+    this.notifications =
+      dependencies.notifications ??
+      new NotificationLayer(rendererWebContents, (handleId) =>
+        this.journeys.getActivePlacementId(handleId)
+      );
+    this.contextMenus =
+      dependencies.contextMenus ?? new ContextMenuController();
+    this.events =
+      dependencies.events ??
+      new EventTranslator(this.contextMenus as ContextMenuController);
+    this.operations =
+      dependencies.operations ?? new HandleOperations(this.handles);
+    const onViewCreated = (
+      id: string,
+      view: WebContentsView,
+      profileId: string
+    ) => {
         // When a view is created, attach event listeners
         this.eventDisposers.get(id)?.();
         this.eventDisposers.set(
@@ -112,8 +186,16 @@ export class ViewStore {
         if (this.downloadManager) {
           this.downloadManager.attachToWebContents(view.webContents);
         }
-      }
-    );
+      };
+    this.interpreter = dependencies.createEffects
+      ? dependencies.createEffects(onViewCreated)
+      : new Interpreter(
+          baseWindow,
+          layerManager,
+          this.handles,
+          rendererWebContents,
+          onViewCreated
+        );
 
     log.debug("ViewStore initialized", "ViewStore");
   }
