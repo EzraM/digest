@@ -4,7 +4,14 @@
  * Provides navigation helpers and route state that wraps TanStack Router.
  * This allows components to navigate without importing router internals directly.
  */
-import React, { createContext, useContext, useCallback, useMemo } from "react";
+import React, {
+  createContext,
+  useContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { useLocation, useRouter } from "@tanstack/react-router";
 
 // Route types matching the old router API for compatibility
@@ -40,6 +47,7 @@ type AppRouteProviderProps = {
 export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderProps) {
   const router = useRouter();
   const location = useLocation();
+  const previousRouteRef = useRef<string | null>(null);
 
   // Parse current route from location
   const route = useMemo((): AppRoute => {
@@ -92,6 +100,20 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
     };
   }, [location.pathname, location.searchStr, fallbackDocId]);
 
+  useEffect(() => {
+    const snapshot = JSON.stringify({
+      previous: previousRouteRef.current,
+      route,
+      pathname: location.pathname,
+      search: location.searchStr,
+      hash: window.location.hash,
+      historyLength: window.history.length,
+      historyState: window.history.state,
+    });
+    console.log(`[AppRoute] committed ${snapshot}`);
+    previousRouteRef.current = `${route.kind}:${location.pathname}${location.searchStr}`;
+  }, [route, location.pathname, location.searchStr]);
+
   // Navigate via TanStack Router so history state includes scroll restoration keys
   const navigateToDoc = useCallback(
     (docId: string, focusBlockId?: string | null) => {
@@ -127,12 +149,15 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
   );
 
   const goBack = useCallback(() => {
-    console.log('[goBack] calling router.history.back()', {
+    console.log(`[goBack] requested ${JSON.stringify({
       currentPath: location.pathname,
+      currentSearch: location.searchStr,
+      hash: window.location.hash,
       historyLength: window.history.length,
-    });
+      historyState: window.history.state,
+    })}`);
     router.history.back();
-  }, [router, location.pathname]);
+  }, [router, location.pathname, location.searchStr]);
 
   const value = useMemo(
     (): AppRouteContextValue => ({

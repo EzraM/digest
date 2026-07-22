@@ -43,6 +43,9 @@ export function Page({
   const { initStatus, retryInitialization, getInitAttemptRef } =
     useBrowserInitialization(viewId);
   const slotRef = useRef<HTMLDivElement>(null);
+  const mountIdRef = useRef(
+    `${viewId}@${placementGeneration ?? "legacy"}:${Date.now()}`
+  );
   const scrollContainer = useScrollContainer();
 
   // For "full" layout, use 100% to fill the grid container (no scrolling on parent)
@@ -74,9 +77,26 @@ export function Page({
   // View lifecycle: release the placement on unmount. Main decides whether the
   // journey is detached for reuse or destroyed.
   useEffect(() => {
-    console.log(`[Page] Mount effect: viewId=${viewId}, layout=${layout}`);
+    console.log(
+      `[Page] mounted ${JSON.stringify({
+        mountId: mountIdRef.current,
+        viewId,
+        layout,
+        placementGeneration,
+        hash: window.location.hash,
+      })}`
+    );
     return () => {
-      console.log(`[Page] Unmount cleanup: viewId=${viewId}, layout=${layout}`);
+      console.log(
+        `[Page] cleanup/detach requested ${JSON.stringify({
+          mountId: mountIdRef.current,
+          viewId,
+          layout,
+          placementGeneration,
+          hash: window.location.hash,
+          visibilityState: document.visibilityState,
+        })}`
+      );
       window.electronAPI.removeView(viewId, placementGeneration);
     };
   }, [viewId, layout, placementGeneration]);

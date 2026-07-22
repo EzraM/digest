@@ -40,10 +40,37 @@ export class ViewLayerManager {
   removeView(id: string): void {
     const managedView = this.views.get(id);
     if (managedView) {
-      log.debug(`Removing view ${id}`, "ViewLayerManager");
+      log.debug(
+        `Removing view ${id}; before=${JSON.stringify(this.getDiagnosticSnapshot())}`,
+        "ViewLayerManager"
+      );
       this.baseWindow.contentView.removeChildView(managedView.view);
       this.views.delete(id);
+      log.debug(
+        `Removed view ${id}; after=${JSON.stringify(this.getDiagnosticSnapshot())}`,
+        "ViewLayerManager"
+      );
+    } else {
+      log.warn(
+        `Cannot remove unmanaged view ${id}; snapshot=${JSON.stringify(this.getDiagnosticSnapshot())}`,
+        "ViewLayerManager"
+      );
     }
+  }
+
+  getDiagnosticSnapshot(): {
+    managed: Array<{ id: string; layer: ViewLayer; nativeAttached: boolean }>;
+    nativeChildCount: number;
+  } {
+    const nativeChildren = this.baseWindow.contentView.children;
+    return {
+      managed: Array.from(this.views.values()).map(({ id, layer, view }) => ({
+        id,
+        layer,
+        nativeAttached: nativeChildren.includes(view),
+      })),
+      nativeChildCount: nativeChildren.length,
+    };
   }
 
   /**

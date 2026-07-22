@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MantineProvider } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { theme } from "./config/theme";
@@ -90,6 +90,21 @@ const RendererAppContent = () => {
 
   // Get route from TanStack Router context
   const { route, navigateToDoc } = useAppRoute();
+  const previousRenderedBranchRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const branch = route.kind;
+    console.log(
+      `[RendererApp] branch committed ${JSON.stringify({
+        previous: previousRenderedBranchRef.current,
+        branch,
+        route,
+        activeDocumentId,
+        hash: window.location.hash,
+      })}`
+    );
+    previousRenderedBranchRef.current = branch;
+  }, [route, activeDocumentId]);
 
   // Get block route props for block routes
   const { blockRouteProps, updateCachedBlockUrl } = useBlockRouteProps(

@@ -471,6 +471,16 @@ export class ViewStore {
     this.interpreter.detachView(handleId);
     this.destroyEvictedViews(this.journeys.markDetached(handleId));
     this.publishLiveReferences();
+    log.debug(
+      `[${viewId}] Detach committed: ${JSON.stringify({
+        handleId,
+        placementGeneration,
+        journeyDetached: this.journeys.isDetached(handleId),
+        worldHasPlacement: this.getWorld().has(viewId),
+        handleRetained: this.getHandleRegistry().has(handleId),
+      })}`,
+      "ViewStore"
+    );
   }
 
   getLiveReferences(): Array<{ profileId: string; url: string }> {
