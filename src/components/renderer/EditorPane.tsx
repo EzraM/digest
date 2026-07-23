@@ -1,5 +1,6 @@
 import {
   FormattingToolbarController,
+  LinkToolbarController,
   SuggestionMenuController,
   SuggestionMenuProps,
 } from "@blocknote/react";
@@ -11,6 +12,7 @@ import { useEditorScrollIntoView } from "../../hooks/useEditorScrollIntoView";
 import { useDocumentContext } from "../../context/DocumentContext";
 import { setLiveIndicatorProfileId } from "../../Browser/livePageStore";
 import { NotebookFormattingToolbar } from "./NotebookFormattingToolbar";
+import { NotebookLinkToolbar } from "./NotebookLinkToolbar";
 
 type EditorPaneProps = {
   editor: CustomBlockNoteEditor;
@@ -38,10 +40,12 @@ export const EditorPane = ({
           editor={editor}
           slashMenu={false}
           formattingToolbar={false}
+          linkToolbar={false}
         >
           <FormattingToolbarController
             formattingToolbar={NotebookFormattingToolbar}
           />
+          <LinkToolbarController linkToolbar={NotebookLinkToolbar} />
           <SuggestionMenuController
             triggerCharacter={"/"}
             suggestionMenuComponent={SlashCommandSyncMenu}

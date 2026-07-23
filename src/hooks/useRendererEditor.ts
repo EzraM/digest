@@ -16,6 +16,7 @@ import {
 } from "../domains/notebook-plugins/core/types";
 import { createMiddleClickDeleteExtension } from "../domains/blocks/adapters/createMiddleClickDeleteExtension";
 import { createLiveLinkIndicatorExtension } from "../domains/blocks/adapters/createLiveLinkIndicatorExtension";
+import { useAppRoute } from "../context/AppRouteContext";
 
 let currentEditor: CustomBlockNoteEditor | null = null;
 
@@ -101,9 +102,33 @@ export const useRendererEditor = (
     settings?: ProfileSettings | null;
   }
 ): CustomBlockNoteEditor => {
+  const { navigateToUrl } = useAppRoute();
   const editor = useCreateBlockNote({
     schema,
     initialContent: undefined,
+    links: {
+      HTMLAttributes: {
+        target: "_self",
+      },
+      onClick: (event) => {
+        event.preventDefault();
+
+        const target = event.target;
+        const element =
+          target instanceof Element
+            ? target
+            : target instanceof Node
+              ? target.parentElement
+              : null;
+        const link = element?.closest<HTMLAnchorElement>(
+          'a[data-inline-content-type="link"]'
+        );
+        if (!link) return false;
+
+        navigateToUrl(link.href);
+        return true;
+      },
+    },
     extensions: [
       createMiddleClickDeleteExtension,
       createLiveLinkIndicatorExtension,
