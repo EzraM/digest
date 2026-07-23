@@ -68,6 +68,14 @@ describe("queued browser lifecycle", () => {
 
         expect(journeys.isDetached("handle")).toBe(!expectedVisible);
       };
+      const enqueue = (label: string, event: LifecycleEvent) => {
+        scheduler.enqueue("renderer-ipc", label, () => deliver(event));
+        if (random(3) === 0) {
+          scheduler.enqueue("renderer-ipc", `${label}-duplicate`, () =>
+            deliver(event)
+          );
+        }
+      };
 
       for (let step = 0; step < operationCount; step += 1) {
         if (random(2) === 0) {
@@ -80,10 +88,9 @@ describe("queued browser lifecycle", () => {
             placementGeneration: newestPlacementGeneration,
             transitionGeneration: newestTransitionGeneration,
           };
-          scheduler.enqueue(
-            "renderer-ipc",
+          enqueue(
             `update-${newestPlacementGeneration}-${newestTransitionGeneration}`,
-            () => deliver(update)
+            update
           );
           if (previousPlacementGeneration > 0) {
             const oldDetach: LifecycleEvent = {
@@ -91,10 +98,9 @@ describe("queued browser lifecycle", () => {
               placementGeneration: previousPlacementGeneration,
               transitionGeneration: previousTransitionGeneration,
             };
-            scheduler.enqueue(
-              "renderer-ipc",
+            enqueue(
               `detach-${previousPlacementGeneration}-${previousTransitionGeneration}`,
-              () => deliver(oldDetach)
+              oldDetach
             );
             const stalePlacement: LifecycleEvent = {
               type: "detach",
@@ -102,10 +108,9 @@ describe("queued browser lifecycle", () => {
               transitionGeneration: newestTransitionGeneration,
               deliberatelyMismatched: true,
             };
-            scheduler.enqueue(
-              "renderer-ipc",
+            enqueue(
               `detach-mixed-${previousPlacementGeneration}-${newestTransitionGeneration}`,
-              () => deliver(stalePlacement)
+              stalePlacement
             );
             const staleTransition: LifecycleEvent = {
               type: "detach",
@@ -113,10 +118,9 @@ describe("queued browser lifecycle", () => {
               transitionGeneration: previousTransitionGeneration,
               deliberatelyMismatched: true,
             };
-            scheduler.enqueue(
-              "renderer-ipc",
+            enqueue(
               `detach-mixed-${newestPlacementGeneration}-${previousTransitionGeneration}`,
-              () => deliver(staleTransition)
+              staleTransition
             );
           }
         }
