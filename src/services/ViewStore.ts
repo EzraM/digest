@@ -79,9 +79,10 @@ export class ViewStore {
     this.handles = dependencies.handles ?? new HandleRegistry();
     this.notifications =
       dependencies.notifications ??
-      new NotificationLayer(rendererWebContents, (handleId) =>
-        this.journeys.getActivePlacementId(handleId)
-      );
+      new NotificationLayer(rendererWebContents, (handleId) => {
+        if (!this.journeys.has(handleId)) return undefined;
+        return this.journeys.getActiveMappingForHandle(handleId) ?? null;
+      });
     this.contextMenus =
       dependencies.contextMenus ?? new ContextMenuController();
     this.events =
@@ -246,7 +247,11 @@ export class ViewStore {
       }
       const attached = this.interpreter.attachView(execution.plan.handleId);
       if (attached) {
-        this.journeys.activatePlacement(execution.plan);
+        this.journeys.activatePlacement(execution.plan, {
+          placementId: update.placementId,
+          routeId: update.routeId,
+          transitionGeneration: update.transitionGeneration,
+        });
         this.updatePlacementBounds(execution.plan.handleId, update);
         this.notifyPlacementReady(update);
         this.publishLiveReferences();
@@ -307,7 +312,11 @@ export class ViewStore {
     }
 
     // Commit only after the Electron attachment succeeds.
-    this.journeys.markVisible(handleId, update.placementId);
+    this.journeys.markVisible(handleId, {
+      placementId: update.placementId,
+      routeId: update.routeId,
+      transitionGeneration: update.transitionGeneration,
+    });
     this.updatePlacementBounds(handleId, update, existing);
     this.notifyPlacementReady(update);
     this.publishLiveReferences();
@@ -354,6 +363,11 @@ export class ViewStore {
           update.placementId,
           update.profileId,
           update.url,
+          {
+            placementId: update.placementId,
+            routeId: update.routeId,
+            transitionGeneration: update.transitionGeneration,
+          },
           update.referenceId
         )
       );
@@ -380,11 +394,21 @@ export class ViewStore {
       );
       return;
     }
-    const identity = {
-      routeId: update.routeId,
-      ...mapping,
-      transitionGeneration: update.transitionGeneration,
-    };
+    if (
+      mapping.routeId !== update.routeId ||
+      mapping.transitionGeneration !== update.transitionGeneration
+    ) {
+      log.error(
+        `[${update.placementId}] Refusing ready notification for contradictory presentation identity: ${JSON.stringify({
+          requestedRouteId: update.routeId,
+          requestedTransitionGeneration: update.transitionGeneration,
+          ...mapping,
+        })}`,
+        "ViewStore"
+      );
+      return;
+    }
+    const identity = mapping;
     log.debug(
       `[${update.placementId}] Presentation ready: ${JSON.stringify(identity)}`,
       "ViewStore"

@@ -32,7 +32,9 @@ type BrowserSelection = {
 export class NotificationLayer {
   constructor(
     private rendererWebContents: WebContents,
-    private notificationIdForHandle: (id: string) => string = (id) => id,
+    private presentationForHandle: (
+      id: string
+    ) => BrowserPresentationIdentity | null | undefined = () => undefined,
   ) {}
 
   /**
@@ -40,7 +42,15 @@ export class NotificationLayer {
    * Compares load and navigation state independently.
    */
   notify(id: string, prevWorld: ViewWorld, nextWorld: ViewWorld): void {
-    const notificationId = this.notificationIdForHandle(id);
+    const presentation = this.presentationForHandle(id);
+    if (presentation === null) {
+      log.debug(
+        `[${id}] Skipping notification from inactive retained handle`,
+        "NotificationLayer"
+      );
+      return;
+    }
+    const notificationId = presentation?.placementId ?? id;
     const prev = prevWorld.get(id);
     const next = nextWorld.get(id);
 
@@ -61,7 +71,11 @@ export class NotificationLayer {
         `[${id}] Load state transition: ${prevLoadState} → ${nextLoadState}`,
         "NotificationLayer",
       );
-      this.sendLoadStateNotification(notificationId, next.loadState);
+      this.sendLoadStateNotification(
+        notificationId,
+        next.loadState,
+        presentation
+      );
     }
 
     if (navigationChanged) {
@@ -69,6 +83,7 @@ export class NotificationLayer {
         notificationId,
         next.url,
         next.history.canGoBack,
+        presentation,
       );
     }
   }
@@ -93,6 +108,7 @@ export class NotificationLayer {
   private sendLoadStateNotification(
     id: string,
     loadState: LoadState,
+    presentation?: BrowserPresentationIdentity,
   ): void {
     if (this.rendererWebContents.isDestroyed()) {
       log.warn(
@@ -109,6 +125,7 @@ export class NotificationLayer {
           blockId: id,
           success: true,
           status: "loading",
+          ...(presentation ? { presentation } : {}),
         });
         break;
 
@@ -118,6 +135,7 @@ export class NotificationLayer {
           blockId: id,
           success: true,
           status: "loaded",
+          ...(presentation ? { presentation } : {}),
         });
         break;
 
@@ -133,6 +151,7 @@ export class NotificationLayer {
           error: `Failed to load: ${loadState.message} (${loadState.code})`,
           errorCode: loadState.code,
           errorDescription: loadState.message,
+          ...(presentation ? { presentation } : {}),
         });
         break;
     }
@@ -157,6 +176,7 @@ export class NotificationLayer {
     id: string,
     url: string,
     canGoBack: boolean,
+    presentation?: BrowserPresentationIdentity,
   ): void {
     log.debug(
       `[${id}] Sending navigation notification for ${url}`,
@@ -166,6 +186,7 @@ export class NotificationLayer {
       blockId: id,
       url,
       canGoBack,
+      ...(presentation ? { presentation } : {}),
     });
   }
 }

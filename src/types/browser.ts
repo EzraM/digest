@@ -49,6 +49,7 @@ export type BrowserLifecycleEvent =
       error: string;
       errorCode: number;
       errorDescription: string;
+      presentation?: BrowserPresentationIdentity;
     };
 
 export type BrowserPageInfo =

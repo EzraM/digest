@@ -9,12 +9,33 @@ const ids = () => {
   return () => `journey-${++next}`;
 };
 
+const activation = (placementId: string, transitionGeneration = 1) => ({
+  placementId,
+  routeId: `route:${placementId}`,
+  transitionGeneration,
+});
+
+const addVisible = (
+  store: BrowsingJourneyStore,
+  handleId: string,
+  profileId: string,
+  url: string,
+  referenceId?: string
+) =>
+  store.addVisible(
+    handleId,
+    profileId,
+    url,
+    activation(handleId),
+    referenceId
+  );
+
 describe("BrowsingJourneyStore", () => {
   it("projects only current live URLs by profile without journey identity", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("handle-1", "profile-a", "https://example.com/first");
+    addVisible(store, "handle-1", "profile-a", "https://example.com/first");
     store.recordNavigation("handle-1", "https://example.com/current");
-    store.addVisible("handle-2", "profile-b", "https://example.com/current");
+    addVisible(store, "handle-2", "profile-b", "https://example.com/current");
 
     expect(store.getLiveReferences()).toEqual([
       { profileId: "profile-a", url: "https://example.com/current" },
@@ -24,31 +45,31 @@ describe("BrowsingJourneyStore", () => {
 
   it("evicts the least recently used detached journey per profile", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("a:full", "profile-a", "https://a.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://a.test", "a");
     store.markDetached("a:full");
-    store.addVisible("b:full", "profile-a", "https://b.test", "b");
+    addVisible(store, "b:full", "profile-a", "https://b.test", "b");
     store.markDetached("b:full");
 
     expect(
-      store.addVisible("c:full", "profile-a", "https://c.test", "c")
+      addVisible(store, "c:full", "profile-a", "https://c.test", "c")
     ).toEqual(["a:full"]);
     expect(store.getLiveReferenceIds()).toEqual(["b", "c"]);
   });
 
   it("never evicts a visible journey", () => {
     const store = new BrowsingJourneyStore(1, ids());
-    store.addVisible("a:full", "profile-a", "https://a.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://a.test", "a");
     expect(
-      store.addVisible("b:full", "profile-a", "https://b.test", "b")
+      addVisible(store, "b:full", "profile-a", "https://b.test", "b")
     ).toEqual([]);
     expect(store.markDetached("a:full")).toEqual(["a:full"]);
   });
 
   it("scopes the limit and URL resolution by profile", () => {
     const store = new BrowsingJourneyStore(1, ids());
-    store.addVisible("a:full", "profile-a", "https://example.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://example.test", "a");
     store.markDetached("a:full");
-    store.addVisible("b:full", "profile-b", "https://example.test", "b");
+    addVisible(store, "b:full", "profile-b", "https://example.test", "b");
 
     expect(store.getLiveReferenceIds()).toEqual(["a", "b"]);
     expect(
@@ -61,7 +82,7 @@ describe("BrowsingJourneyStore", () => {
 
   it("indexes every URL visited by a journey", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("a:full", "profile-a", "https://a.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://a.test", "a");
     store.recordNavigation("a:full", "https://b.test/path?q=1#section");
 
     expect(
@@ -75,14 +96,14 @@ describe("BrowsingJourneyStore", () => {
 
   it("keeps multiple same-URL journeys and resolves the most recent", () => {
     const store = new BrowsingJourneyStore(3, ids());
-    store.addVisible("a:full", "profile-a", "https://same.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://same.test", "a");
     store.markDetached("a:full");
-    store.addVisible("b:full", "profile-a", "https://same.test", "b");
+    addVisible(store, "b:full", "profile-a", "https://same.test", "b");
 
     expect(
       store.resolveCurrent("profile-a", "https://same.test")?.handleId
     ).toBe("b:full");
-    store.markVisible("a:full");
+    store.markVisible("a:full", activation("a:full", 2));
     expect(
       store.resolveCurrent("profile-a", "https://same.test")?.handleId
     ).toBe("a:full");
@@ -90,7 +111,7 @@ describe("BrowsingJourneyStore", () => {
 
   it("does not present an older visited URL as the current document", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("a:full", "profile-a", "https://a.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://a.test", "a");
     store.recordNavigation("a:full", "https://b.test");
 
     expect(store.resolveCurrent("profile-a", "https://a.test")).toBeUndefined();
@@ -109,7 +130,7 @@ describe("BrowsingJourneyStore", () => {
 
   it("plans restoration of a recorded older history entry", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("a:full", "profile-a", "https://a.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://a.test", "a");
     store.recordNavigation("a:full", "https://a.test", 0);
     store.recordNavigation("a:full", "https://b.test", 1);
     store.markDetached("a:full");
@@ -134,7 +155,7 @@ describe("BrowsingJourneyStore", () => {
 
   it("does not plan a history hit when no entry index was observed", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("a:full", "profile-a", "https://a.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://a.test", "a");
     store.recordNavigation("a:full", "https://b.test", 1);
     store.markDetached("a:full");
 
@@ -150,7 +171,7 @@ describe("BrowsingJourneyStore", () => {
 
   it("plans and commits current-document reuse as an atomic placement transition", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("a:full", "profile-a", "https://same.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://same.test", "a");
     store.markDetached("a:full");
 
     const plan = store.planOpenReference({
@@ -169,13 +190,15 @@ describe("BrowsingJourneyStore", () => {
     });
     if (plan.type !== "reuse-current") throw new Error("expected reuse plan");
 
-    store.activatePlacement(plan);
+    store.activatePlacement(plan, activation("b:full", 2));
     expect(store.getHandleIdForPlacement("b:full")).toBe("a:full");
     expect(store.getActivePlacementId("a:full")).toBe("b:full");
     expect(store.getActiveMapping("b:full")).toEqual({
       placementId: "b:full",
       journeyId: "journey-1",
       handleId: "a:full",
+      routeId: "route:b:full",
+      transitionGeneration: 2,
     });
     expect(store.getLiveReferenceIds()).toEqual(["a", "b"]);
 
@@ -186,7 +209,7 @@ describe("BrowsingJourneyStore", () => {
 
   it("plans creation when a matching journey is already visible", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("a:full", "profile-a", "https://same.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://same.test", "a");
 
     expect(
       store.planOpenReference({
@@ -204,7 +227,7 @@ describe("BrowsingJourneyStore", () => {
 
   it("does not leave a stale placement alias after competing activations", () => {
     const store = new BrowsingJourneyStore(2, ids());
-    store.addVisible("handle", "profile-a", "https://same.test", "original");
+    addVisible(store, "handle", "profile-a", "https://same.test", "original");
     store.markDetached("handle");
 
     const first = store.planOpenReference({
@@ -223,8 +246,8 @@ describe("BrowsingJourneyStore", () => {
       throw new Error("expected competing reuse plans");
     }
 
-    store.activatePlacement(first);
-    store.activatePlacement(second);
+    store.activatePlacement(first, activation("first:full", 2));
+    store.activatePlacement(second, activation("second:full", 3));
 
     expect(store.getHandleIdForPlacement("first:full")).toBeUndefined();
     expect(store.getHandleIdForPlacement("second:full")).toBe("handle");
@@ -254,13 +277,19 @@ describe("BrowsingJourneyStore", () => {
           const url = urls[random(urls.length)];
           switch (random(6)) {
             case 0:
-              store.addVisible(handle, "profile-a", url, `ref-${random(12)}`);
+              addVisible(
+                store,
+                handle,
+                "profile-a",
+                url,
+                `ref-${random(12)}`
+              );
               break;
             case 1:
               store.markDetached(handle);
               break;
             case 2:
-              store.markVisible(handle, placement);
+              store.markVisible(handle, activation(placement, step + 1));
               break;
             case 3:
               store.recordNavigation(handle, url, random(5));
@@ -276,7 +305,10 @@ describe("BrowsingJourneyStore", () => {
                 plan.type === "reuse-current" ||
                 plan.type === "reuse-history"
               ) {
-                store.activatePlacement(plan);
+                store.activatePlacement(
+                  plan,
+                  activation(plan.placementId, step + 1)
+                );
               }
               break;
             }
@@ -313,9 +345,9 @@ describe("BrowsingJourneyStore", () => {
 
   it("reports profile-scoped occupancy and cross-profile matches", () => {
     const store = new BrowsingJourneyStore(3, ids());
-    store.addVisible("a:full", "profile-a", "https://same.test", "a");
+    addVisible(store, "a:full", "profile-a", "https://same.test", "a");
     store.markDetached("a:full");
-    store.addVisible("b:full", "profile-b", "https://same.test", "b");
+    addVisible(store, "b:full", "profile-b", "https://same.test", "b");
 
     expect(store.getDiagnostics("profile-a", "https://same.test")).toEqual({
       candidateCount: 1,

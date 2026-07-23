@@ -29,6 +29,14 @@ export type ActiveJourneyMapping = {
   placementId: string;
   journeyId: string;
   handleId: string;
+  routeId: string;
+  transitionGeneration: number;
+};
+
+export type PlacementActivation = {
+  placementId: string;
+  routeId: string;
+  transitionGeneration: number;
 };
 
 export type OpenReferencePlan =
@@ -102,13 +110,14 @@ export class BrowsingJourneyStore {
     handleId: string,
     profileId: string,
     url: string,
+    activation: PlacementActivation,
     referenceId?: string
   ): string[] {
     const existing = this.getByHandle(handleId);
     if (existing) {
       existing.placement = "visible";
       existing.lastUsedAt = this.nextTimestamp();
-      this.bindPlacement(handleId, handleId);
+      this.bindPlacement(handleId, activation);
       if (referenceId) existing.referenceIds.add(referenceId);
       this.associateUrl(existing, url);
       return this.enforceLimit(profileId);
@@ -127,17 +136,17 @@ export class BrowsingJourneyStore {
     };
     this.journeys.set(journey.journeyId, journey);
     this.journeyIdByHandle.set(handleId, journey.journeyId);
-    this.bindPlacement(handleId, handleId);
+    this.bindPlacement(handleId, activation);
     this.associateUrl(journey, url);
     return this.enforceLimit(profileId);
   }
 
-  markVisible(handleId: string, placementId = handleId): void {
+  markVisible(handleId: string, activation: PlacementActivation): void {
     const journey = this.getByHandle(handleId);
     if (!journey) return;
     journey.placement = "visible";
     journey.lastUsedAt = this.nextTimestamp();
-    this.bindPlacement(handleId, placementId);
+    this.bindPlacement(handleId, activation);
   }
 
   planOpenReference(input: {
@@ -182,11 +191,18 @@ export class BrowsingJourneyStore {
   }
 
   activatePlacement(
-    plan: Extract<OpenReferencePlan, { type: "reuse-current" | "reuse-history" }>
+    plan: Extract<OpenReferencePlan, { type: "reuse-current" | "reuse-history" }>,
+    activation: PlacementActivation
   ): void {
     const journey = this.getByHandle(plan.handleId);
-    if (!journey || journey.journeyId !== plan.journeyId) return;
-    this.bindPlacement(plan.handleId, plan.placementId);
+    if (
+      !journey ||
+      journey.journeyId !== plan.journeyId ||
+      activation.placementId !== plan.placementId
+    ) {
+      return;
+    }
+    this.bindPlacement(plan.handleId, activation);
     journey.referenceIds.add(plan.referenceId);
     journey.placement = "visible";
     journey.lastUsedAt = this.nextTimestamp();
@@ -214,6 +230,13 @@ export class BrowsingJourneyStore {
       return undefined;
     }
     return mapping;
+  }
+
+  getActiveMappingForHandle(
+    handleId: string
+  ): ActiveJourneyMapping | undefined {
+    const placementId = this.activePlacementIdByHandleId.get(handleId);
+    return placementId ? this.getActiveMapping(placementId) : undefined;
   }
 
   getDiagnostics(profileId: string, url: string): JourneyCacheDiagnostics {
@@ -442,7 +465,11 @@ export class BrowsingJourneyStore {
   }
 
   /** Keep the handle/placement relationship one-to-one across stale events. */
-  private bindPlacement(handleId: string, placementId: string): void {
+  private bindPlacement(
+    handleId: string,
+    activation: PlacementActivation
+  ): void {
+    const { placementId, routeId, transitionGeneration } = activation;
     const journeyId = this.journeyIdByHandle.get(handleId);
     if (!journeyId) return;
 
@@ -460,6 +487,8 @@ export class BrowsingJourneyStore {
       placementId,
       journeyId,
       handleId,
+      routeId,
+      transitionGeneration,
     });
     this.activePlacementIdByHandleId.set(handleId, placementId);
     this.assertActiveMappingInvariant();

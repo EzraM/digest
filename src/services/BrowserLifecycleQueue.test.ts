@@ -32,6 +32,11 @@ describe("queued browser lifecycle", () => {
         "handle",
         "profile",
         "https://example.test/",
+        {
+          placementId: "handle",
+          routeId: "route:initial",
+          transitionGeneration: 1,
+        },
         "reference"
       );
       const scheduler = new DeterministicScheduler();
@@ -48,7 +53,11 @@ describe("queued browser lifecycle", () => {
               event.transitionGeneration
             )
           ) {
-            journeys.markVisible("handle", "page:full");
+            journeys.markVisible("handle", {
+              placementId: "page:full",
+              routeId: `route:${event.transitionGeneration}`,
+              transitionGeneration: event.transitionGeneration,
+            });
             expectedVisible = true;
           }
         } else {

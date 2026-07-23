@@ -17,10 +17,10 @@ function createRenderer(messages: SentMessage[]): WebContents {
   } as unknown as WebContents;
 }
 
-function createWorld(): ViewWorld {
+function createWorld(id = "block-1"): ViewWorld {
   return reduce(emptyWorld, {
     type: "create",
-    id: "block-1",
+    id,
     url: "https://example.com",
     bounds: { x: 0, y: 0, width: 800, height: 600 },
     profile: "default",
@@ -201,5 +201,56 @@ describe("NotificationLayer", () => {
         },
       },
     ]);
+  });
+
+  it("routes native readiness through the complete active presentation", () => {
+    const messages: SentMessage[] = [];
+    const presentation = {
+      routeId: "route-PD-3772",
+      placementId: "placement-PD-3772",
+      journeyId: "journey-17",
+      handleId: "handle-PS-5606",
+      transitionGeneration: 23,
+    };
+    const notifications = new NotificationLayer(
+      createRenderer(messages),
+      () => presentation
+    );
+    const loading = createWorld("handle-PS-5606");
+    const ready = reduce(loading, {
+      type: "markReady",
+      id: "handle-PS-5606",
+    });
+
+    notifications.notify("handle-PS-5606", loading, ready);
+
+    expect(messages).toEqual([
+      {
+        channel: "browser:initialized",
+        payload: {
+          blockId: "placement-PD-3772",
+          success: true,
+          status: "loaded",
+          presentation,
+        },
+      },
+    ]);
+  });
+
+  it("drops delayed events from an inactive retained handle", () => {
+    const messages: SentMessage[] = [];
+    const notifications = new NotificationLayer(
+      createRenderer(messages),
+      () => null
+    );
+    const loading = createWorld("handle-PS-5606");
+    const ready = reduce(loading, {
+      type: "markReady",
+      id: "handle-PS-5606",
+    });
+
+    notifications.notify("handle-PS-5606", loading, ready);
+
+    expect(messages).toEqual([]);
   });
 });
