@@ -19,7 +19,7 @@ type BlockRouteViewContentProps = {
   profileId: string | null;
   url: string;
   title: string;
-  viewId: string;
+  placementId: string;
   editor: CustomBlockNoteEditor;
   onUrlChange?: (url: string) => void;
   onBack: () => void;
@@ -30,13 +30,13 @@ export const BlockRouteViewContent = ({
   docId,
   profileId,
   url,
-  viewId,
+  placementId,
   editor,
   onUrlChange,
   onBack,
 }: BlockRouteViewContentProps) => {
   const urlString = url;
-  const loadStatus = useBrowserLoadState(viewId);
+  const loadStatus = useBrowserLoadState(placementId);
 
   const initialUrlRef = useRef(urlString);
   const [currentBrowserUrl, setCurrentBrowserUrl] = useState(urlString);
@@ -49,7 +49,7 @@ export const BlockRouteViewContent = ({
     isOpen: devToolsOpen,
     isBusy: isTogglingDevTools,
     toggleDevTools,
-  } = useDevToolsState(viewId);
+  } = useDevToolsState(placementId);
 
   const handleUrlChange = useCallback(
     (nextUrl: string) => {
@@ -60,7 +60,7 @@ export const BlockRouteViewContent = ({
   );
 
   const { canGoBack, isNavigatingBack, goBack } = useBrowserNavigationState(
-    viewId,
+    placementId,
     urlString,
     {
       blockIdForEditorSync: blockId ?? undefined, // Only sync if blockId exists
@@ -92,7 +92,7 @@ export const BlockRouteViewContent = ({
   }, [blockId, editor, onBack]);
 
   const handleReload = useCallback(() => {
-    void window.electronAPI.browser.reload(viewId).then((result) => {
+    void window.electronAPI.browser.reload(placementId).then((result) => {
       if (!result.success) {
         console.error(
           "[BlockRouteViewContent] Failed to reload page:",
@@ -100,7 +100,7 @@ export const BlockRouteViewContent = ({
         );
       }
     });
-  }, [viewId]);
+  }, [placementId]);
 
   // Get page tool slot content
   const pageToolContext = useContext(PageToolSlotContext);
@@ -167,7 +167,7 @@ export const BlockRouteViewContent = ({
       >
         {/* Left sidebar - minimize/expand toggle */}
         <LeftRail
-          viewId={viewId}
+          viewId={placementId}
           onBack={handleBack}
           canGoBrowserBack={canGoBack}
           isNavigatingBrowserBack={isNavigatingBack}
@@ -197,7 +197,7 @@ export const BlockRouteViewContent = ({
               blockId={blockId}
               url={urlString}
               layout="full"
-              viewId={viewId}
+              placementId={placementId}
             />
           </div>
 

@@ -30,8 +30,7 @@ import { LinkCaptureNotification } from "./domains/link-capture/ui/LinkCaptureNo
 import { useLinkCaptureNotification } from "./domains/link-capture/ui/useLinkCaptureNotification";
 import { DownloadProvider } from "./domains/downloads/ui/DownloadContext";
 import { DownloadNotification } from "./domains/downloads/ui/DownloadNotification";
-
-const PRIMARY_BROWSER_PLACEMENT_ID = "primary-browser";
+import { PRIMARY_BROWSER_PLACEMENT_ID } from "./Browser/presentationIds";
 import { useDownloadNotification } from "./domains/downloads/ui/useDownloadNotification";
 import { StatusBar } from "./components/renderer/StatusBar";
 import { useStatusBar } from "./hooks/useStatusBar";
@@ -342,7 +341,7 @@ const RendererAppContent = () => {
           profileId={activeDocument?.profileId ?? null}
           url={blockRouteProps?.url ?? null}
           title={blockRouteProps?.title ?? "Block"}
-          viewId={PRIMARY_BROWSER_PLACEMENT_ID}
+          placementId={PRIMARY_BROWSER_PLACEMENT_ID}
           editor={editor}
           onUrlChange={(nextUrl) =>
             updateCachedBlockUrl(route.blockId, nextUrl)
@@ -356,7 +355,7 @@ const RendererAppContent = () => {
           profileId={activeDocument?.profileId ?? null}
           url={route.url}
           title={route.url}
-          viewId={PRIMARY_BROWSER_PLACEMENT_ID}
+          placementId={PRIMARY_BROWSER_PLACEMENT_ID}
           editor={editor}
         />
       )}

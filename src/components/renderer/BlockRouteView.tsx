@@ -10,7 +10,7 @@ type BlockRouteViewProps = {
   profileId: string | null;
   url: string | null;
   title: string;
-  viewId: string;
+  placementId: string;
   editor: CustomBlockNoteEditor;
   onUrlChange?: (url: string) => void;
 };
@@ -21,7 +21,7 @@ export const BlockRouteView = ({
   profileId,
   url,
   title,
-  viewId,
+  placementId,
   editor,
   onUrlChange,
 }: BlockRouteViewProps) => {
@@ -46,7 +46,7 @@ export const BlockRouteView = ({
       profileId={profileId}
       url={url}
       title={title}
-      viewId={viewId}
+      placementId={placementId}
       editor={editor}
       onUrlChange={onUrlChange}
       onBack={handleMinimize}

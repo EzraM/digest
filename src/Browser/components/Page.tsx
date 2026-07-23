@@ -4,8 +4,8 @@ import { useBrowserViewUpdater } from "../hooks/useBrowserViewUpdater";
 import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
 import { useSize } from "../hooks/useSize";
 import { useScrollContainer } from "../../context/ScrollContainerContext";
-import { toFullViewId } from "../../utils/viewId";
 import { SiteLoadingState } from "./SiteLoadingState";
+import { PRIMARY_BROWSER_PLACEMENT_ID } from "../presentationIds";
 
 const NORMAL_HEIGHT = 800;
 
@@ -13,17 +13,23 @@ export function Page({
   blockId: providedBlockId,
   url,
   layout = "inline",
-  viewId: explicitViewId,
+  placementId: explicitPlacementId,
 }: PageProps & {
   layout?: "inline" | "full";
-  viewId?: string;
+  placementId?: string;
 }) {
   // For ephemeral URL pages (no blockId), generate a synthetic ID based on URL
   const blockId = providedBlockId ?? `ephemeral-${btoa(url).replace(/[^a-zA-Z0-9]/g, '')}`;
 
-  // Layout-qualified view ID: separates inline from fullscreen views
-  const viewId =
-    explicitViewId ?? (layout === "full" ? toFullViewId(blockId) : blockId);
+  const generatedPlacementIdRef = useRef<string | null>(null);
+  if (generatedPlacementIdRef.current === null) {
+    generatedPlacementIdRef.current =
+      layout === "full"
+        ? PRIMARY_BROWSER_PLACEMENT_ID
+        : `inline-placement-${globalThis.crypto.randomUUID()}`;
+  }
+  const placementId =
+    explicitPlacementId ?? generatedPlacementIdRef.current;
   const routeId =
     layout === "inline"
       ? `inline:${blockId}`
@@ -32,7 +38,7 @@ export function Page({
         : `url:${url}`;
 
   console.log(
-    `[Page] Render: blockId=${blockId}, layout=${layout}, viewId=${viewId}`
+    `[Page] Render: blockId=${blockId}, layout=${layout}, placementId=${placementId}`
   );
 
   const {
@@ -41,17 +47,17 @@ export function Page({
     placementGeneration,
   } =
     useBrowserViewUpdater(
-      viewId,
+      placementId,
       blockId,
       routeId,
       layout,
       providedBlockId ? "site-block" : "ephemeral-url"
     );
   const { initStatus, retryInitialization, getInitAttemptRef } =
-    useBrowserInitialization(viewId);
+    useBrowserInitialization(placementId);
   const slotRef = useRef<HTMLDivElement>(null);
   const mountIdRef = useRef(
-    `${viewId}@${placementGeneration ?? "legacy"}:${Date.now()}`
+    `${placementId}@${placementGeneration}:${Date.now()}`
   );
   const scrollContainer = useScrollContainer();
 
@@ -87,7 +93,7 @@ export function Page({
     console.log(
       `[Page] mounted ${JSON.stringify({
         mountId: mountIdRef.current,
-        viewId,
+        placementId,
         layout,
         placementGeneration,
         hash: window.location.hash,
@@ -97,7 +103,7 @@ export function Page({
       console.log(
         `[Page] cleanup/detach requested ${JSON.stringify({
           mountId: mountIdRef.current,
-          viewId,
+          placementId,
           layout,
           placementGeneration,
           hash: window.location.hash,
@@ -105,12 +111,12 @@ export function Page({
         })}`
       );
       window.electronAPI.removeView({
-        placementId: viewId,
+        placementId,
         placementGeneration,
         transitionGeneration: placementGeneration,
       });
     };
-  }, [viewId, layout, placementGeneration]);
+  }, [placementId, layout, placementGeneration]);
 
   const handleRetry = () => {
     retryInitialization();
