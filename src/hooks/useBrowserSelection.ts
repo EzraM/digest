@@ -8,7 +8,7 @@ import { log } from "../utils/rendererLogger";
 /**
  * Listen for browser selections and insert them directly into the notebook.
  */
-export const useBrowserSelection = () => {
+export const useBrowserSelection = (documentId: string | null) => {
   const clipService = ClipService.getInstance();
   const clipConverter = ClipConverter.getInstance();
   const clipCommitService = ClipCommitService.getInstance();
@@ -48,7 +48,9 @@ export const useBrowserSelection = () => {
             convertedDraft,
             insertAfterBlockId
           );
+        if (!documentId) throw new Error("No document selected");
         const result = await window.electronAPI.applyBlockOperations(
+          documentId,
           operations,
           origin
         );
@@ -73,6 +75,5 @@ export const useBrowserSelection = () => {
     });
 
     return unsubscribe;
-  }, [clipCommitService, clipConverter, clipService]);
+  }, [clipCommitService, clipConverter, clipService, documentId]);
 };
-

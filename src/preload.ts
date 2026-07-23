@@ -194,14 +194,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     };
   },
   // Block operations for unified processing with transaction metadata
-  applyBlockOperations: (operations: any[], origin?: any) => {
+  applyBlockOperations: (
+    documentId: string,
+    operations: any[],
+    origin?: any
+  ) => {
     log.debug(
       `Applying ${operations.length} block operations ${
         origin?.batchId ? `(batch: ${origin.batchId})` : ""
       }`,
       "preload"
     );
-    return ipcRenderer.invoke("block-operations:apply", operations, origin);
+    return ipcRenderer.invoke("block-operations:apply", {
+      documentId,
+      operations,
+      origin,
+    });
   },
 
   // Signal renderer ready to receive document updates

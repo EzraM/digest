@@ -30,7 +30,7 @@ export class BlockOperationService {
   private yBlocks: Y.Array<any>;
   private database: Database.Database;
   private documentId: string;
-  private rendererWebContents: Electron.WebContentsView | null = null;
+  private rendererWebContents = new Set<Electron.WebContentsView>();
   private _eventLogger: ReturnType<typeof getEventLogger> | null = null;
 
   private get eventLogger() {
@@ -110,7 +110,11 @@ export class BlockOperationService {
    * Set the renderer web contents for sending updates
    */
   setRendererWebContents(webContents: Electron.WebContentsView): void {
-    this.rendererWebContents = webContents;
+    this.rendererWebContents.add(webContents);
+  }
+
+  removeRendererWebContents(webContents: Electron.WebContentsView): void {
+    this.rendererWebContents.delete(webContents);
   }
 
   /**
@@ -327,15 +331,18 @@ export class BlockOperationService {
    * Enhanced with transaction origin metadata for provenance tracking
    */
   private handleYDocUpdate(update: Uint8Array, origin: any): void {
-    if (
-      this.rendererWebContents &&
-      !this.rendererWebContents.webContents.isDestroyed()
-    ) {
+    for (const renderer of this.rendererWebContents) {
+      if (renderer.webContents.isDestroyed()) {
+        this.rendererWebContents.delete(renderer);
+        continue;
+      }
       // Convert Y.Doc state to blocks array for renderer
       const blocks = this.yBlocks.toArray();
 
       // Enhanced broadcast with transaction metadata
-      this.rendererWebContents.webContents.send("document-update", {
+      renderer.webContents.send("document-update", {
+        documentId: this.documentId,
+        recipientRendererId: renderer.webContents.id,
         blocks,
         origin: origin as TransactionOrigin, // Cast to our typed origin
         updateVector: Array.from(update),
@@ -350,7 +357,7 @@ export class BlockOperationService {
         : "";
 
       log.debug(
-        `Broadcasted document update to renderer: ${blocks.length} blocks ${originDescription}`,
+        `Broadcasted document update to renderer ${renderer.webContents.id}: ${blocks.length} blocks ${originDescription}`,
         "BlockOperationService"
       );
     }
@@ -688,7 +695,7 @@ export class BlockOperationService {
 
     this.yDoc.destroy();
 
-    this.rendererWebContents = null;
+    this.rendererWebContents.clear();
 
     log.debug("BlockOperationService destroyed", "BlockOperationService");
   }

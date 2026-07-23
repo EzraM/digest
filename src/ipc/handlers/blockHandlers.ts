@@ -7,13 +7,38 @@ import type { BlockOperationsApplier } from "../../domains/blocks/services";
 export function createBlockHandlers(
   documentManager: DocumentManager,
   rendererView: WebContentsView | null,
-  blockOperationsApplier: BlockOperationsApplier
+  blockOperationsApplier: BlockOperationsApplier,
+  resolveWindowId: (rendererId: number) => string | undefined = () => undefined
 ): IPCHandlerMap {
   return {
     "block-operations:apply": {
       type: "invoke",
-      fn: async (_event, operations: unknown[], origin?: unknown) => {
+      fn: async (
+        event,
+        payload: {
+          documentId: string;
+          operations: unknown[];
+          origin?: unknown;
+        }
+      ) => {
         try {
+          if (
+            !payload ||
+            typeof payload.documentId !== "string" ||
+            !Array.isArray(payload.operations)
+          ) {
+            throw new Error(
+              "block-operations:apply requires documentId and operations"
+            );
+          }
+          const { documentId, operations } = payload;
+          const origin = {
+            ...(typeof payload.origin === "object" && payload.origin
+              ? payload.origin
+              : {}),
+            rendererId: event.sender.id,
+            windowId: resolveWindowId(event.sender.id),
+          };
           log.debug(
             `IPC: Applying ${operations.length} block operations ${
               (origin as { batchId?: string })?.batchId
@@ -23,20 +48,14 @@ export function createBlockHandlers(
             "main"
           );
 
-          const activeDocument =
-            documentManager.activeDocument ??
-            documentManager.listDocuments()[0];
-          if (!activeDocument) {
-            throw new Error("No active document available for operations");
-          }
-
-          const blockService = documentManager.getBlockService(activeDocument.id);
+          documentManager.getDocument(documentId);
+          const blockService = documentManager.getBlockService(documentId);
           if (rendererView && !rendererView.webContents.isDestroyed()) {
             blockService.setRendererWebContents(rendererView);
           }
 
           const result = await blockOperationsApplier.apply(
-            activeDocument.id,
+            documentId,
             operations as any,
             origin as any
           );

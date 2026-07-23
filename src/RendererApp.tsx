@@ -60,8 +60,8 @@ const RendererAppContent = () => {
   const editor = useRendererEditor(pluginProfile);
 
   // Listen for browser selection events
-  useBrowserSelection();
-  useBrowserImageClips();
+  useBrowserSelection(activeDocument?.id ?? null);
+  useBrowserImageClips(activeDocument?.id ?? null);
 
   // Listen for link capture events
   useLinkCaptureNotification();

@@ -292,7 +292,7 @@ export const useRendererEditor = (
     return unsubscribe;
   }, []);
 
-  useDocumentSync(editor);
+  useDocumentSync(editor, pluginProfile?.documentId ?? null);
 
   return editor;
 };

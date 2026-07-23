@@ -7,7 +7,10 @@ import { useDebounced } from "./useDebounced";
  * Custom hook to synchronize document state and operations with the main process.
  * Handles persistence by saving user operations to Y.js + SQLite.
  */
-export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
+export const useDocumentSync = (
+  editor: CustomBlockNoteEditor,
+  documentId: string | null
+) => {
   // Track the last known document state to detect real changes
   const lastDocumentRef = useRef<any[] | null>(null);
 
@@ -43,7 +46,7 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
       );
 
       (window.electronAPI as any)
-        ?.applyBlockOperations([operation], origin)
+        ?.applyBlockOperations(documentId, [operation], origin)
         .then((result: any) => {
           log.debug(
             `User operation saved: ${result.operationsApplied} operations`,
@@ -58,7 +61,7 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
   );
 
   useEffect(() => {
-    if (!editor || !window.electronAPI) return;
+    if (!editor || !window.electronAPI || !documentId) return;
 
     // Handle document changes - but filter intelligently
     const handleDocumentChange = (
@@ -106,13 +109,18 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
       if (!updateData?.blocks || !Array.isArray(updateData.blocks)) return;
 
       const { blocks, origin } = updateData;
+      if (updateData.documentId && updateData.documentId !== documentId) {
+        return;
+      }
 
       // Use transaction metadata to determine if we should apply this update
-      const isUserOriginated = origin?.source === "user";
+      const isOwnUserUpdate =
+        origin?.source === "user" &&
+        origin?.rendererId === updateData?.recipientRendererId;
       const isSystemOriginated = origin?.source === "system" || !origin;
       const isClipOriginated = origin?.source === "clip";
 
-      if (isUserOriginated) {
+      if (isOwnUserUpdate) {
         // Skip user-originated Y.js updates to prevent loops
         log.debug(
           `Skipping Y.js sync from user operation (${origin.batchId})`,
@@ -169,5 +177,5 @@ export const useDocumentSync = (editor: CustomBlockNoteEditor) => {
         window.electronAPI.removeDocumentUpdateListener(handleYjsSync);
       }
     };
-  }, [editor, saveUserOperation]);
+  }, [documentId, editor, saveUserOperation]);
 };

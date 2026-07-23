@@ -8,7 +8,7 @@ import { log } from "../utils/rendererLogger";
 /**
  * Listens for right-click image clips and inserts them into the notebook.
  */
-export const useBrowserImageClips = () => {
+export const useBrowserImageClips = (documentId: string | null) => {
   const clipService = ClipService.getInstance();
   const clipConverter = ClipConverter.getInstance();
   const clipCommitService = ClipCommitService.getInstance();
@@ -55,7 +55,9 @@ export const useBrowserImageClips = () => {
             convertedDraft,
             insertAfterBlockId
           );
+        if (!documentId) throw new Error("No document selected");
         const result = await window.electronAPI.applyBlockOperations(
+          documentId,
           operations,
           origin
         );
@@ -101,7 +103,7 @@ export const useBrowserImageClips = () => {
     });
 
     return unsubscribe;
-  }, [clipCommitService, clipConverter, clipService]);
+  }, [clipCommitService, clipConverter, clipService, documentId]);
 };
 
 const escapeHtml = (value: string): string =>

@@ -89,6 +89,7 @@ interface ElectronAPI {
     callback: (data: { url: string; title: string; capturedAt: number }) => void
   ) => () => void;
   applyBlockOperations: (
+    documentId: string,
     operations: BlockOperation[],
     origin?: import("./operations").TransactionOrigin
   ) => Promise<OperationResult>;
