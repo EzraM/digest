@@ -31,7 +31,7 @@
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
     "@vitejs/plugin-react": "^4.3.0",
-    "electron": "39.2.3",
+    "electron": "43.2.0",
     "eslint": "^8.0.1",
     "eslint-plugin-import": "^2.25.0",
     "ts-node": "^10.0.0",
@@ -59,8 +59,8 @@
     "@tanstack/react-router": "^1.157.16",
     "@tiptap/extensions": "^3.7.2",
     "@types/lodash": "^4.17.6",
-    "better-sqlite3": "^12.4.1",
-    "sqlite-vec": "^0.1.6",
+    "better-sqlite3": "^12.11.1",
+    "sqlite-vec": "^0.1.9",
     "electron-squirrel-startup": "^1.0.1",
     "immer": "^10.1.1",
     "lodash": "^4.17.21",
@@ -78,7 +78,7 @@
     "prosemirror-transform": "^1.10.5",
     "prosemirror-state": "^1.4.4",
     "node-abi": "^4.24.0",
-    "esbuild": ">=0.25.0",
+    "esbuild": "0.25.12",
     "tmp": ">=0.2.4"
   },
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"

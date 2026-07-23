@@ -398,25 +398,19 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
   // Forward renderer console logs to main process
   webContentsView.webContents.on(
     "console-message",
-    (
-      _event: unknown,
-      level: number,
-      message: string,
-      line: number,
-      sourceId: string
-    ) => {
+    ({ level, message, lineNumber, sourceId }) => {
       const logLevel =
-        level === 1
+        level === "info"
           ? "info"
-          : level === 2
+          : level === "warning"
             ? "warn"
-            : level === 3
+            : level === "error"
               ? "error"
               : "debug";
       const source = sourceId ? path.basename(sourceId) : "renderer";
 
       log.debug(
-        `[RENDERER-${logLevel.toUpperCase()}] ${source}:${line} - ${message}`,
+        `[RENDERER-${logLevel.toUpperCase()}] ${source}:${lineNumber} - ${message}`,
         "renderer-console"
       );
     }

@@ -5,7 +5,6 @@ import {
   CustomPartialBlock,
   schema,
 } from "../types/schema";
-import { useBrowserScrollForward } from "./useBrowserScrollForward";
 import { useDocumentSync } from "./useDocumentSync";
 import { handleElectronPaste } from "../clipboard/handleElectronPaste";
 import { ProfileSettings } from "../types/documents";
@@ -289,7 +288,6 @@ export const useRendererEditor = (
     return unsubscribe;
   }, []);
 
-  useBrowserScrollForward();
   useDocumentSync(editor);
 
   return editor;

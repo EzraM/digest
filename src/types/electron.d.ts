@@ -52,13 +52,6 @@ interface ElectronAPI {
       canGoBack?: boolean;
     }) => void
   ) => () => void;
-  onBrowserScrollForward: (
-    callback: (data: {
-      blockId: string;
-      direction: "up" | "down";
-      deltaY: number;
-    }) => void
-  ) => () => void;
   onBrowserSelection: (
     callback: (data: {
       blockId: string;

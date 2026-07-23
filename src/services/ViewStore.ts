@@ -110,7 +110,6 @@ export class ViewStore {
           baseWindow,
           layerManager,
           this.handles,
-          rendererWebContents,
           onViewCreated
         );
 

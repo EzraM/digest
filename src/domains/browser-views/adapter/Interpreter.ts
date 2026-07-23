@@ -4,7 +4,6 @@ import { Rect } from "../core/types";
 import { HandleRegistry } from "./HandleRegistry";
 import { ViewLayerManager, ViewLayer } from "../../../services/ViewLayerManager";
 import { getProfilePartition } from "../../../config/profiles";
-import { injectScrollForwardingScript } from "../../../services/ScrollForwardingService";
 import { log } from "../../../utils/mainLogger";
 import { DEV_CONFIG } from "../../../config/development";
 
@@ -19,7 +18,6 @@ export class Interpreter {
     private baseWindow: BrowserWindow,
     private layerManager: ViewLayerManager | undefined,
     private handles: HandleRegistry,
-    private rendererWebContents: Electron.WebContents,
     private onViewCreated: (id: string, view: WebContentsView, profileId: string) => void
   ) {}
 
@@ -30,7 +28,7 @@ export class Interpreter {
   interpret(cmd: Command): void {
     switch (cmd.type) {
       case "create":
-        this.createView(cmd.id, cmd.url, cmd.bounds, cmd.profile, cmd.layout);
+        this.createView(cmd.id, cmd.url, cmd.bounds, cmd.profile);
         break;
 
       case "updateBounds":
@@ -60,8 +58,7 @@ export class Interpreter {
     id: string,
     url: string,
     bounds: Rect,
-    profile: string,
-    layout?: "inline" | "full"
+    profile: string
   ): void {
     if (this.baseWindow.isDestroyed()) {
       log.warn(
@@ -134,14 +131,6 @@ export class Interpreter {
 
       // Notify that view was created (this will attach event listeners)
       this.onViewCreated(id, newView, profile);
-
-      // Inject scroll forwarding for inline layout (set once at creation)
-      injectScrollForwardingScript(
-        newView,
-        id,
-        this.rendererWebContents,
-        layout ?? "inline"
-      );
 
       // Load URL
       log.debug(`Loading URL for blockId: ${id}: ${url}`, "Interpreter");
