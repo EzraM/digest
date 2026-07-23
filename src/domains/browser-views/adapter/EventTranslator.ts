@@ -3,6 +3,10 @@ import { Command } from '../core/commands';
 import { log } from '../../../utils/mainLogger';
 import { toBlockId } from '../../../utils/viewId';
 import type { ViewContextMenus } from '../../../services/ViewStoreContracts';
+import {
+  httpResponseMonitor,
+  type HttpResponseMonitor,
+} from '../../../services/HttpResponseMonitor';
 
 type CommandDispatcher = (cmd: Command) => void;
 type BackgroundLinkCallback = (url: string, sourceId: string, title: string, profileId: string) => void;
@@ -15,7 +19,10 @@ type BackgroundLinkCallback = (url: string, sourceId: string, title: string, pro
 export class EventTranslator {
   private onBackgroundLinkClick?: BackgroundLinkCallback;
 
-  constructor(private contextMenus: ViewContextMenus) {}
+  constructor(
+    private contextMenus: ViewContextMenus,
+    private httpResponses: HttpResponseMonitor = httpResponseMonitor
+  ) {}
 
   setBackgroundLinkClickCallback(callback: BackgroundLinkCallback): void {
     this.onBackgroundLinkClick = callback;
@@ -100,6 +107,39 @@ export class EventTranslator {
         );
       }
     });
+
+    const stopObservingHttp = this.httpResponses.observe(
+      webContents,
+      (details) => {
+        if (details.resourceType !== 'mainFrame' || details.statusCode < 500) {
+          return;
+        }
+
+        // A superseded request can complete after a newer navigation starts.
+        // Only let the response decide the state of the document it belongs to.
+        if (!sameDocumentUrl(details.url, webContents.getURL())) {
+          log.debug(
+            `[${id}] Ignoring stale HTTP ${details.statusCode} for ${details.url}; current URL is ${webContents.getURL()}`,
+            'EventTranslator'
+          );
+          return;
+        }
+
+        const description =
+          details.statusLine || `HTTP ${details.statusCode}`;
+        log.warn(
+          `[${id}] Main-frame HTTP failure: ${description} for ${details.url}`,
+          'EventTranslator'
+        );
+        hasErrored = true;
+        dispatch({
+          type: 'markError',
+          id,
+          code: details.statusCode,
+          message: description,
+        });
+      }
+    );
 
     listen('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       // Only handle main frame errors (ignore iframe errors)
@@ -231,6 +271,7 @@ export class EventTranslator {
 
     log.debug(`[${id}] Event listeners attached`, 'EventTranslator');
     return () => {
+      stopObservingHttp();
       for (const { event, listener } of listeners) {
         webContents.removeListener(event as any, listener as any);
       }
@@ -241,4 +282,16 @@ export class EventTranslator {
     };
   }
 
+}
+
+function sameDocumentUrl(responseUrl: string, currentUrl: string): boolean {
+  try {
+    const response = new URL(responseUrl);
+    const current = new URL(currentUrl);
+    response.hash = '';
+    current.hash = '';
+    return response.href === current.href;
+  } catch {
+    return responseUrl === currentUrl;
+  }
 }

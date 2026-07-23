@@ -91,13 +91,13 @@ export function categorizeBrowserError(
     };
   }
 
-  // HTTP errors (4xx, 5xx)
-  if (errorCode === -324) {
+  // Main-frame server errors observed from the HTTP response.
+  if (errorCode >= 500 && errorCode <= 599) {
     return {
       errorCategory: "http",
       userMessage:
-        "Website returned an error. The page may not exist or the server is having issues.",
-      technicalDetails: `${errorDescription} (${errorCode}) for ${validatedURL}`,
+        "The website's server returned an error. Please try again in a little bit.",
+      technicalDetails: `HTTP ${errorCode}: ${errorDescription} for ${validatedURL}`,
       canRetry: true,
     };
   }
