@@ -92,7 +92,7 @@ export const BlockRouteStatusBar = ({
       className={placement === "titlebar" ? "app-title-bar browser-title-bar" : undefined}
       style={{
         height: placement === "titlebar" ? "100%" : "28px",
-        backgroundColor: "#fff",
+        backgroundColor: "var(--digest-chrome-surface)",
         borderTop: placement === "footer" ? "1px solid #e0e0e0" : 0,
         display: "flex",
         alignItems: "center",
@@ -101,7 +101,7 @@ export const BlockRouteStatusBar = ({
         paddingRight: "6px",
         fontSize: "11px",
         fontFamily: "monospace",
-        color: "#666",
+        color: "var(--digest-chrome-text)",
       }}
     >
       <div

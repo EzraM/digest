@@ -16,8 +16,8 @@ export const BlockRoutePageToolSlot = ({
   return (
     <div
       style={{
-        backgroundColor: "#fff",
-        borderTop: "1px solid #e0e0e0",
+        backgroundColor: "var(--digest-chrome-surface)",
+        borderTop: "1px solid var(--digest-chrome-menu-edge)",
         overflow: "hidden",
       }}
     >

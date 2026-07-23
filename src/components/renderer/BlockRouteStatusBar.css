@@ -134,7 +134,7 @@
 }
 
 .browser-devtools-button:hover:not(:disabled) {
-  background: #f1f3f5 !important;
+  background: var(--digest-chrome-indigo-tint) !important;
 }
 
 .browser-load-indicator {
@@ -157,7 +157,7 @@
   border-radius: 3px;
   background: transparent;
   padding: 0;
-  color: #666;
+  color: var(--digest-chrome-text);
   font: 16px/18px sans-serif;
   opacity: 0;
   transform: translateX(-4px);
@@ -180,8 +180,8 @@
 
 .browser-load-control__refresh:hover,
 .browser-load-control__refresh:focus-visible {
-  background: #f1f3f5;
-  color: #1c7ed6;
+  background: var(--digest-chrome-sky-tint);
+  color: var(--digest-chrome-indigo);
   outline: none;
 }
 

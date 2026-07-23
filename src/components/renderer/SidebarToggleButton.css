@@ -1,0 +1,44 @@
+.notebook-rail-toggle {
+  position: absolute;
+  inset: 0;
+  width: 2rem;
+  height: 100%;
+  border: 0;
+  background: var(--digest-chrome-surface);
+  color: var(--digest-chrome-indigo);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.notebook-rail-toggle::before {
+  position: absolute;
+  inset: 4px 3px;
+  border-radius: 8px;
+  background: var(--digest-chrome-indigo-tint);
+  content: "";
+  transition: background-color 150ms ease;
+}
+
+.notebook-rail-toggle:hover::before {
+  background: var(--digest-chrome-indigo-hover);
+}
+
+.notebook-rail-toggle:active::before {
+  background: rgba(82, 96, 166, 0.18);
+}
+
+.notebook-rail-toggle:focus-visible {
+  outline: 2px solid var(--digest-chrome-focus);
+  outline-offset: -3px;
+}
+
+.notebook-rail-toggle span {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

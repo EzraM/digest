@@ -1,5 +1,4 @@
-import { useMantineColorScheme } from "@mantine/core";
-import { sidebarButtonColors } from "../../config/theme";
+import "./SidebarToggleButton.css";
 
 const SidebarIcon = ({ isOpen }: { isOpen: boolean }) => (
   <svg
@@ -36,47 +35,15 @@ export const SidebarToggleButton = ({
   isOpen,
   onToggle,
 }: SidebarToggleButtonProps) => {
-  const { colorScheme } = useMantineColorScheme();
-  const colors =
-    sidebarButtonColors.navigation[colorScheme === "dark" ? "dark" : "light"];
-
   return (
     <button
+      className="notebook-rail-toggle"
       type="button"
       onClick={onToggle}
-      style={{
-        position: "absolute",
-        left: 0,
-        top: 0,
-        width: "2rem",
-        height: "100%",
-        border: "none",
-        borderRight: `1px solid ${colors.border}`,
-        backgroundColor: colors.background,
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 0,
-        transition: "background-color 150ms ease",
-      }}
       title={isOpen ? "Collapse sidebar" : "Expand sidebar"}
       aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = colors.hover;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = colors.background;
-      }}
     >
-      <span
-        style={{
-          color: colors.text,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
+      <span>
         <SidebarIcon isOpen={isOpen} />
       </span>
     </button>

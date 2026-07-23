@@ -2,7 +2,7 @@
   box-sizing: border-box;
   gap: 0;
   padding: 0;
-  background: #fff;
+  background: var(--digest-chrome-surface);
 }
 
 .left-rail button {
@@ -11,7 +11,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #666c80;
+  color: var(--digest-chrome-text);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -25,7 +25,7 @@
   position: absolute;
   inset: 4px 3px;
   border-radius: 8px;
-  background: rgba(99, 112, 174, 0.055);
+  background: var(--digest-chrome-indigo-tint);
   content: "";
   transition: background-color 150ms ease, box-shadow 150ms ease;
 }
@@ -37,11 +37,11 @@
 
 .left-rail button:hover:not(:disabled) {
   background: transparent;
-  color: #505b96;
+  color: var(--digest-chrome-indigo);
 }
 
 .left-rail button:hover:not(:disabled)::before {
-  background: rgba(91, 105, 175, 0.13);
+  background: var(--digest-chrome-indigo-hover);
 }
 
 .left-rail button:active:not(:disabled) {
@@ -53,7 +53,7 @@
 }
 
 .left-rail button:focus-visible {
-  outline: 2px solid rgba(82, 100, 186, 0.45);
+  outline: 2px solid var(--digest-chrome-focus);
   outline-offset: 1px;
 }
 
@@ -93,7 +93,7 @@
 }
 
 .left-rail__notebook::before {
-  background: rgba(116, 96, 184, 0.06);
+  background: var(--digest-chrome-violet-tint);
 }
 
 .left-rail__notebook:hover::before {
@@ -121,7 +121,7 @@
 }
 
 .left-rail__add::before {
-  background: rgba(77, 145, 205, 0.075);
+  background: var(--digest-chrome-sky-tint);
 }
 
 .left-rail__add:hover::before {

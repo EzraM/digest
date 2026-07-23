@@ -1,6 +1,15 @@
 import { ActionIcon, Group, Menu, SegmentedControl, Stack, Text } from "@mantine/core";
 import { ProfileRecord } from "../../types/documents";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
+import "./ProfileList.css";
+
+const MoreIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <circle cx="3.25" cy="8" r="1.1" fill="currentColor" />
+    <circle cx="8" cy="8" r="1.1" fill="currentColor" />
+    <circle cx="12.75" cy="8" r="1.1" fill="currentColor" />
+  </svg>
+);
 
 type ProfileListProps = {
   profiles: ProfileRecord[];
@@ -32,7 +41,7 @@ export const ProfileList = ({
   const canRename = activeProfile !== undefined;
 
   return (
-    <Stack gap="xs">
+    <Stack className="profile-list" gap="xs">
       <Group justify="space-between">
         <Text fw={600} size="sm">
           Profiles
@@ -43,23 +52,23 @@ export const ProfileList = ({
               variant="subtle"
               size="sm"
               radius="md"
+              className="profile-actions-trigger"
               aria-label="Profile actions"
             >
-              <Text fw={600} size="xs">
-                ...
-              </Text>
+              <MoreIcon />
             </ActionIcon>
           </Menu.Target>
-          <Menu.Dropdown>
+          <Menu.Dropdown className="profile-actions-menu">
             {onCreateProfile && (
-              <Menu.Item onClick={onCreateProfile}>New profile</Menu.Item>
+              <Menu.Item className="profile-actions-menu__item" onClick={onCreateProfile}>New profile</Menu.Item>
             )}
             {activeProfile && (canRename || canDelete) && (
               <>
-                <Menu.Divider />
-                <Menu.Label>Profile</Menu.Label>
+                <Menu.Divider className="profile-actions-menu__divider" />
+                <Menu.Label className="profile-actions-menu__label">Profile</Menu.Label>
                 {canRename && onRenameProfile && (
                   <Menu.Item
+                    className="profile-actions-menu__item"
                     onClick={() => onRenameProfile(activeProfile.id)}
                   >
                     Rename
@@ -67,6 +76,7 @@ export const ProfileList = ({
                 )}
                 {canDelete && onDeleteProfile && (
                   <Menu.Item
+                    className="profile-actions-menu__item profile-actions-menu__item--danger"
                     color="red"
                     onClick={() => onDeleteProfile(activeProfile.id)}
                   >
@@ -75,6 +85,7 @@ export const ProfileList = ({
                 )}
                 {onToggleJiraLinks && (
                   <Menu.Item
+                    className="profile-actions-menu__item"
                     onClick={() =>
                       onToggleJiraLinks(
                         activeProfile.id,
@@ -100,6 +111,12 @@ export const ProfileList = ({
         </Text>
       ) : (
         <SegmentedControl
+          classNames={{
+            root: "profile-switcher",
+            indicator: "profile-switcher__indicator",
+            control: "profile-switcher__control",
+            label: "profile-switcher__label",
+          }}
           size="xs"
           fullWidth
           value={value || undefined}

@@ -1,11 +1,46 @@
 html,
 body {
+  --digest-chrome-surface: var(--mantine-color-body);
+  --digest-chrome-text: var(--mantine-color-dimmed);
+  --digest-chrome-indigo: #59669c;
+  --digest-chrome-indigo-tint: rgba(99, 112, 174, 0.06);
+  --digest-chrome-indigo-hover: rgba(91, 105, 175, 0.14);
+  --digest-chrome-violet-tint: rgba(116, 96, 184, 0.06);
+  --digest-chrome-sky-tint: rgba(77, 145, 205, 0.08);
+  --digest-chrome-focus: rgba(82, 100, 186, 0.45);
+  --digest-chrome-menu-edge: rgba(84, 91, 119, 0.1);
+  --digest-chrome-menu-shadow: rgba(41, 46, 67, 0.12);
   background-color: var(--mantine-color-body);
   color: var(--mantine-color-text);
   transition: background-color 0.2s ease, color 0.2s ease;
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+[data-mantine-color-scheme="dark"] {
+  --digest-chrome-indigo: #aeb8ed;
+  --digest-chrome-indigo-tint: rgba(137, 151, 220, 0.16);
+  --digest-chrome-indigo-hover: rgba(137, 151, 220, 0.28);
+  --digest-chrome-violet-tint: rgba(157, 132, 218, 0.15);
+  --digest-chrome-sky-tint: rgba(94, 158, 211, 0.16);
+  --digest-chrome-focus: rgba(150, 166, 239, 0.65);
+  --digest-chrome-menu-edge: rgba(205, 211, 232, 0.12);
+  --digest-chrome-menu-shadow: rgba(0, 0, 0, 0.34);
+}
+
+@media (prefers-color-scheme: dark) {
+  html,
+  body {
+    --digest-chrome-indigo: #aeb8ed;
+    --digest-chrome-indigo-tint: rgba(137, 151, 220, 0.16);
+    --digest-chrome-indigo-hover: rgba(137, 151, 220, 0.28);
+    --digest-chrome-violet-tint: rgba(157, 132, 218, 0.15);
+    --digest-chrome-sky-tint: rgba(94, 158, 211, 0.16);
+    --digest-chrome-focus: rgba(150, 166, 239, 0.65);
+    --digest-chrome-menu-edge: rgba(205, 211, 232, 0.12);
+    --digest-chrome-menu-shadow: rgba(0, 0, 0, 0.34);
+  }
 }
 
 body {

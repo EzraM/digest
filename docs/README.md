@@ -8,6 +8,7 @@ This directory contains documentation for the Digest project.
   - **[goals_and_priorities.md](./product/goals_and_priorities.md)**: Overview of project goals and priorities
   - **[development_roadmap.md](./product/development_roadmap.md)**: Detailed roadmap with priorities and timelines
   - **[technical_architecture.md](./product/technical_architecture.md)**: Technical architecture documentation
+  - **[visual-style-guidance.md](./product/visual-style-guidance.md)**: Visual language for application chrome, controls, menus, and interaction states
 - **[plans/](./plans/)**: Technical plans / design docs
   - **[clip-architecture-plan.md](./plans/clip-architecture-plan.md)**: Clipping pipeline (selection → proposed blocks → insert), deterministic vs LLM conversion, and review/edit UX
   - **[sync-refactor-plan.md](./plans/sync-refactor-plan.md)**: Refactor persistence/sync to granular BlockNote changes, preserving provenance and supporting snapshots, image cleanup, and clip insertion
@@ -39,4 +40,4 @@ The development process follows these general steps:
 3. Implement and test features
 4. Update documentation as needed
 
-For more detailed information about the project, refer to the specific documentation files listed above. 
+For more detailed information about the project, refer to the specific documentation files listed above.
