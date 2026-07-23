@@ -40,6 +40,20 @@ if (require("electron-squirrel-startup")) {
   app.quit();
 }
 
+// Opt-in Chrome DevTools Protocol access for local performance diagnostics.
+// Keep this disabled during normal runs because the endpoint can control the app.
+const remoteDebuggingPort = process.env.DIGEST_REMOTE_DEBUGGING_PORT;
+if (remoteDebuggingPort) {
+  if (!/^\d+$/.test(remoteDebuggingPort)) {
+    throw new Error("DIGEST_REMOTE_DEBUGGING_PORT must be a numeric port");
+  }
+  app.commandLine.appendSwitch(
+    "remote-debugging-address",
+    "127.0.0.1"
+  );
+  app.commandLine.appendSwitch("remote-debugging-port", remoteDebuggingPort);
+}
+
 // Register custom protocol scheme before app is ready
 // This must be called before app.on("ready")
 protocol.registerSchemesAsPrivileged([

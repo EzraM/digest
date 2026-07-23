@@ -6,6 +6,8 @@
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "yarn clean && electron-forge start 2>&1 | tee ./digest.log",
+    "start:profile": "DIGEST_REMOTE_DEBUGGING_PORT=9222 yarn start",
+    "profile:capture": "node scripts/capture-renderer-profile.cjs",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
