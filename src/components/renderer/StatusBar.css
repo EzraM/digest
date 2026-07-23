@@ -7,3 +7,103 @@
 .app-title-bar__control {
   -webkit-app-region: no-drag;
 }
+
+.notebook-title-bar {
+  position: relative;
+  display: flex;
+  height: 100%;
+  align-items: center;
+  background: var(--digest-chrome-surface);
+  color: var(--digest-chrome-text);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 11px;
+}
+
+.notebook-title-bar__location {
+  position: absolute;
+  left: 50%;
+  box-sizing: border-box;
+  display: flex;
+  width: min(58%, 680px);
+  height: 28px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--digest-chrome-violet-tint);
+  color: inherit;
+  font: inherit;
+  transform: translateX(-50%);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.notebook-title-bar__location:hover {
+  border-color: rgba(116, 96, 184, 0.08);
+  background: rgba(116, 96, 184, 0.12);
+  color: var(--digest-chrome-indigo);
+}
+
+.notebook-title-bar__location:active {
+  background: rgba(116, 96, 184, 0.17);
+}
+
+.notebook-title-bar__location:focus-visible {
+  outline: 2px solid var(--digest-chrome-focus);
+  outline-offset: 1px;
+}
+
+.notebook-title-bar__icon {
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.notebook-title-bar__breadcrumb {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notebook-title-bar__reveal {
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 120ms ease, transform 150ms ease;
+}
+
+.notebook-title-bar__location:hover .notebook-title-bar__reveal,
+.notebook-title-bar__location:focus-visible .notebook-title-bar__reveal {
+  opacity: 0.72;
+  transform: translateX(0);
+}
+
+@media (max-width: 520px) {
+  .notebook-title-bar__location {
+    left: 78px;
+    right: 8px;
+    width: auto;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notebook-title-bar__location,
+  .notebook-title-bar__reveal {
+    transition: none;
+  }
+}

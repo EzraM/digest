@@ -1,4 +1,3 @@
-import { Box, Text, Group } from "@mantine/core";
 import "./StatusBar.css";
 
 type StatusBarProps = {
@@ -8,55 +7,39 @@ type StatusBarProps = {
 
 export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
   return (
-    <Box
-      component="header"
-      className="app-title-bar"
-      h="100%"
-      style={{
-        backgroundColor: "var(--mantine-color-body)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingLeft: "max(var(--mantine-spacing-sm), 78px)",
-        paddingRight: "var(--mantine-spacing-sm)",
-        fontSize: "11px",
-        fontFamily: "var(--mantine-font-family-monospace)",
-        color: "var(--mantine-color-dimmed)",
-      }}
-    >
-      <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-        <Box
-          className="app-title-bar__control"
-          onClick={onClick}
-          style={{
-            minWidth: 0,
-            cursor: "pointer",
-            transition: "background-color 0.15s ease",
-            maxWidth: "60%",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor =
-              "var(--mantine-color-default-hover)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-          }}
+    <header className="app-title-bar notebook-title-bar">
+      <button
+        className="app-title-bar__control notebook-title-bar__location"
+        type="button"
+        onClick={onClick}
+        title={`${breadcrumbText} — toggle sidebar`}
+        aria-label={`${breadcrumbText}. Toggle sidebar`}
+      >
+        <svg
+          className="notebook-title-bar__icon"
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
         >
-          <Text
-            size="xs"
-            c="dimmed"
-            style={{
-              userSelect: "none",
-              lineHeight: 1,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {breadcrumbText}
-          </Text>
-        </Box>
-      </Group>
-    </Box>
+          <path d="M4.25 2.5h6A1.75 1.75 0 0 1 12 4.25v8.25H5.75A1.75 1.75 0 0 1 4 10.75V2.5h.25Z" />
+          <path d="M4 10.75c0-.97.78-1.75 1.75-1.75H12M6.5 5.25h3" />
+        </svg>
+        <span className="notebook-title-bar__breadcrumb">
+          {breadcrumbText}
+        </span>
+        <svg
+          className="notebook-title-bar__reveal"
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path d="m6 4 4 4-4 4" />
+        </svg>
+      </button>
+    </header>
   );
 };
