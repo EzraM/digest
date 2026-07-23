@@ -295,6 +295,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       profileId: string;
       settings: import("./types/documents").ProfileSettings;
     }) => ipcRenderer.invoke("profiles:update-settings", payload),
+    reorder: (profileIds: string[]) =>
+      ipcRenderer.invoke("profiles:reorder", profileIds),
     delete: (profileId: string) =>
       ipcRenderer.invoke("profiles:delete", profileId),
     onUpdated: (

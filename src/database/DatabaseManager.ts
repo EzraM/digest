@@ -16,6 +16,7 @@ import migration005 from "./migrations/005_add_images_table";
 import migration006 from "./migrations/006_add_vector_search";
 import migration007 from "./migrations/007_add_download_items_table";
 import migration008 from "./migrations/008_add_live_page_cache_attempts";
+import migration009 from "./migrations/009_add_profile_position";
 
 /**
  * Singleton database manager that handles initialization and migrations
@@ -36,6 +37,7 @@ export class DatabaseManager {
     migration006,
     migration007,
     migration008,
+    migration009,
   ];
 
   private constructor() {

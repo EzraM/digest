@@ -16,6 +16,17 @@ export interface CreateProfileOptions {
   settings?: ProfileSettings | null;
 }
 
+type ProfileRow = {
+  id: string;
+  name: string;
+  partition_name: string;
+  icon: string | null;
+  color: string | null;
+  created_at: number;
+  updated_at: number;
+  settings: string | null;
+};
+
 export class ProfileManager {
   private profiles = new Map<string, ProfileRecord>();
 
@@ -55,10 +66,16 @@ export class ProfileManager {
     const settingsString = options.settings
       ? JSON.stringify(options.settings)
       : null;
+    const position =
+      (
+        this.database
+          .prepare(`SELECT COALESCE(MAX(position), -1) + 1 AS position FROM profiles`)
+          .get() as { position: number }
+      ).position;
 
     const stmt = this.database.prepare(
-      `INSERT INTO profiles (id, name, partition_name, icon, color, created_at, updated_at, settings)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO profiles (id, name, partition_name, icon, color, created_at, updated_at, settings, position)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     stmt.run(
@@ -69,7 +86,8 @@ export class ProfileManager {
       options.color ?? null,
       now,
       now,
-      settingsString
+      settingsString,
+      position
     );
 
     const profile: ProfileRecord = {
@@ -133,6 +151,29 @@ export class ProfileManager {
     log.debug(`Deleted profile ${profileId}`, "ProfileManager");
   }
 
+  reorderProfiles(profileIds: string[]): ProfileRecord[] {
+    const existingIds = Array.from(this.profiles.keys());
+    if (
+      profileIds.length !== existingIds.length ||
+      new Set(profileIds).size !== profileIds.length ||
+      profileIds.some((id) => !this.profiles.has(id))
+    ) {
+      throw new Error("Profile order must contain every profile exactly once");
+    }
+
+    const update = this.database.prepare(
+      `UPDATE profiles SET position = ? WHERE id = ?`
+    );
+    this.database.transaction(() => {
+      profileIds.forEach((id, position) => update.run(position, id));
+    })();
+
+    const reordered = new Map<string, ProfileRecord>();
+    profileIds.forEach((id) => reordered.set(id, this.getProfile(id)));
+    this.profiles = reordered;
+    return this.listProfiles();
+  }
+
   private ensureDefaultProfile(): void {
     if (this.profiles.has(DEFAULT_PROFILE_ID)) {
       return;
@@ -146,9 +187,11 @@ export class ProfileManager {
     try {
       const rows = this.database
         .prepare(
-          `SELECT id, name, partition_name, icon, color, created_at, updated_at, settings FROM profiles ORDER BY created_at ASC`
+          `SELECT id, name, partition_name, icon, color, created_at, updated_at, settings
+           FROM profiles
+           ORDER BY position ASC, created_at ASC`
         )
-        .all();
+        .all() as ProfileRow[];
 
       this.profiles.clear();
       for (const row of rows) {
@@ -160,7 +203,7 @@ export class ProfileManager {
     }
   }
 
-  private mapProfileRow(row: any): ProfileRecord {
+  private mapProfileRow(row: ProfileRow): ProfileRecord {
     let parsedSettings: ProfileSettings | null = null;
     if (row.settings) {
       try {

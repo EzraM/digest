@@ -41,6 +41,14 @@ export function createProfileHandlers(
         return profile;
       },
     },
+    "profiles:reorder": {
+      type: "invoke",
+      fn: (_event, profileIds: string[]) => {
+        const profiles = profileManager.reorderProfiles(profileIds);
+        broadcastProfiles();
+        return profiles;
+      },
+    },
     "profiles:delete": {
       type: "invoke",
       fn: (_event, profileId: string) => {

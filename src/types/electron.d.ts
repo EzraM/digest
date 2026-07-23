@@ -130,6 +130,7 @@ interface ElectronAPI {
       profileId: string;
       settings: import("./documents").ProfileSettings;
     }) => Promise<ProfileRecord>;
+    reorder: (profileIds: string[]) => Promise<ProfileRecord[]>;
     delete: (profileId: string) => Promise<{ success: boolean }>;
     onUpdated: (
       callback: (event: { profiles: ProfileRecord[] }) => void

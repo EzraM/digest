@@ -312,6 +312,10 @@ const RendererAppContent = () => {
     [profiles]
   );
 
+  const handleReorderProfiles = useCallback(async (profileIds: string[]) => {
+    await window.electronAPI.profiles.reorder(profileIds);
+  }, []);
+
   return (
     <MantineProvider theme={theme} defaultColorScheme="auto">
       <TitleBarContext.Provider value={titleBarContextValue}>
@@ -373,6 +377,7 @@ const RendererAppContent = () => {
               onRenameProfile={handleRenameProfile}
               onDeleteProfile={handleDeleteProfile}
               onToggleJiraLinks={handleToggleJiraLinks}
+              onReorderProfiles={handleReorderProfiles}
               documentTree={activeProfileTree}
               activeDocumentId={activeDocumentId}
               onSelectDocument={handleSidebarDocumentSelect}

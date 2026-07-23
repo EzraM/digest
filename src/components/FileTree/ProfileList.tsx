@@ -1,4 +1,5 @@
-import { ActionIcon, Group, Menu, SegmentedControl, Stack, Text } from "@mantine/core";
+import { useState } from "react";
+import { ActionIcon, Group, Menu, Stack, Text } from "@mantine/core";
 import { ProfileRecord } from "../../types/documents";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
 import "./ProfileList.css";
@@ -19,6 +20,7 @@ type ProfileListProps = {
   onRenameProfile?: (profileId: string) => void;
   onDeleteProfile?: (profileId: string) => void;
   onToggleJiraLinks?: (profileId: string, enabled: boolean) => void;
+  onReorderProfiles: (profileIds: string[]) => void;
 };
 
 export const ProfileList = ({
@@ -29,7 +31,9 @@ export const ProfileList = ({
   onRenameProfile,
   onDeleteProfile,
   onToggleJiraLinks,
+  onReorderProfiles,
 }: ProfileListProps) => {
+  const [draggedProfileId, setDraggedProfileId] = useState<string | null>(null);
   // Determine which profile to show as selected in the SegmentedControl
   // Priority: activeProfileId if valid, otherwise first profile, otherwise null
   const isActiveProfileValid =
@@ -39,6 +43,28 @@ export const ProfileList = ({
   const activeProfile = profiles.find((p) => p.id === activeProfileId);
   const canDelete = activeProfile && activeProfile.id !== DEFAULT_PROFILE_ID;
   const canRename = activeProfile !== undefined;
+  const isStacked = profiles.length > 3;
+
+  const moveProfile = (
+    profileId: string,
+    targetProfileId: string,
+    placeAfter = false
+  ) => {
+    if (profileId === targetProfileId) return;
+    const nextIds = profiles.map((profile) => profile.id);
+    const from = nextIds.indexOf(profileId);
+    if (from < 0 || !nextIds.includes(targetProfileId)) return;
+    const [movedId] = nextIds.splice(from, 1);
+    const targetIndex = nextIds.indexOf(targetProfileId);
+    nextIds.splice(targetIndex + (placeAfter ? 1 : 0), 0, movedId);
+    onReorderProfiles(nextIds);
+  };
+
+  const moveProfileBy = (profileId: string, offset: number) => {
+    const index = profiles.findIndex((profile) => profile.id === profileId);
+    const target = profiles[index + offset];
+    if (target) moveProfile(profileId, target.id, offset > 0);
+  };
 
   return (
     <Stack className="profile-list" gap="xs">
@@ -110,22 +136,57 @@ export const ProfileList = ({
           No profiles available yet.
         </Text>
       ) : (
-        <SegmentedControl
-          classNames={{
-            root: "profile-switcher",
-            indicator: "profile-switcher__indicator",
-            control: "profile-switcher__control",
-            label: "profile-switcher__label",
-          }}
-          size="xs"
-          fullWidth
-          value={value || undefined}
-          onChange={onSelectProfile}
-          data={profiles.map((profile) => ({
-            label: profile.name,
-            value: profile.id,
-          }))}
-        />
+        <div
+          className={`profile-switcher${isStacked ? " profile-switcher--stacked" : ""}`}
+          role="tablist"
+          aria-orientation={isStacked ? "vertical" : "horizontal"}
+        >
+          {profiles.map((profile) => (
+            <button
+              key={profile.id}
+              type="button"
+              role="tab"
+              aria-selected={profile.id === value}
+              className="profile-switcher__control"
+              draggable
+              onClick={() => onSelectProfile(profile.id)}
+              onDragStart={(event) => {
+                setDraggedProfileId(profile.id);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", profile.id);
+              }}
+              onDragEnd={() => setDraggedProfileId(null)}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const draggedId =
+                  draggedProfileId || event.dataTransfer.getData("text/plain");
+                const bounds = event.currentTarget.getBoundingClientRect();
+                const placeAfter = isStacked
+                  ? event.clientY > bounds.top + bounds.height / 2
+                  : event.clientX > bounds.left + bounds.width / 2;
+                if (draggedId) moveProfile(draggedId, profile.id, placeAfter);
+                setDraggedProfileId(null);
+              }}
+              onKeyDown={(event) => {
+                if (!event.altKey) return;
+                const previousKey = isStacked ? "ArrowUp" : "ArrowLeft";
+                const nextKey = isStacked ? "ArrowDown" : "ArrowRight";
+                if (event.key === previousKey || event.key === nextKey) {
+                  event.preventDefault();
+                  moveProfileBy(profile.id, event.key === previousKey ? -1 : 1);
+                }
+              }}
+              title="Drag to reorder, or use Alt + arrow key"
+            >
+              <span className="profile-switcher__grip" aria-hidden="true">⠿</span>
+              <span className="profile-switcher__label">{profile.name}</span>
+            </button>
+          ))}
+        </div>
       )}
     </Stack>
   );

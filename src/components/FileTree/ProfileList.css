@@ -15,28 +15,72 @@
 }
 
 .profile-switcher {
+  display: flex;
+  gap: 3px;
   padding: 3px;
   border-radius: 9px;
   background: var(--digest-chrome-violet-tint);
 }
 
-.profile-switcher__indicator {
+.profile-switcher--stacked {
+  flex-direction: column;
+}
+
+.profile-switcher__control {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 7px;
+  border: 0;
   border-radius: 7px;
+  color: var(--digest-chrome-text);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: grab;
+}
+
+.profile-switcher__control:active {
+  cursor: grabbing;
+}
+
+.profile-switcher__control[aria-selected="true"] {
   background: var(--digest-chrome-surface);
   box-shadow: 0 1px 4px rgba(52, 57, 80, 0.12);
 }
 
-.profile-switcher__control {
-  border: 0 !important;
+.profile-switcher__control:focus-visible {
+  outline: 2px solid var(--digest-chrome-focus);
+  outline-offset: 1px;
+}
+
+.profile-switcher__grip {
+  position: absolute;
+  left: 2px;
+  color: color-mix(in srgb, var(--digest-chrome-text) 50%, transparent);
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.profile-switcher__control:hover .profile-switcher__grip,
+.profile-switcher__control:focus-visible .profile-switcher__grip {
+  opacity: 1;
 }
 
 .profile-switcher__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-radius: 7px;
-  color: var(--digest-chrome-text);
   transition: color 150ms ease, background-color 150ms ease;
 }
 
-.profile-switcher__label:hover {
+.profile-switcher__control:hover {
   color: var(--digest-chrome-indigo);
   background: rgba(116, 96, 184, 0.06);
 }
