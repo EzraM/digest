@@ -31,7 +31,7 @@ const addVisible = (
   );
 
 describe("BrowsingJourneyStore", () => {
-  it("projects only current live URLs by profile without journey identity", () => {
+  it("projects current live URLs by profile without journey identity", () => {
     const store = new BrowsingJourneyStore(2, ids());
     addVisible(store, "handle-1", "profile-a", "https://example.com/first");
     store.recordNavigation("handle-1", "https://example.com/current");
@@ -40,6 +40,26 @@ describe("BrowsingJourneyStore", () => {
     expect(store.getLiveReferences()).toEqual([
       { profileId: "profile-a", url: "https://example.com/current" },
       { profileId: "profile-b", url: "https://example.com/current" },
+    ]);
+  });
+
+  it("projects indexed history entries as resumable live URLs", () => {
+    const store = new BrowsingJourneyStore(2, ids());
+    addVisible(store, "handle-1", "profile-a", "https://example.com/first");
+    store.recordNavigation("handle-1", "https://example.com/first", 0);
+    store.recordNavigation("handle-1", "https://example.com/current", 1);
+
+    expect(store.getLiveReferences()).toEqual([
+      { profileId: "profile-a", url: "https://example.com/first" },
+      { profileId: "profile-a", url: "https://example.com/current" },
+    ]);
+
+    store.forgetHistoryAssociation(
+      "handle-1",
+      "https://example.com/first"
+    );
+    expect(store.getLiveReferences()).toEqual([
+      { profileId: "profile-a", url: "https://example.com/current" },
     ]);
   });
 

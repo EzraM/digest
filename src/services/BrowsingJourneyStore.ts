@@ -396,11 +396,15 @@ export class BrowsingJourneyStore {
   getLiveReferences(): LiveReference[] {
     const references = new Map<string, LiveReference>();
     for (const journey of this.journeys.values()) {
-      const url = normalizeJourneyUrl(journey.currentUrl);
-      references.set(this.urlKey(journey.profileId, url), {
-        profileId: journey.profileId,
-        url,
-      });
+      const resumableUrls = new Set(journey.historyIndexByNormalizedUrl.keys());
+      resumableUrls.add(normalizeJourneyUrl(journey.currentUrl));
+
+      for (const url of resumableUrls) {
+        references.set(this.urlKey(journey.profileId, url), {
+          profileId: journey.profileId,
+          url,
+        });
+      }
     }
     return Array.from(references.values());
   }
