@@ -159,14 +159,24 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
         );
 
         try {
-          // Get the WebContentsView for this view
+          // Renderer controls address browser views by placement. Resolve the
+          // placement to its currently attached handle so a reused placement
+          // cannot capture from a previously attached journey.
+          const handleId = viewStore.getHandleIdForPlacement(viewId);
+          if (!handleId) {
+            return {
+              success: false,
+              error: `No active view found for ${viewId}`,
+            };
+          }
+
           const handleRegistry = viewStore.getHandleRegistry();
-          const view = handleRegistry.get(viewId);
+          const view = handleRegistry.get(handleId);
 
           if (!view) {
             return {
               success: false,
-              error: `No view found for ${viewId}`,
+              error: `No active view found for ${viewId}`,
             };
           }
 
@@ -192,7 +202,7 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
           );
 
           if (result.success) {
-            const blockId = toBlockId(viewId);
+            const blockId = toBlockId(handleId);
 
             viewStore.notifyBrowserSelection({
               blockId,
