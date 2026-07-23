@@ -1,15 +1,16 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { createExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
   CustomBlock,
-  CustomPartialBlock,
 } from "../types/schema";
+import { useAppRoute } from "../context/AppRouteContext";
 import { SearchBlockShell } from "./SearchBlockShell";
 
 export const YouTubeSearchExtensionName = "digest-youtube-search";
+const navigators = new WeakMap<object, (url: string) => void>();
 
 interface InlineContentItem {
   type: string;
@@ -28,17 +29,17 @@ function getPlainText(content: InlineContentItem[]): string {
 function executeYouTubeSearch(
   query: string,
   block: CustomBlock,
-  editor: CustomBlockNoteEditor
+  editor: CustomBlockNoteEditor,
+  navigateToUrl = navigators.get(editor)
 ): void {
   const trimmedQuery = query.trim();
-  if (!trimmedQuery) return;
+  if (!trimmedQuery || !navigateToUrl) return;
 
   const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(trimmedQuery)}`;
-  editor.updateBlock(block, {
-    type: "site",
-    props: { url: youtubeUrl },
-    content: undefined,
-  } as unknown as CustomPartialBlock);
+
+  // The prompt is temporary: remove it from the notebook before opening YouTube.
+  editor.removeBlocks([block.id]);
+  navigateToUrl(youtubeUrl);
 }
 
 const youtubeSearchExtension = createExtension({
@@ -66,13 +67,25 @@ export const YouTubeSearch = createReactBlockSpec(
   },
   {
     render: ({ block, editor, contentRef }) => {
+      const { navigateToUrl } = useAppRoute();
+
+      useEffect(() => {
+        navigators.set(editor, navigateToUrl);
+        return () => {
+          if (navigators.get(editor) === navigateToUrl) {
+            navigators.delete(editor);
+          }
+        };
+      }, [editor, navigateToUrl]);
+
       const handleSearch = useCallback(() => {
         executeYouTubeSearch(
           getPlainText(block.content as InlineContentItem[]),
           block as CustomBlock,
-          editor as unknown as CustomBlockNoteEditor
+          editor as unknown as CustomBlockNoteEditor,
+          navigateToUrl
         );
-      }, [block, editor]);
+      }, [block, editor, navigateToUrl]);
 
       return (
         <SearchBlockShell
