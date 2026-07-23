@@ -89,7 +89,7 @@ export class BrowsingJourneyStore {
   private journeys = new Map<string, BrowsingJourney>();
   private journeyIdByHandle = new Map<string, string>();
   private journeyIdsByProfileUrl = new Map<string, Set<string>>();
-  private handleIdByPlacementId = new Map<string, string>();
+  private activeMappingByPlacementId = new Map<string, ActiveJourneyMapping>();
   private activePlacementIdByHandleId = new Map<string, string>();
   private clock = 0;
 
@@ -127,7 +127,7 @@ export class BrowsingJourneyStore {
     };
     this.journeys.set(journey.journeyId, journey);
     this.journeyIdByHandle.set(handleId, journey.journeyId);
-    this.activePlacementIdByHandleId.set(handleId, handleId);
+    this.bindPlacement(handleId, handleId);
     this.associateUrl(journey, url);
     return this.enforceLimit(profileId);
   }
@@ -193,7 +193,7 @@ export class BrowsingJourneyStore {
   }
 
   getHandleIdForPlacement(placementId: string): string | undefined {
-    return this.handleIdByPlacementId.get(placementId);
+    return this.activeMappingByPlacementId.get(placementId)?.handleId;
   }
 
   getActivePlacementId(handleId: string): string {
@@ -205,14 +205,15 @@ export class BrowsingJourneyStore {
   }
 
   getActiveMapping(placementId: string): ActiveJourneyMapping | undefined {
-    const handleId = this.handleIdByPlacementId.get(placementId);
-    if (!handleId) return undefined;
-    const journeyId = this.journeyIdByHandle.get(handleId);
-    if (!journeyId) return undefined;
-    if (this.activePlacementIdByHandleId.get(handleId) !== placementId) {
+    const mapping = this.activeMappingByPlacementId.get(placementId);
+    if (!mapping) return undefined;
+    if (
+      this.journeyIdByHandle.get(mapping.handleId) !== mapping.journeyId ||
+      this.activePlacementIdByHandleId.get(mapping.handleId) !== placementId
+    ) {
       return undefined;
     }
-    return { placementId, journeyId, handleId };
+    return mapping;
   }
 
   getDiagnostics(profileId: string, url: string): JourneyCacheDiagnostics {
@@ -243,7 +244,7 @@ export class BrowsingJourneyStore {
     journey.lastUsedAt = this.nextTimestamp();
     const activePlacementId = this.activePlacementIdByHandleId.get(handleId);
     if (activePlacementId) {
-      this.handleIdByPlacementId.delete(activePlacementId);
+      this.activeMappingByPlacementId.delete(activePlacementId);
       this.activePlacementIdByHandleId.delete(handleId);
     }
     return this.enforceLimit(journey.profileId);
@@ -425,9 +426,9 @@ export class BrowsingJourneyStore {
     this.journeys.delete(journey.journeyId);
     this.journeyIdByHandle.delete(journey.handleId);
     this.activePlacementIdByHandleId.delete(journey.handleId);
-    for (const [placementId, handleId] of this.handleIdByPlacementId) {
-      if (handleId === journey.handleId) {
-        this.handleIdByPlacementId.delete(placementId);
+    for (const [placementId, mapping] of this.activeMappingByPlacementId) {
+      if (mapping.handleId === journey.handleId) {
+        this.activeMappingByPlacementId.delete(placementId);
       }
     }
     for (const normalizedUrl of journey.normalizedUrls) {
@@ -440,17 +441,24 @@ export class BrowsingJourneyStore {
 
   /** Keep the handle/placement relationship one-to-one across stale events. */
   private bindPlacement(handleId: string, placementId: string): void {
+    const journeyId = this.journeyIdByHandle.get(handleId);
+    if (!journeyId) return;
+
     const previousPlacement = this.activePlacementIdByHandleId.get(handleId);
     if (previousPlacement && previousPlacement !== placementId) {
-      this.handleIdByPlacementId.delete(previousPlacement);
+      this.activeMappingByPlacementId.delete(previousPlacement);
     }
 
-    const previousHandle = this.handleIdByPlacementId.get(placementId);
-    if (previousHandle && previousHandle !== handleId) {
-      this.activePlacementIdByHandleId.delete(previousHandle);
+    const previousMapping = this.activeMappingByPlacementId.get(placementId);
+    if (previousMapping && previousMapping.handleId !== handleId) {
+      this.activePlacementIdByHandleId.delete(previousMapping.handleId);
     }
 
-    this.handleIdByPlacementId.set(placementId, handleId);
+    this.activeMappingByPlacementId.set(placementId, {
+      placementId,
+      journeyId,
+      handleId,
+    });
     this.activePlacementIdByHandleId.set(handleId, placementId);
   }
 

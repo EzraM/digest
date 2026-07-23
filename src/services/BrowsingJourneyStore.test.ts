@@ -172,10 +172,16 @@ describe("BrowsingJourneyStore", () => {
     store.activatePlacement(plan);
     expect(store.getHandleIdForPlacement("b:full")).toBe("a:full");
     expect(store.getActivePlacementId("a:full")).toBe("b:full");
+    expect(store.getActiveMapping("b:full")).toEqual({
+      placementId: "b:full",
+      journeyId: "journey-1",
+      handleId: "a:full",
+    });
     expect(store.getLiveReferenceIds()).toEqual(["a", "b"]);
 
     store.markDetached("a:full");
     expect(store.getHandleIdForPlacement("b:full")).toBeUndefined();
+    expect(store.getActiveMapping("b:full")).toBeUndefined();
   });
 
   it("plans creation when a matching journey is already visible", () => {
