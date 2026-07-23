@@ -7,11 +7,20 @@ export type LivePagesProjection = {
   references: LiveReference[];
 };
 
+export type BrowserPresentationIdentity = {
+  routeId: string;
+  placementId: string;
+  journeyId: string;
+  handleId: string;
+  transitionGeneration: number;
+};
+
 export type BrowserLifecycleEvent =
   | {
       blockId: string;
       success: true;
       status: Exclude<BrowserLoadStatus, "error">;
+      presentation?: BrowserPresentationIdentity;
     }
   | {
       blockId: string;

@@ -14,7 +14,11 @@ import type {
 } from "./ViewStoreContracts";
 import { BrowsingJourneyStore } from "./BrowsingJourneyStore";
 
-type Effect = { type: string; id?: string };
+type Effect = {
+  type: string;
+  id?: string;
+  identity?: import("../types/browser").BrowserPresentationIdentity;
+};
 
 function fakeView(url: string): WebContentsView {
   const webContents = {
@@ -33,8 +37,12 @@ function createHarness(options: {
   let now = 100;
   const notifications: ViewNotifications = {
     notify: () => undefined,
-    notifyPlacementReady: (id) =>
-      effects.push({ type: "placement-ready", id }),
+    notifyPlacementReady: (identity) =>
+      effects.push({
+        type: "placement-ready",
+        id: identity.placementId,
+        identity,
+      }),
     notifyLiveReferencesChanged: () =>
       effects.push({ type: "live-projection" }),
     notifyBrowserSelection: () => undefined,
@@ -252,5 +260,41 @@ describe("ViewStore fake-native integration", () => {
     expect(
       effects.filter((effect) => effect.type === "detach").length
     ).toBe(detachCount);
+  });
+
+  it("traces retained-handle reuse with one complete identity mapping", () => {
+    const { store, effects, request } = createHarness();
+    const retainedHandleId = "ephemeral-profile/browse/PS-5606:full";
+    const requestedPlacementId = "ephemeral-profile/browse/PD-3772:full";
+    const url = "https://identity.test/";
+
+    store.openReference(request(retainedHandleId, url, 40));
+    store.handleDetachView(retainedHandleId, 40);
+    const result = store.openReference({
+      ...request(requestedPlacementId, url, 41),
+      routeId: "route-PD-3772",
+      transitionGeneration: 17,
+    });
+
+    expect(result).toMatchObject({
+      outcome: "hit_current",
+      loadAvoided: true,
+    });
+    expect(
+      effects.filter((effect) => effect.type === "attach").slice(-1)[0]
+    ).toEqual({ type: "attach", id: retainedHandleId });
+    expect(
+      effects.filter((effect) => effect.type === "placement-ready").slice(-1)[0]
+    ).toEqual({
+      type: "placement-ready",
+      id: requestedPlacementId,
+      identity: {
+        routeId: "route-PD-3772",
+        placementId: requestedPlacementId,
+        journeyId: store.getJourneyIdForHandle(retainedHandleId),
+        handleId: retainedHandleId,
+        transitionGeneration: 17,
+      },
+    });
   });
 });

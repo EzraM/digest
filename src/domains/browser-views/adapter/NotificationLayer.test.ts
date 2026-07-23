@@ -167,7 +167,13 @@ describe("NotificationLayer", () => {
         { profileId: "profile-1", url: "https://example.com/" },
       ],
     });
-    notifications.notifyPlacementReady("placement-1");
+    notifications.notifyPlacementReady({
+      routeId: "route-1",
+      placementId: "placement-1",
+      journeyId: "journey-1",
+      handleId: "handle-1",
+      transitionGeneration: 7,
+    });
 
     expect(messages).toEqual([
       {
@@ -185,6 +191,13 @@ describe("NotificationLayer", () => {
           blockId: "placement-1",
           success: true,
           status: "loaded",
+          presentation: {
+            routeId: "route-1",
+            placementId: "placement-1",
+            journeyId: "journey-1",
+            handleId: "handle-1",
+            transitionGeneration: 7,
+          },
         },
       },
     ]);

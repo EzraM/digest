@@ -250,7 +250,7 @@ export class ViewStore {
       if (attached) {
         this.journeys.activatePlacement(execution.plan);
         this.updatePlacementBounds(execution.plan.handleId, update);
-        this.notifications.notifyPlacementReady(update.viewId);
+        this.notifyPlacementReady(update);
         this.publishLiveReferences();
         return this.finishCacheAttempt(update, diagnostics, {
           journeyId: execution.plan.journeyId,
@@ -311,7 +311,7 @@ export class ViewStore {
     // Commit only after the Electron attachment succeeds.
     this.journeys.markVisible(handleId, update.viewId);
     this.updatePlacementBounds(handleId, update, existing);
-    this.notifications.notifyPlacementReady(update.viewId);
+    this.notifyPlacementReady(update);
     this.publishLiveReferences();
     return this.finishCacheAttempt(update, diagnostics, {
       journeyId: this.journeys.getJourneyId(handleId),
@@ -364,6 +364,33 @@ export class ViewStore {
       missReason: rendererAvailable ? missReason : "renderer_unavailable",
       loadAvoided: false,
     });
+  }
+
+  private notifyPlacementReady(update: OpenReferenceRequest): void {
+    const mapping = this.journeys.getActiveMapping(update.viewId);
+    if (!mapping) {
+      log.error(
+        `[${update.viewId}] Refusing ready notification without an active identity mapping: ${JSON.stringify({
+          routeId: update.routeId ?? update.blockId,
+          placementId: update.viewId,
+          transitionGeneration:
+            update.transitionGeneration ?? update.placementGeneration ?? 0,
+        })}`,
+        "ViewStore"
+      );
+      return;
+    }
+    const identity = {
+      routeId: update.routeId ?? update.blockId,
+      ...mapping,
+      transitionGeneration:
+        update.transitionGeneration ?? update.placementGeneration ?? 0,
+    };
+    log.debug(
+      `[${update.viewId}] Presentation ready: ${JSON.stringify(identity)}`,
+      "ViewStore"
+    );
+    this.notifications.notifyPlacementReady(identity);
   }
 
   private updatePlacementBounds(
@@ -517,6 +544,10 @@ export class ViewStore {
 
   resolveHandleId(viewId: string): string {
     return this.journeys.resolveHandleId(viewId);
+  }
+
+  getJourneyIdForHandle(handleId: string): string | undefined {
+    return this.journeys.getJourneyId(handleId);
   }
 
   /**

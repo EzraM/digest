@@ -25,6 +25,12 @@ export type JourneyAssociationMatch = JourneyMatch & {
   isCurrentDocument: boolean;
 };
 
+export type ActiveJourneyMapping = {
+  placementId: string;
+  journeyId: string;
+  handleId: string;
+};
+
 export type OpenReferencePlan =
   | {
       type: "reuse-current";
@@ -196,6 +202,17 @@ export class BrowsingJourneyStore {
 
   getJourneyId(handleId: string): string | undefined {
     return this.getByHandle(handleId)?.journeyId;
+  }
+
+  getActiveMapping(placementId: string): ActiveJourneyMapping | undefined {
+    const handleId = this.handleIdByPlacementId.get(placementId);
+    if (!handleId) return undefined;
+    const journeyId = this.journeyIdByHandle.get(handleId);
+    if (!journeyId) return undefined;
+    if (this.activePlacementIdByHandleId.get(handleId) !== placementId) {
+      return undefined;
+    }
+    return { placementId, journeyId, handleId };
   }
 
   getDiagnostics(profileId: string, url: string): JourneyCacheDiagnostics {

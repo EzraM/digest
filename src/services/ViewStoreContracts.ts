@@ -8,13 +8,17 @@ import type { ViewWorld } from "../domains/browser-views/core/types";
 import type { Result } from "../domains/browser-views/adapter/HandleOperations";
 import type { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry";
 import type { ImageContextCallback } from "../domains/browser-views/adapter/ContextMenuController";
-import type { LivePagesProjection } from "../types/browser";
+import type {
+  BrowserPresentationIdentity,
+  LivePagesProjection,
+} from "../types/browser";
 import type { BrowsingJourneyStore } from "./BrowsingJourneyStore";
 import type { CacheMissReason } from "./LivePageOpenPolicy";
 import type { LivePageProjectionStore } from "./LivePageProjectionStore";
 
 export type OpenReferenceRequest = {
   viewId: string;
+  routeId?: string;
   blockId: string;
   url: string;
   bounds: { x: number; y: number; width: number; height: number };
@@ -22,6 +26,7 @@ export type OpenReferenceRequest = {
   layout?: "inline" | "full";
   referenceKind?: "site-block" | "ephemeral-url";
   placementGeneration?: number;
+  transitionGeneration?: number;
 };
 
 export type OpenReferenceResult = {
@@ -39,7 +44,7 @@ export interface ViewEffects {
 
 export interface ViewNotifications {
   notify(id: string, previous: ViewWorld, next: ViewWorld): void;
-  notifyPlacementReady(placementId: string): void;
+  notifyPlacementReady(identity: BrowserPresentationIdentity): void;
   notifyLiveReferencesChanged(projection: LivePagesProjection): void;
   notifyBrowserSelection(selection: {
     blockId: string;

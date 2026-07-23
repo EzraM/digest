@@ -3,6 +3,7 @@ import { LoadState, ViewWorld } from "../core/types";
 import { log } from "../../../utils/mainLogger";
 import {
   BrowserLifecycleEvent,
+  BrowserPresentationIdentity,
   LivePagesProjection,
 } from "../../../types/browser";
 
@@ -76,11 +77,12 @@ export class NotificationLayer {
     this.send(EVENTS.BROWSER.LIVE_PAGES_CHANGED, projection);
   }
 
-  notifyPlacementReady(placementId: string): void {
+  notifyPlacementReady(identity: BrowserPresentationIdentity): void {
     this.sendLifecycleEvent({
-      blockId: placementId,
+      blockId: identity.placementId,
       success: true,
       status: "loaded",
+      presentation: identity,
     });
   }
 
