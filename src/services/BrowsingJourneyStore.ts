@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-export type JourneyPlacement = "visible" | "detached";
+export type JourneyPlacement = "visible" | "detached" | "reserved";
 
 export type BrowsingJourney = {
   journeyId: string;
@@ -12,6 +12,10 @@ export type BrowsingJourney = {
   referenceIds: Set<string>;
   normalizedUrls: Set<string>;
   historyIndexByNormalizedUrl: Map<string, number>;
+  reservation?: {
+    requestId: string;
+    placementId: string;
+  };
 };
 
 export type JourneyMatch = {
@@ -47,6 +51,7 @@ export type OpenReferencePlan =
       placementId: string;
       referenceId: string;
       requestedUrl: string;
+      requestId: string;
     }
   | {
       type: "reuse-history";
@@ -56,6 +61,7 @@ export type OpenReferencePlan =
       referenceId: string;
       requestedUrl: string;
       historyIndex: number;
+      requestId: string;
     }
   | {
       type: "create";
@@ -103,7 +109,8 @@ export class BrowsingJourneyStore {
 
   constructor(
     private readonly limitPerProfile = 10,
-    private readonly createId: () => string = randomUUID
+    private readonly createId: () => string = randomUUID,
+    private readonly createRequestId: () => string = randomUUID
   ) {}
 
   addVisible(
@@ -116,6 +123,7 @@ export class BrowsingJourneyStore {
     const existing = this.getByHandle(handleId);
     if (existing) {
       existing.placement = "visible";
+      existing.reservation = undefined;
       existing.lastUsedAt = this.nextTimestamp();
       this.bindPlacement(handleId, activation);
       if (referenceId) existing.referenceIds.add(referenceId);
@@ -145,6 +153,7 @@ export class BrowsingJourneyStore {
     const journey = this.getByHandle(handleId);
     if (!journey) return;
     journey.placement = "visible";
+    journey.reservation = undefined;
     journey.lastUsedAt = this.nextTimestamp();
     this.bindPlacement(handleId, activation);
   }
@@ -155,31 +164,35 @@ export class BrowsingJourneyStore {
     profileId: string;
     url: string;
   }): OpenReferencePlan {
-    const reusable = this.resolveCurrent(input.profileId, input.url);
+    const reusable = this.resolveCurrent(input.profileId, input.url, true);
     const historyReusable = reusable
       ? undefined
-      : this.resolveHistory(input.profileId, input.url);
+      : this.resolveHistory(input.profileId, input.url, true);
     const candidate = reusable ?? historyReusable;
     if (!candidate) {
+      const hasMatchingJourney = Boolean(
+        this.resolveCurrent(input.profileId, input.url) ??
+          this.resolveHistory(input.profileId, input.url)
+      );
       return {
         type: "create",
         placementId: input.placementId,
-        reason: "no-current-association",
+        reason: hasMatchingJourney
+          ? "matching-journey-visible"
+          : "no-current-association",
       };
     }
-    if (!this.isDetached(candidate.handleId)) {
-      return {
-        type: "create",
-        placementId: input.placementId,
-        reason: "matching-journey-visible",
-      };
-    }
+    const journey = this.getByHandle(candidate.handleId)!;
+    const requestId = this.createRequestId();
+    journey.placement = "reserved";
+    journey.reservation = { requestId, placementId: input.placementId };
     const base = {
       journeyId: candidate.journeyId,
       handleId: candidate.handleId,
       placementId: input.placementId,
       referenceId: input.referenceId,
       requestedUrl: input.url,
+      requestId,
     };
     return historyReusable
       ? {
@@ -198,10 +211,14 @@ export class BrowsingJourneyStore {
     if (
       !journey ||
       journey.journeyId !== plan.journeyId ||
-      activation.placementId !== plan.placementId
+      activation.placementId !== plan.placementId ||
+      journey.placement !== "reserved" ||
+      journey.reservation?.requestId !== plan.requestId ||
+      journey.reservation.placementId !== plan.placementId
     ) {
       return;
     }
+    journey.reservation = undefined;
     this.bindPlacement(plan.handleId, activation);
     journey.referenceIds.add(plan.referenceId);
     journey.placement = "visible";
@@ -264,6 +281,7 @@ export class BrowsingJourneyStore {
     const journey = this.getByHandle(handleId);
     if (!journey) return [];
     journey.placement = "detached";
+    journey.reservation = undefined;
     journey.lastUsedAt = this.nextTimestamp();
     const activePlacementId = this.activePlacementIdByHandleId.get(handleId);
     if (activePlacementId) {
@@ -316,7 +334,11 @@ export class BrowsingJourneyStore {
   }
 
   /** Resolve only a journey whose current live document is the requested URL. */
-  resolveCurrent(profileId: string, url: string): JourneyMatch | undefined {
+  resolveCurrent(
+    profileId: string,
+    url: string,
+    detachedOnly = false
+  ): JourneyMatch | undefined {
     const ids = this.journeyIdsByProfileUrl.get(this.urlKey(profileId, url));
     if (!ids) return undefined;
 
@@ -325,6 +347,7 @@ export class BrowsingJourneyStore {
       .filter(
         (entry): entry is BrowsingJourney =>
           entry !== undefined &&
+          (!detachedOnly || entry.placement === "detached") &&
           normalizeJourneyUrl(entry.currentUrl) === normalizedUrl
       )
       .sort((a, b) => b.lastUsedAt - a.lastUsedAt)[0];
@@ -341,7 +364,8 @@ export class BrowsingJourneyStore {
   /** Resolve a previously visited entry that is no longer the current document. */
   resolveHistory(
     profileId: string,
-    url: string
+    url: string,
+    detachedOnly = false
   ): (JourneyMatch & { historyIndex: number }) | undefined {
     const normalizedUrl = normalizeJourneyUrl(url);
     const ids = this.journeyIdsByProfileUrl.get(this.urlKey(profileId, url));
@@ -351,6 +375,7 @@ export class BrowsingJourneyStore {
       .filter(
         (entry): entry is BrowsingJourney =>
           entry !== undefined &&
+          (!detachedOnly || entry.placement === "detached") &&
           normalizeJourneyUrl(entry.currentUrl) !== normalizedUrl &&
           entry.historyIndexByNormalizedUrl.has(normalizedUrl)
       )
@@ -380,6 +405,23 @@ export class BrowsingJourneyStore {
 
   isDetached(handleId: string): boolean {
     return this.getByHandle(handleId)?.placement === "detached";
+  }
+
+  releaseReservation(
+    plan: Extract<OpenReferencePlan, { type: "reuse-current" | "reuse-history" }>
+  ): boolean {
+    const journey = this.getByHandle(plan.handleId);
+    if (
+      !journey ||
+      journey.placement !== "reserved" ||
+      journey.reservation?.requestId !== plan.requestId ||
+      journey.reservation.placementId !== plan.placementId
+    ) {
+      return false;
+    }
+    journey.placement = "detached";
+    journey.reservation = undefined;
+    return true;
   }
 
   getLiveReferenceIds(): string[] {

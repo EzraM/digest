@@ -16,6 +16,7 @@ describe("LivePageOpenPolicy", () => {
       placementId: "placement-1",
       referenceId: "reference-1",
       requestedUrl: "https://example.test",
+      requestId: "request-1",
     };
     expect(decideOpenReferenceExecution(plan, diagnostics, true)).toEqual({
       type: "reuse-current",
@@ -32,6 +33,7 @@ describe("LivePageOpenPolicy", () => {
       referenceId: "reference-1",
       requestedUrl: "https://example.test/earlier",
       historyIndex: 2,
+      requestId: "request-1",
     };
     expect(decideOpenReferenceExecution(plan, diagnostics, true)).toEqual({
       type: "reuse-current",
@@ -47,6 +49,7 @@ describe("LivePageOpenPolicy", () => {
       placementId: "placement-1",
       referenceId: "reference-1",
       requestedUrl: "https://example.test",
+      requestId: "request-1",
     };
     expect(
       decideOpenReferenceExecution(reusePlan, diagnostics, false)

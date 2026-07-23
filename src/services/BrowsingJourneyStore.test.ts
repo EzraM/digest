@@ -149,7 +149,7 @@ describe("BrowsingJourneyStore", () => {
   });
 
   it("plans restoration of a recorded older history entry", () => {
-    const store = new BrowsingJourneyStore(2, ids());
+    const store = new BrowsingJourneyStore(2, ids(), () => "request-1");
     addVisible(store, "a:full", "profile-a", "https://a.test", "a");
     store.recordNavigation("a:full", "https://a.test", 0);
     store.recordNavigation("a:full", "https://b.test", 1);
@@ -170,6 +170,7 @@ describe("BrowsingJourneyStore", () => {
       referenceId: "a-again",
       requestedUrl: "https://a.test",
       historyIndex: 0,
+      requestId: "request-1",
     });
   });
 
@@ -245,7 +246,7 @@ describe("BrowsingJourneyStore", () => {
     });
   });
 
-  it("does not leave a stale placement alias after competing activations", () => {
+  it("reserves a detached journey before native presentation begins", () => {
     const store = new BrowsingJourneyStore(2, ids());
     addVisible(store, "handle", "profile-a", "https://same.test", "original");
     store.markDetached("handle");
@@ -262,16 +263,53 @@ describe("BrowsingJourneyStore", () => {
       profileId: "profile-a",
       url: "https://same.test",
     });
-    if (first.type !== "reuse-current" || second.type !== "reuse-current") {
-      throw new Error("expected competing reuse plans");
-    }
+    if (first.type !== "reuse-current") throw new Error("expected reuse plan");
+    expect(second).toEqual({
+      type: "create",
+      placementId: "second:full",
+      reason: "matching-journey-visible",
+    });
 
     store.activatePlacement(first, activation("first:full", 2));
-    store.activatePlacement(second, activation("second:full", 3));
+    expect(store.getHandleIdForPlacement("first:full")).toBe("handle");
+    expect(store.getActivePlacementId("handle")).toBe("first:full");
+  });
 
-    expect(store.getHandleIdForPlacement("first:full")).toBeUndefined();
-    expect(store.getHandleIdForPlacement("second:full")).toBe("handle");
-    expect(store.getActivePlacementId("handle")).toBe("second:full");
+  it("filters visible candidates before ranking detached candidates", () => {
+    const store = new BrowsingJourneyStore(3, ids());
+    addVisible(store, "older", "profile-a", "https://same.test", "older");
+    store.markDetached("older");
+    addVisible(store, "newer", "profile-a", "https://same.test", "newer");
+
+    expect(
+      store.planOpenReference({
+        placementId: "destination",
+        referenceId: "destination",
+        profileId: "profile-a",
+        url: "https://same.test",
+      })
+    ).toMatchObject({
+      type: "reuse-current",
+      handleId: "older",
+      placementId: "destination",
+    });
+  });
+
+  it("releases only the matching reservation after failed native work", () => {
+    const store = new BrowsingJourneyStore(2, ids(), () => "request-1");
+    addVisible(store, "handle", "profile-a", "https://same.test");
+    store.markDetached("handle");
+    const plan = store.planOpenReference({
+      placementId: "destination",
+      referenceId: "destination",
+      profileId: "profile-a",
+      url: "https://same.test",
+    });
+    if (plan.type !== "reuse-current") throw new Error("expected reuse plan");
+
+    expect(store.releaseReservation({ ...plan, requestId: "stale" })).toBe(false);
+    expect(store.releaseReservation(plan)).toBe(true);
+    expect(store.isDetached("handle")).toBe(true);
   });
 
   it("survives seeded randomized lifecycle interleavings", () => {

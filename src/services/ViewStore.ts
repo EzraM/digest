@@ -257,6 +257,7 @@ export class ViewStore {
         targetIndex
       );
       if (!prepared.success) {
+        this.journeys.releaseReservation(execution.plan);
         this.journeys.forgetHistoryAssociation(
           execution.plan.handleId,
           execution.plan.requestedUrl
