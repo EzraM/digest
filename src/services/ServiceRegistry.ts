@@ -20,6 +20,7 @@ import { DocumentManager } from "./DocumentManager";
 import { ImageService } from "./ImageService";
 import { SearchIndexManager } from "../domains/search/services/SearchIndexManager";
 import { BraveSearchService } from "../domains/search/services/BraveSearchService";
+import type Database from "better-sqlite3";
 
 /**
  * Service registry that defines all application services and their dependencies
@@ -43,7 +44,9 @@ export function registerServices(container: Container): void {
     dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing EventLogger service", "ServiceRegistry");
-      const database = await c.resolve(SERVICE_IDS.DATABASE);
+      const database = await c.resolve<Database.Database>(
+        SERVICE_IDS.DATABASE
+      );
       return initializeEventLogger(database);
     },
   });
@@ -54,7 +57,9 @@ export function registerServices(container: Container): void {
     dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing BlockOperationService", "ServiceRegistry");
-      const database = await c.resolve(SERVICE_IDS.DATABASE);
+      const database = await c.resolve<Database.Database>(
+        SERVICE_IDS.DATABASE
+      );
       BlockOperationService.setDatabase(database);
       return BlockOperationService.getInstance("default", database);
     },
@@ -66,7 +71,9 @@ export function registerServices(container: Container): void {
     dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing ProfileManager service", "ServiceRegistry");
-      const database = await c.resolve(SERVICE_IDS.DATABASE);
+      const database = await c.resolve<Database.Database>(
+        SERVICE_IDS.DATABASE
+      );
       return new ProfileManager(database);
     },
   });
@@ -77,7 +84,9 @@ export function registerServices(container: Container): void {
     dependencies: [SERVICE_IDS.DATABASE, SERVICE_IDS.PROFILE_MANAGER],
     factory: async (c) => {
       log.debug("Initializing DocumentManager service", "ServiceRegistry");
-      const database = await c.resolve(SERVICE_IDS.DATABASE);
+      const database = await c.resolve<Database.Database>(
+        SERVICE_IDS.DATABASE
+      );
       const profileManager = (await c.resolve(
         SERVICE_IDS.PROFILE_MANAGER
       )) as ProfileManager;
@@ -113,7 +122,9 @@ export function registerServices(container: Container): void {
     dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing ImageService", "ServiceRegistry");
-      const database = await c.resolve(SERVICE_IDS.DATABASE);
+      const database = await c.resolve<Database.Database>(
+        SERVICE_IDS.DATABASE
+      );
       return ImageService.getInstance(database);
     },
   });
@@ -124,7 +135,9 @@ export function registerServices(container: Container): void {
     dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
       log.debug("Initializing SearchIndexManager", "ServiceRegistry");
-      const database = await c.resolve(SERVICE_IDS.DATABASE);
+      const database = await c.resolve<Database.Database>(
+        SERVICE_IDS.DATABASE
+      );
       // Use FTS5 for full-text search (works offline, no API key required)
       return SearchIndexManager.initialize(database, {
         searchProvider: "fts5",

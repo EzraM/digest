@@ -68,7 +68,7 @@ export const DebugSidebar: React.FC<DebugSidebarProps> = ({ isVisible, onToggle 
   if (!isVisible) return null;
 
   return (
-    <Stack h="100vh" spacing="md">
+    <Stack h="100vh" gap="md">
       <Group justify="space-between" align="center">
         <Text size="lg" fw={600}>Debug Events</Text>
         <Button variant="subtle" size="xs" onClick={onToggle}>
@@ -98,14 +98,14 @@ export const DebugSidebar: React.FC<DebugSidebarProps> = ({ isVisible, onToggle 
       <ScrollArea flex={1} style={{ position: 'relative' }}>
         <LoadingOverlay visible={isLoading} />
         {events.length === 0 ? (
-          <Stack align="center" justify="center" h={200} spacing="xs">
+          <Stack align="center" justify="center" h={200} gap="xs">
             <Text size="sm" c="dimmed">No debug events yet</Text>
             <Text size="xs" c="dimmed" ta="center">
               Try editing the notebook to see events appear here.
             </Text>
           </Stack>
         ) : (
-          <Stack spacing="xs">
+          <Stack gap="xs">
             {events.map((event, index) => (
               <EventCard key={`${event.id || event.timestamp}-${index}`} event={event} />
             ))}

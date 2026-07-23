@@ -1,4 +1,4 @@
-import { createBlockNoteExtension } from "@blocknote/core";
+import { createExtension } from "@blocknote/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import {
@@ -33,11 +33,10 @@ const buildDecorations = (
   return DecorationSet.create(doc, decorations);
 };
 
-export const createLiveLinkIndicatorExtension = () =>
-  createBlockNoteExtension({
-    key: "liveLinkIndicator",
-    plugins: [
-      new Plugin<DecorationSet>({
+export const createLiveLinkIndicatorExtension = createExtension({
+  key: "liveLinkIndicator",
+  prosemirrorPlugins: [
+    new Plugin<DecorationSet>({
         key: pluginKey,
         state: {
           init: (_config, state) => buildDecorations(state.doc),
@@ -74,6 +73,6 @@ export const createLiveLinkIndicatorExtension = () =>
             },
           };
         },
-      }),
-    ],
-  });
+    }),
+  ],
+});

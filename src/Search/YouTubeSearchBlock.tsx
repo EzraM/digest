@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
-import { createBlockNoteExtension } from "@blocknote/core";
+import { createExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
@@ -41,7 +41,7 @@ function executeYouTubeSearch(
   } as unknown as CustomPartialBlock);
 }
 
-const youtubeSearchExtension = createBlockNoteExtension({
+const youtubeSearchExtension = createExtension({
   key: "digest-youtube-search-enter",
   keyboardShortcuts: {
     Enter: ({ editor }) => {

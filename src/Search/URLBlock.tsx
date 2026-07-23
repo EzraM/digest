@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
-import { createBlockNoteExtension } from "@blocknote/core";
+import { createExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
@@ -55,11 +55,12 @@ function executeURLLoad(
 }
 
 // Extension for handling Enter key in URLBlock
-const urlExtension = createBlockNoteExtension({
+const urlExtension = createExtension({
   key: "digest-url-enter",
   keyboardShortcuts: {
-    Enter: ({ editor }: { editor: CustomBlockNoteEditor }) => {
-      const { block } = editor.getTextCursorPosition();
+    Enter: ({ editor }) => {
+      const customEditor = editor as unknown as CustomBlockNoteEditor;
+      const { block } = customEditor.getTextCursorPosition();
       if (!URLBlockTypes.has(block.type)) {
         return false; // Let other handlers process
       }
@@ -69,7 +70,7 @@ const urlExtension = createBlockNoteExtension({
         block.content as InlineContentItem[]
       );
       if (url.trim()) {
-        executeURLLoad(url, block as CustomBlock, editor);
+        executeURLLoad(url, block as CustomBlock, customEditor);
         return true; // Prevent default Enter behavior
       }
 
@@ -105,7 +106,12 @@ export const URL = createReactBlockSpec(
           block.content as InlineContentItem[]
         );
 
-        executeURLLoad(url, block as CustomBlock, editor, navigateToUrl);
+        executeURLLoad(
+          url,
+          block as CustomBlock,
+          editor as unknown as CustomBlockNoteEditor,
+          navigateToUrl
+        );
       }, [block, editor, navigateToUrl]);
 
       return (

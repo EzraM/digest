@@ -1,24 +1,14 @@
 import {
-  BlockSchema,
-  BlockNoteEditor,
-  InlineContentSchema,
-  StyleSchema,
-  createBlockNoteExtension,
+  createExtension,
 } from "@blocknote/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 const BLOCK_SELECTOR = '[data-node-type="blockOuter"][data-id]';
 
-export const createMiddleClickDeleteExtension = <
-  BSchema extends BlockSchema,
-  ISchema extends InlineContentSchema,
-  SSchema extends StyleSchema
->(
-  editor: BlockNoteEditor<BSchema, ISchema, SSchema>
-) =>
-  createBlockNoteExtension({
+export const createMiddleClickDeleteExtension = createExtension(
+  ({ editor }) => ({
     key: "middleClickDelete",
-    plugins: [
+    prosemirrorPlugins: [
       new Plugin({
         key: new PluginKey("middleClickDelete"),
         props: {
@@ -43,4 +33,5 @@ export const createMiddleClickDeleteExtension = <
         },
       }),
     ],
-  });
+  })
+)();

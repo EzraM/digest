@@ -104,7 +104,6 @@ export const RendererLayout = ({
           duration={NAVBAR_TRANSITION_MS}
           timingFunction="ease-out"
           keepMounted
-          reduceMotion
         >
           {(styles) => (
             <Box style={{ height: "100%", ...styles }}>{navbar}</Box>

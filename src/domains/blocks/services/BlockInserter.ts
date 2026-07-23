@@ -1,4 +1,4 @@
-import { insertOrUpdateBlock } from "@blocknote/core";
+import { insertOrUpdateBlockForSlashMenu } from "@blocknote/core";
 import { log } from "../../../utils/rendererLogger";
 
 // Block creation request interface (matches the one from ResponseExploder)
@@ -97,7 +97,7 @@ export class BlockInserter {
         this.editor.updateBlock(currentBlock, blockData);
       } else {
         // Insert a new block
-        insertOrUpdateBlock(this.editor, blockData);
+        insertOrUpdateBlockForSlashMenu(this.editor, blockData);
       }
     } catch (error) {
       log.debug(

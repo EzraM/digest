@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
-import { createBlockNoteExtension } from "@blocknote/core";
+import { createExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
@@ -50,11 +50,12 @@ function executeGoogleSearch(
 }
 
 // Extension for handling Enter key in GoogleSearchBlock
-const googleSearchExtension = createBlockNoteExtension({
+const googleSearchExtension = createExtension({
   key: "digest-google-search-enter",
   keyboardShortcuts: {
-    Enter: ({ editor }: { editor: CustomBlockNoteEditor }) => {
-      const { block } = editor.getTextCursorPosition();
+    Enter: ({ editor }) => {
+      const customEditor = editor as unknown as CustomBlockNoteEditor;
+      const { block } = customEditor.getTextCursorPosition();
       if (block.type !== GoogleSearchExtensionName) {
         return false; // Let other handlers process
       }
@@ -64,7 +65,7 @@ const googleSearchExtension = createBlockNoteExtension({
         block.content as InlineContentItem[]
       );
       if (query.trim()) {
-        executeGoogleSearch(query, block as CustomBlock, editor);
+        executeGoogleSearch(query, block as CustomBlock, customEditor);
         return true; // Prevent default Enter behavior
       }
 
@@ -103,7 +104,7 @@ export const GoogleSearch = createReactBlockSpec(
         executeGoogleSearch(
           query,
           block as CustomBlock,
-          editor,
+          editor as unknown as CustomBlockNoteEditor,
           navigateToUrl
         );
       }, [block, editor, navigateToUrl]);

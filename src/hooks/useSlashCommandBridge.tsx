@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useRef } from "react";
-import { insertOrUpdateBlock } from "@blocknote/core";
+import {
+  insertOrUpdateBlockForSlashMenu,
+  SuggestionMenu,
+} from "@blocknote/core";
 import {
   CustomBlockNoteEditor,
   CustomPartialBlock,
@@ -12,6 +15,7 @@ const URL_BLOCK_TYPES = new Set([URLExtensionName, "url"]);
 
 export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
   const workspaceInsertPendingRef = useRef(false);
+  const suggestionMenu = editor.getExtension(SuggestionMenu);
 
   const handleSlashMenuItems = useCallback(
     async (query: string): Promise<SlashCommandOption[]> => {
@@ -20,7 +24,7 @@ export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
       // Don't trigger workspace inside URL blocks
       if (block && URL_BLOCK_TYPES.has(block.type)) {
         log.debug("Slash menu suppressed inside URL block", "renderer");
-        editor.suggestionMenus.closeMenu();
+        suggestionMenu?.closeMenu();
         return [];
       }
 
@@ -41,13 +45,13 @@ export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
             // BlockNote's suggestion-menu selection flow clears the query
             // before executing an item. This removes the "/" trigger so
             // insertOrUpdateBlock can replace the now-empty paragraph.
-            editor.suggestionMenus.clearQuery();
+            suggestionMenu?.clearQuery();
 
             // Close the suggestion menu - workspace block handles the UI.
-            editor.suggestionMenus.closeMenu();
+            suggestionMenu?.closeMenu();
 
             // Insert the workspace block at cursor
-            insertOrUpdateBlock(editor, {
+            insertOrUpdateBlockForSlashMenu(editor, {
               type: "workspace",
               props: { initialQuery: "" },
             } as unknown as CustomPartialBlock);
@@ -62,7 +66,7 @@ export const useSlashCommandBridge = (editor: CustomBlockNoteEditor) => {
       // Return empty - workspace block handles everything
       return [];
     },
-    [editor]
+    [editor, suggestionMenu]
   );
 
   // Minimal menu component - returns null since workspace block handles UI

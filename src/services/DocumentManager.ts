@@ -14,6 +14,19 @@ export interface CreateDocumentOptions {
   documentId?: string;
 }
 
+interface DocumentRow {
+  id: string;
+  title: string | null;
+  created_at: number;
+  updated_at: number;
+  block_count: number | null;
+  profile_id: string | null;
+  parent_document_id: string | null;
+  position: number | null;
+  is_expanded: number | null;
+  deleted_at: number | null;
+}
+
 export class DocumentManager {
   private documents = new Map<string, DocumentRecord>();
   private activeDocumentId: string | null = null;
@@ -305,7 +318,7 @@ export class DocumentManager {
         .prepare(
           `SELECT id, title, created_at, updated_at, block_count, profile_id, parent_document_id, position, is_expanded, deleted_at FROM documents`
         )
-        .all();
+        .all() as DocumentRow[];
 
       this.documents.clear();
       for (const row of rows) {
@@ -322,7 +335,7 @@ export class DocumentManager {
     }
   }
 
-  private mapDocumentRow(row: any): DocumentRecord {
+  private mapDocumentRow(row: DocumentRow): DocumentRecord {
     return {
       id: row.id,
       title: row.title,

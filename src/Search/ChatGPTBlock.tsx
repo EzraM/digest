@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
-import { createBlockNoteExtension } from "@blocknote/core";
+import { createExtension } from "@blocknote/core";
 import { Button } from "@mantine/core";
 import type {
   CustomBlockNoteEditor,
@@ -51,11 +51,12 @@ function executeChatGPTQuery(
 }
 
 // Extension for handling Enter key in ChatGPTBlock
-const chatGPTExtension = createBlockNoteExtension({
+const chatGPTExtension = createExtension({
   key: "digest-chatgpt-enter",
   keyboardShortcuts: {
-    Enter: ({ editor }: { editor: CustomBlockNoteEditor }) => {
-      const { block } = editor.getTextCursorPosition();
+    Enter: ({ editor }) => {
+      const customEditor = editor as unknown as CustomBlockNoteEditor;
+      const { block } = customEditor.getTextCursorPosition();
       if (!ChatGPTBlockTypes.has(block.type)) {
         return false; // Let other handlers process
       }
@@ -65,7 +66,7 @@ const chatGPTExtension = createBlockNoteExtension({
         block.content as InlineContentItem[]
       );
       if (query.trim()) {
-        executeChatGPTQuery(query, block as CustomBlock, editor);
+        executeChatGPTQuery(query, block as CustomBlock, customEditor);
         return true; // Prevent default Enter behavior
       }
 
@@ -104,7 +105,7 @@ export const ChatGPT = createReactBlockSpec(
         executeChatGPTQuery(
           query,
           block as CustomBlock,
-          editor,
+          editor as unknown as CustomBlockNoteEditor,
           navigateToUrl
         );
       }, [block, editor, navigateToUrl]);
