@@ -8,7 +8,9 @@ export function createBlockHandlers(
   documentManager: DocumentManager,
   rendererView: WebContentsView | null,
   blockOperationsApplier: BlockOperationsApplier,
-  resolveWindowId: (rendererId: number) => string | undefined = () => undefined
+  resolveWindowId: (rendererId: number) => string | undefined = () => undefined,
+  authorizeEdit: (documentId: string, rendererId: number) => void = () =>
+    undefined
 ): IPCHandlerMap {
   return {
     "block-operations:apply": {
@@ -32,6 +34,7 @@ export function createBlockHandlers(
             );
           }
           const { documentId, operations } = payload;
+          authorizeEdit(documentId, event.sender.id);
           const origin = {
             ...(typeof payload.origin === "object" && payload.origin
               ? payload.origin

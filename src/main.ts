@@ -40,6 +40,7 @@ import { WindowRegistry } from "./application/WindowRegistry";
 import { PlacementRegistry } from "./application/PlacementRegistry";
 import { BrowsingJourneyStore } from "./services/BrowsingJourneyStore";
 import { HandleRegistry } from "./domains/browser-views/adapter/HandleRegistry";
+import { DocumentEditRegistry } from "./application/DocumentEditRegistry";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -103,6 +104,7 @@ const viewStoreByRendererId = new Map<number, ViewStore>();
 const placementIdByRendererId = new Map<number, string>();
 const sharedJourneys = new BrowsingJourneyStore(10);
 const sharedHandles = new HandleRegistry();
+const documentEditRegistry = new DocumentEditRegistry();
 const ipcRouter = new IPCRouter();
 let applicationServices: ReturnType<typeof getServices> | undefined;
 let applicationInitialization: Promise<ReturnType<typeof getServices>> | undefined;
@@ -457,6 +459,7 @@ const createWindow = async (initialHash?: string) => {
   baseWindow.on("closed", () => {
     const rendererId = appViewInstance.webContents.id;
     viewStoreByRendererId.delete(rendererId);
+    documentEditRegistry.releaseRenderer(rendererId);
     placementIdByRendererId.delete(rendererId);
     placementRegistry.retireWindow(windowId);
     windowRegistry.retire(windowId);
@@ -573,6 +576,7 @@ const setupIpcHandlers = (
       : rendererView;
     if (!targetView) throw new Error(`Unknown renderer: ${rendererId}`);
     const blockService = documentManager.getBlockService(documentId);
+    documentEditRegistry.acquire(documentId, targetView.webContents.id);
     blockService.setRendererWebContents(targetView);
 
     const blocks = await blockService.loadDocument();
@@ -692,7 +696,9 @@ const setupIpcHandlers = (
       rendererView,
       services.blockOperationsApplier
       ,
-      (rendererId) => windowRegistry.resolve({ id: rendererId } as any)?.windowId
+      (rendererId) => windowRegistry.resolve({ id: rendererId } as any)?.windowId,
+      (documentId, rendererId) =>
+        documentEditRegistry.requireOwner(documentId, rendererId)
     )
   );
   registerMap(
