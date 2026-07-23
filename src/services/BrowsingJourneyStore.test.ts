@@ -170,12 +170,12 @@ describe("BrowsingJourneyStore", () => {
     if (plan.type !== "reuse-current") throw new Error("expected reuse plan");
 
     store.activatePlacement(plan);
-    expect(store.resolveHandleId("b:full")).toBe("a:full");
+    expect(store.getHandleIdForPlacement("b:full")).toBe("a:full");
     expect(store.getActivePlacementId("a:full")).toBe("b:full");
     expect(store.getLiveReferenceIds()).toEqual(["a", "b"]);
 
     store.markDetached("a:full");
-    expect(store.resolveHandleId("b:full")).toBe("b:full");
+    expect(store.getHandleIdForPlacement("b:full")).toBeUndefined();
   });
 
   it("plans creation when a matching journey is already visible", () => {
@@ -220,8 +220,8 @@ describe("BrowsingJourneyStore", () => {
     store.activatePlacement(first);
     store.activatePlacement(second);
 
-    expect(store.resolveHandleId("first:full")).toBe("first:full");
-    expect(store.resolveHandleId("second:full")).toBe("handle");
+    expect(store.getHandleIdForPlacement("first:full")).toBeUndefined();
+    expect(store.getHandleIdForPlacement("second:full")).toBe("handle");
     expect(store.getActivePlacementId("handle")).toBe("second:full");
   });
 
@@ -282,14 +282,15 @@ describe("BrowsingJourneyStore", () => {
           for (const candidateHandle of handles) {
             const activePlacement = store.getActivePlacementId(candidateHandle);
             if (activePlacement !== candidateHandle) {
-              expect(store.resolveHandleId(activePlacement)).toBe(
+              expect(store.getHandleIdForPlacement(activePlacement)).toBe(
                 candidateHandle
               );
             }
           }
           for (const candidatePlacement of placements) {
-            const resolvedHandle = store.resolveHandleId(candidatePlacement);
-            if (resolvedHandle !== candidatePlacement) {
+            const resolvedHandle =
+              store.getHandleIdForPlacement(candidatePlacement);
+            if (resolvedHandle !== undefined) {
               expect(store.getActivePlacementId(resolvedHandle)).toBe(
                 candidatePlacement
               );

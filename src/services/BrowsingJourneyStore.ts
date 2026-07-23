@@ -192,8 +192,8 @@ export class BrowsingJourneyStore {
     journey.lastUsedAt = this.nextTimestamp();
   }
 
-  resolveHandleId(placementId: string): string {
-    return this.handleIdByPlacementId.get(placementId) ?? placementId;
+  getHandleIdForPlacement(placementId: string): string | undefined {
+    return this.handleIdByPlacementId.get(placementId);
   }
 
   getActivePlacementId(handleId: string): string {

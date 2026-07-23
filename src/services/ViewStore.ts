@@ -192,7 +192,8 @@ export class ViewStore {
       );
       return undefined;
     }
-    const handleId = this.resolveHandleId(update.placementId);
+    const handleId =
+      this.getHandleIdForPlacement(update.placementId) ?? update.placementId;
     const existing = this.world.get(handleId);
     const diagnostics = this.journeys.getDiagnostics(
       update.profileId,
@@ -457,11 +458,15 @@ export class ViewStore {
   }
 
   handleRemoveView(viewId: string): void {
-    const handleId = this.resolveHandleId(viewId);
     log.debug(`[${viewId}] Removing view`, "ViewStore");
     // Clean up rate limiting state
     this.pendingCreates.delete(viewId);
     this.placementGenerations.remove(viewId);
+    const handleId = this.getHandleIdForPlacement(viewId);
+    if (!handleId) {
+      log.debug(`[${viewId}] No handle found for removal`, "ViewStore");
+      return;
+    }
     this.eventDisposers.get(handleId)?.();
     this.eventDisposers.delete(handleId);
     const wasLive = this.journeys.remove(handleId);
@@ -482,7 +487,11 @@ export class ViewStore {
       );
       return;
     }
-    const handleId = this.resolveHandleId(viewId);
+    const handleId = this.getHandleIdForPlacement(viewId);
+    if (!handleId) {
+      log.debug(`[${viewId}] No handle found for detach`, "ViewStore");
+      return;
+    }
     if (!this.journeys.has(handleId)) {
       this.handleRemoveView(viewId);
       return;
@@ -529,16 +538,21 @@ export class ViewStore {
 
   retryView(blockId: string): void {
     log.debug(`[${blockId}] Retrying view`, "ViewStore");
-    this.dispatch({ type: "retry", id: this.resolveHandleId(blockId) });
+    const handleId = this.getHandleIdForPlacement(blockId);
+    if (handleId) this.dispatch({ type: "retry", id: handleId });
   }
 
   reloadView(viewId: string): void {
     log.debug(`[${viewId}] Reloading view`, "ViewStore");
-    this.dispatch({ type: "reload", id: this.resolveHandleId(viewId) });
+    const handleId = this.getHandleIdForPlacement(viewId);
+    if (handleId) this.dispatch({ type: "reload", id: handleId });
   }
 
-  resolveHandleId(viewId: string): string {
-    return this.journeys.resolveHandleId(viewId);
+  getHandleIdForPlacement(placementId: string): string | undefined {
+    return (
+      this.journeys.getHandleIdForPlacement(placementId) ??
+      (this.handles.has(placementId) ? placementId : undefined)
+    );
   }
 
   getJourneyIdForHandle(handleId: string): string | undefined {
@@ -574,9 +588,11 @@ export class ViewStore {
     isOpen: boolean;
     error?: string;
   } {
-    const result = this.operations.getDevToolsState(
-      this.resolveHandleId(blockId)
-    );
+    const handleId = this.getHandleIdForPlacement(blockId);
+    if (!handleId) {
+      return { success: false, isOpen: false, error: "No active view found" };
+    }
+    const result = this.operations.getDevToolsState(handleId);
     if (result.success === false) {
       return { success: false, isOpen: false, error: result.error };
     }
@@ -592,7 +608,11 @@ export class ViewStore {
     isOpen: boolean;
     error?: string;
   } {
-    const result = this.operations.toggleDevTools(this.resolveHandleId(blockId));
+    const handleId = this.getHandleIdForPlacement(blockId);
+    if (!handleId) {
+      return { success: false, isOpen: false, error: "No active view found" };
+    }
+    const result = this.operations.toggleDevTools(handleId);
     if (result.success === false) {
       return { success: false, isOpen: false, error: result.error };
     }
@@ -608,7 +628,11 @@ export class ViewStore {
     canGoBack: boolean;
     error?: string;
   } {
-    const result = this.operations.goBack(this.resolveHandleId(blockId));
+    const handleId = this.getHandleIdForPlacement(blockId);
+    if (!handleId) {
+      return { success: false, canGoBack: false, error: "No active view found" };
+    }
+    const result = this.operations.goBack(handleId);
     if (result.success === false) {
       return { success: false, canGoBack: false, error: result.error };
     }
