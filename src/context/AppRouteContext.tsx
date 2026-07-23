@@ -22,6 +22,7 @@ export type AppRoute =
 
 export type AppRouteContextValue = {
   route: AppRoute;
+  transitionGeneration: number;
   navigateToDoc: (docId: string, focusBlockId?: string | null) => void;
   navigateToBlock: (blockId: string, docId?: string | null) => void;
   navigateToUrl: (url: string, docId?: string | null) => void;
@@ -48,6 +49,15 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
   const router = useRouter();
   const location = useLocation();
   const previousRouteRef = useRef<string | null>(null);
+  const transitionRef = useRef({ routeKey: "", generation: 0 });
+  const routeKey = `${location.pathname}${location.searchStr}`;
+  if (transitionRef.current.routeKey !== routeKey) {
+    transitionRef.current = {
+      routeKey,
+      generation: nextTransitionGeneration(),
+    };
+  }
+  const transitionGeneration = transitionRef.current.generation;
 
   // Parse current route from location
   const route = useMemo((): AppRoute => {
@@ -162,15 +172,32 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
   const value = useMemo(
     (): AppRouteContextValue => ({
       route,
+      transitionGeneration,
       navigateToDoc,
       navigateToBlock,
       navigateToUrl,
       goBack,
     }),
-    [route, navigateToDoc, navigateToBlock, navigateToUrl, goBack]
+    [
+      route,
+      transitionGeneration,
+      navigateToDoc,
+      navigateToBlock,
+      navigateToUrl,
+      goBack,
+    ]
   );
 
   return (
     <AppRouteContext.Provider value={value}>{children}</AppRouteContext.Provider>
   );
+}
+
+let transitionGeneration = 0;
+function nextTransitionGeneration(): number {
+  transitionGeneration = Math.max(
+    transitionGeneration + 1,
+    Date.now() * 1000
+  );
+  return transitionGeneration;
 }

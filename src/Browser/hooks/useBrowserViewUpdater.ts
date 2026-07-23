@@ -17,6 +17,7 @@ export const useBrowserViewUpdater = (
   placementId: string,
   blockId: string,
   routeId: string,
+  transitionGeneration: number,
   layout: "inline" | "full",
   referenceKind: "site-block" | "ephemeral-url" = "site-block"
 ) => {
@@ -48,7 +49,7 @@ export const useBrowserViewUpdater = (
         layout: layoutRef.current,
         referenceKind,
         placementGeneration,
-        transitionGeneration: placementGeneration,
+        transitionGeneration,
       });
     }
   }, [
@@ -58,6 +59,7 @@ export const useBrowserViewUpdater = (
     profileId,
     referenceKind,
     placementGeneration,
+    transitionGeneration,
   ]);
 
   const handleUrlChange = useCallback(

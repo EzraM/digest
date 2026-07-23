@@ -6,6 +6,7 @@ import { useSize } from "../hooks/useSize";
 import { useScrollContainer } from "../../context/ScrollContainerContext";
 import { SiteLoadingState } from "./SiteLoadingState";
 import { PRIMARY_BROWSER_PLACEMENT_ID } from "../presentationIds";
+import { useAppRoute } from "../../context/AppRouteContext";
 
 const NORMAL_HEIGHT = 800;
 
@@ -20,6 +21,7 @@ export function Page({
 }) {
   // For ephemeral URL pages (no blockId), generate a synthetic ID based on URL
   const blockId = providedBlockId ?? `ephemeral-${btoa(url).replace(/[^a-zA-Z0-9]/g, '')}`;
+  const { transitionGeneration } = useAppRoute();
 
   const generatedPlacementIdRef = useRef<string | null>(null);
   if (generatedPlacementIdRef.current === null) {
@@ -50,6 +52,7 @@ export function Page({
       placementId,
       blockId,
       routeId,
+      transitionGeneration,
       layout,
       providedBlockId ? "site-block" : "ephemeral-url"
     );
@@ -113,10 +116,10 @@ export function Page({
       window.electronAPI.removeView({
         placementId,
         placementGeneration,
-        transitionGeneration: placementGeneration,
+        transitionGeneration,
       });
     };
-  }, [placementId, layout, placementGeneration]);
+  }, [placementId, layout, placementGeneration, transitionGeneration]);
 
   const handleRetry = () => {
     retryInitialization();
