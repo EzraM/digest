@@ -14,7 +14,7 @@
 }
 
 .left-rail__browser-back[data-available="true"] {
-  flex-basis: 25%;
+  flex-basis: 15%;
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
