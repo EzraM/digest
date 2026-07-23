@@ -8,7 +8,7 @@ import { DocumentProvider } from "../../context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
 import { BlockRoutePageToolSlot } from "./BlockRoutePageToolSlot";
 import { LeftRail } from "./LeftRail";
-import { BlockRouteStatusBar } from "./BlockRouteStatusBar";
+import { BrowserTitleBar } from "./BrowserTitleBar";
 import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
 import { useBrowserLoadState } from "../../hooks/useBrowserLoadState";
 import { useTitleBar } from "../../context/TitleBarContext";
@@ -116,8 +116,7 @@ export const BlockRouteViewContent = ({
   const { setContextualContent } = useTitleBar();
   const siteTitleBar = useMemo(
     () => (
-      <BlockRouteStatusBar
-        placement="titlebar"
+      <BrowserTitleBar
         url={displayUrl}
         loadStatus={loadStatus}
         onReload={handleReload}

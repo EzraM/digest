@@ -18,7 +18,7 @@
   gap: 8px;
 }
 
-.browser-location-zone--titlebar {
+.browser-location-zone {
   position: absolute;
   left: 50%;
   box-sizing: border-box;
@@ -127,10 +127,21 @@
 
 .browser-devtools-button {
   display: inline-grid;
-  flex: 0 0 auto;
+  flex: 0 0 0;
+  width: 0;
+  height: 24px;
+  overflow: hidden;
   place-items: center;
   border-radius: 4px !important;
-  margin-left: auto;
+  opacity: 0;
+  transform: translateX(4px);
+  transition:
+    flex-basis 140ms ease,
+    width 140ms ease,
+    margin-left 140ms ease,
+    opacity 100ms ease,
+    transform 140ms ease,
+    background-color 100ms ease;
 }
 
 .browser-devtools-button:hover:not(:disabled) {
@@ -150,16 +161,18 @@
 
 .browser-load-control__refresh {
   box-sizing: border-box;
+  display: inline-grid;
   width: 0;
-  height: 18px;
+  height: 24px;
   overflow: hidden;
   border: 0;
   border-radius: 3px;
   background: transparent;
   padding: 0;
   color: var(--digest-chrome-text);
-  font: 16px/18px sans-serif;
+  font: inherit;
   opacity: 0;
+  place-items: center;
   transform: translateX(-4px);
   cursor: pointer;
   transition:
@@ -170,10 +183,19 @@
     background-color 100ms ease;
 }
 
-.browser-load-control:hover .browser-load-control__refresh,
-.browser-load-control:focus-within .browser-load-control__refresh {
-  width: 20px;
+.browser-location-zone:hover .browser-load-control__refresh,
+.browser-location-zone:focus-within .browser-load-control__refresh {
+  width: 24px;
   margin-left: 3px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.browser-location-zone:hover .browser-devtools-button,
+.browser-location-zone:focus-within .browser-devtools-button {
+  flex-basis: 24px;
+  width: 24px;
+  margin-left: 2px;
   opacity: 1;
   transform: translateX(0);
 }
@@ -260,7 +282,8 @@
     animation: none;
   }
 
-  .browser-load-control__refresh {
+  .browser-load-control__refresh,
+  .browser-devtools-button {
     transition: none;
   }
 
