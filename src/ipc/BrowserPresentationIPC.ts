@@ -79,7 +79,7 @@ export function parseOpenReferenceCommand(
 
   return {
     routeId: requireString(input, "routeId"),
-    placementId: requireString(input, "viewId"),
+    placementId: requireString(input, "placementId"),
     referenceId: requireString(input, "blockId"),
     url: requireString(input, "url"),
     bounds: requireBounds(input.bounds),
@@ -100,7 +100,7 @@ export function parseDetachPlacementCommand(
   return {
     placementId: requireString(
       input,
-      "viewId" satisfies keyof DetachPlacementIPCRequest
+      "placementId" satisfies keyof DetachPlacementIPCRequest
     ),
     placementGeneration: requireGeneration(input, "placementGeneration"),
     transitionGeneration: requireGeneration(input, "transitionGeneration"),

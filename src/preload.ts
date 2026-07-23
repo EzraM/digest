@@ -47,7 +47,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("remove-browser", blockId);
   },
   removeView: (request: DetachPlacementIPCRequest) => {
-    log.debug(`Removing view ${request.viewId}`, "preload");
+    log.debug(`Removing placement ${request.placementId}`, "preload");
     ipcRenderer.send("remove-view", request);
   },
   browser: {

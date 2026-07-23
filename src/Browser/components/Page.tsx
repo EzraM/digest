@@ -105,7 +105,7 @@ export function Page({
         })}`
       );
       window.electronAPI.removeView({
-        viewId,
+        placementId: viewId,
         placementGeneration,
         transitionGeneration: placementGeneration,
       });

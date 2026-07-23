@@ -14,7 +14,7 @@ type Bounds = { x: number; y: number; width: number; height: number };
  * @returns An object with stable `handleUrlChange` and `handleBoundsChange` callbacks.
  */
 export const useBrowserViewUpdater = (
-  viewId: string,
+  placementId: string,
   blockId: string,
   routeId: string,
   layout: "inline" | "full",
@@ -39,7 +39,7 @@ export const useBrowserViewUpdater = (
     // Only send the update if we have both a URL and bounds.
     if (urlRef.current && boundsRef.current) {
       window.electronAPI.updateBrowser({
-        viewId,
+        placementId,
         routeId,
         blockId,
         url: urlRef.current,
@@ -52,7 +52,7 @@ export const useBrowserViewUpdater = (
       });
     }
   }, [
-    viewId,
+    placementId,
     routeId,
     blockId,
     profileId,

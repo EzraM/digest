@@ -17,7 +17,7 @@ export type BrowserPresentationIdentity = {
 
 /** Renderer-to-main request. Main converts this IPC naming at the boundary. */
 export type OpenReferenceIPCRequest = {
-  viewId: string;
+  placementId: string;
   routeId: string;
   blockId: string;
   url: string;
@@ -30,7 +30,7 @@ export type OpenReferenceIPCRequest = {
 };
 
 export type DetachPlacementIPCRequest = {
-  viewId: string;
+  placementId: string;
   placementGeneration: number;
   transitionGeneration: number;
 };

@@ -4,7 +4,7 @@ import {
 } from "./BrowserPresentationIPC";
 
 const validRequest = {
-  viewId: "primary-browser",
+  placementId: "primary-browser",
   routeId: "block:PD-3772",
   blockId: "PD-3772",
   url: "https://example.test/",
@@ -65,7 +65,7 @@ describe("browser presentation IPC contract", () => {
   it("requires both generations when detaching a placement", () => {
     expect(
       parseDetachPlacementCommand({
-        viewId: "primary-browser",
+        placementId: "primary-browser",
         placementGeneration: 7,
         transitionGeneration: 11,
       })
@@ -78,7 +78,7 @@ describe("browser presentation IPC contract", () => {
     let message = "";
     try {
       parseDetachPlacementCommand({
-        viewId: "primary-browser",
+        placementId: "primary-browser",
         placementGeneration: 7,
       });
     } catch (error) {
