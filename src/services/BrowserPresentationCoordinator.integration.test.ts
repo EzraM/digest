@@ -5,14 +5,16 @@ import type {
 } from "electron";
 import { Command } from "../domains/browser-views/core/commands";
 import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry";
-import { ViewStore } from "./ViewStore";
+import { WindowPresentationStore } from "./WindowPresentationStore";
 import type {
   ViewEffects,
   ViewEvents,
   ViewHandleOperations,
   ViewNotifications,
-} from "./ViewStoreContracts";
+} from "./BrowserPresentationContracts";
 import { BrowsingJourneyStore } from "./BrowsingJourneyStore";
+import { ApplicationJourneyAllocator } from "./ApplicationJourneyAllocator";
+import { BrowserPresentationCoordinator } from "./BrowserPresentationCoordinator";
 
 type Effect = {
   type: string;
@@ -99,7 +101,11 @@ function createHarness(options: {
     },
     detachView: (id) => effects.push({ type: "detach", id }),
   });
-  const store = new ViewStore(
+  const allocator = new ApplicationJourneyAllocator({
+    journeys: new BrowsingJourneyStore(options.cacheLimit ?? 10),
+    handles,
+  });
+  const store = new WindowPresentationStore(
     {} as BrowserWindow,
     undefined,
     {} as WebContents,
@@ -108,8 +114,23 @@ function createHarness(options: {
       now: () => now,
       createHandleId: (placementId) =>
         `native:${placementId}:${++nextHandleId}`,
-      journeys: new BrowsingJourneyStore(options.cacheLimit ?? 10),
       handles,
+      resolvePresentationIdentity: (handleId) =>
+        allocator.getActiveMappingForHandle(handleId),
+      resolveHandleIdForPlacement: (placementId) =>
+        allocator.getHandleIdForPlacement(placementId),
+      onRendererGone: (handleId) => {
+        const placementId = allocator.getActivePlacementId(handleId);
+        allocator.removeJourney(handleId);
+        return placementId;
+      },
+      onNavigation: (handleId, url, historyIndex) =>
+        allocator.recordNavigation(handleId, url, historyIndex),
+      publishLivePages: () => {
+        allocator.syncLivePages();
+      },
+      subscribeLivePages: (listener) =>
+        allocator.subscribeLivePages(listener),
       notifications,
       events,
       contextMenus: {
@@ -119,6 +140,12 @@ function createHarness(options: {
       operations,
       createEffects,
     }
+  );
+  const coordinator = new BrowserPresentationCoordinator(
+    allocator,
+    () => store,
+    undefined,
+    () => now
   );
   const request = (
     viewId: string,
@@ -138,6 +165,8 @@ function createHarness(options: {
   });
   return {
     store,
+    coordinator,
+    allocator,
     effects,
     handles,
     request,
@@ -147,18 +176,18 @@ function createHarness(options: {
   };
 }
 
-describe("ViewStore fake-native integration", () => {
+describe("BrowserPresentationCoordinator fake-native integration", () => {
   it("opens, resizes, detaches, reattaches, and destroys one live journey", () => {
-    const { store, effects, handles, request, advanceTime } = createHarness();
+    const { store, coordinator, allocator, effects, handles, request, advanceTime } = createHarness();
     const baseRequest = request("page:full");
 
-    expect(store.openReference(baseRequest)).toMatchObject({
+    expect(coordinator.openReference(baseRequest)).toMatchObject({
       outcome: "miss",
       loadAvoided: false,
     });
     expect(handles.has(firstHandleIdFor("page:full"))).toBe(true);
 
-    store.openReference({
+    coordinator.openReference({
       ...baseRequest,
       bounds: { ...baseRequest.bounds, height: 520 },
     });
@@ -166,21 +195,21 @@ describe("ViewStore fake-native integration", () => {
       store.getWorld().get(firstHandleIdFor("page:full"))?.bounds.height
     ).toBe(520);
 
-    store.handleDetachView({
+    coordinator.detachPlacement({
       placementId: "page:full",
       placementGeneration: 1000,
       transitionGeneration: 1000,
     });
     advanceTime();
     expect(
-      store.openReference({
+      coordinator.openReference({
         ...baseRequest,
         placementGeneration: 2000,
         transitionGeneration: 2000,
       })
     ).toMatchObject({ outcome: "hit_current", loadAvoided: true });
 
-    store.handleRemoveView("page:full");
+    coordinator.removePlacement("page:full");
     expect(handles.has(firstHandleIdFor("page:full"))).toBe(false);
     expect(effects.map((effect) => effect.type)).toEqual([
       "create",
@@ -198,8 +227,8 @@ describe("ViewStore fake-native integration", () => {
   });
 
   it("clears liveness and ignores delayed load events after a renderer crash", () => {
-    const { store, effects, handles, request } = createHarness();
-    store.openReference(request("page:full"));
+    const { store, coordinator, allocator, effects, handles, request } = createHarness();
+    coordinator.openReference(request("page:full"));
 
     store.dispatch({
       type: "rendererGone",
@@ -210,14 +239,14 @@ describe("ViewStore fake-native integration", () => {
     store.dispatch({ type: "markReady", id: firstHandleIdFor("page:full") });
 
     expect(store.getWorld().has(firstHandleIdFor("page:full"))).toBe(false);
-    expect(store.getLiveReferences()).toEqual([]);
+    expect(allocator.getLiveReferences()).toEqual([]);
     expect(handles.has(firstHandleIdFor("page:full"))).toBe(false);
     expect(effects.length).toBe(effectCountAfterCrash);
   });
 
   it("allows immediate fresh creation after a renderer crash", () => {
-    const { store, handles, request } = createHarness();
-    store.openReference(request("page:full"));
+    const { store, coordinator, allocator, handles, request } = createHarness();
+    coordinator.openReference(request("page:full"));
     store.dispatch({
       type: "rendererGone",
       id: firstHandleIdFor("page:full"),
@@ -225,17 +254,17 @@ describe("ViewStore fake-native integration", () => {
     });
 
     expect(
-      store.openReference(request("page:full", undefined, 2000))
+      coordinator.openReference(request("page:full", undefined, 2000))
     ).toMatchObject({ outcome: "miss", loadAvoided: false });
     expect(handles.has("native:page:full:2")).toBe(true);
   });
 
   it("destroys a failed reuse candidate and creates a fresh view", () => {
-    const { store, handles, request, advanceTime } = createHarness({
+    const { store, coordinator, allocator, handles, request, advanceTime } = createHarness({
       attachSucceeds: false,
     });
-    store.openReference(request("first:full"));
-    store.handleDetachView({
+    coordinator.openReference(request("first:full"));
+    coordinator.detachPlacement({
       placementId: "first:full",
       placementGeneration: 1000,
       transitionGeneration: 1000,
@@ -243,7 +272,7 @@ describe("ViewStore fake-native integration", () => {
     advanceTime();
 
     expect(
-      store.openReference(request("second:full", undefined, 2000))
+      coordinator.openReference(request("second:full", undefined, 2000))
     ).toMatchObject({
       outcome: "miss",
       missReason: "attach_failed",
@@ -254,38 +283,38 @@ describe("ViewStore fake-native integration", () => {
   });
 
   it("evicts an older detached renderer when a new journey exceeds capacity", () => {
-    const { store, handles, request } = createHarness({ cacheLimit: 1 });
-    store.openReference(request("first:full", "https://first.test/"));
-    store.handleDetachView({
+    const { store, coordinator, allocator, handles, request } = createHarness({ cacheLimit: 1 });
+    coordinator.openReference(request("first:full", "https://first.test/"));
+    coordinator.detachPlacement({
       placementId: "first:full",
       placementGeneration: 1000,
       transitionGeneration: 1000,
     });
-    store.openReference(
+    coordinator.openReference(
       request("second:full", "https://second.test/", 2000)
     );
 
     expect(handles.has(firstHandleIdFor("first:full"))).toBe(false);
     expect(handles.has("native:second:full:2")).toBe(true);
-    expect(store.getLiveReferences()).toEqual([
+    expect(allocator.getLiveReferences()).toEqual([
       { profileId: "profile", url: "https://second.test/" },
     ]);
   });
 
   it("rejects cleanup from the pre-reload renderer generation", () => {
-    const { store, effects, request } = createHarness();
-    store.openReference(request("page:full", undefined, 1000));
-    store.handleDetachView({
+    const { store, coordinator, allocator, effects, request } = createHarness();
+    coordinator.openReference(request("page:full", undefined, 1000));
+    coordinator.detachPlacement({
       placementId: "page:full",
       placementGeneration: 1000,
       transitionGeneration: 1000,
     });
-    store.openReference(request("page:full", undefined, 2000));
+    coordinator.openReference(request("page:full", undefined, 2000));
     const detachCount = effects.filter(
       (effect) => effect.type === "detach"
     ).length;
 
-    store.handleDetachView({
+    coordinator.detachPlacement({
       placementId: "page:full",
       placementGeneration: 1000,
       transitionGeneration: 1000,
@@ -297,19 +326,19 @@ describe("ViewStore fake-native integration", () => {
   });
 
   it("traces retained-handle reuse with one complete identity mapping", () => {
-    const { store, effects, request } = createHarness();
+    const { store, coordinator, allocator, effects, request } = createHarness();
     const retainedPlacementId = "ephemeral-profile/browse/PS-5606:full";
     const retainedHandleId = firstHandleIdFor(retainedPlacementId);
     const requestedPlacementId = "ephemeral-profile/browse/PD-3772:full";
     const url = "https://identity.test/";
 
-    store.openReference(request(retainedPlacementId, url, 40));
-    store.handleDetachView({
+    coordinator.openReference(request(retainedPlacementId, url, 40));
+    coordinator.detachPlacement({
       placementId: retainedPlacementId,
       placementGeneration: 40,
       transitionGeneration: 40,
     });
-    const result = store.openReference({
+    const result = coordinator.openReference({
       ...request(requestedPlacementId, url, 41),
       routeId: "route-PD-3772",
       transitionGeneration: 17,
@@ -330,7 +359,7 @@ describe("ViewStore fake-native integration", () => {
       identity: {
         routeId: "route-PD-3772",
         placementId: requestedPlacementId,
-        journeyId: store.getJourneyIdForHandle(retainedHandleId),
+        journeyId: allocator.getJourneyId(retainedHandleId),
         handleId: retainedHandleId,
         transitionGeneration: 17,
       },
@@ -338,15 +367,15 @@ describe("ViewStore fake-native integration", () => {
   });
 
   it("switches the journey occupying one stable full-page placement", () => {
-    const { store, effects, handles, request } = createHarness();
+    const { store, coordinator, allocator, effects, handles, request } = createHarness();
     const placementId = "primary-browser";
     const firstHandleId = firstHandleIdFor(placementId);
 
-    store.openReference({
+    coordinator.openReference({
       ...request(placementId, "https://first.test/", 10),
       routeId: "block:first",
     });
-    store.openReference({
+    coordinator.openReference({
       ...request(placementId, "https://second.test/", 20),
       routeId: "block:second",
     });
@@ -357,7 +386,7 @@ describe("ViewStore fake-native integration", () => {
     expect(
       effects.filter((effect) => effect.type === "detach").slice(-1)[0]
     ).toEqual({ type: "detach", id: firstHandleId });
-    expect(store.getLiveReferences()).toEqual([
+    expect(allocator.getLiveReferences()).toEqual([
       { profileId: "profile", url: "https://first.test/" },
       { profileId: "profile", url: "https://second.test/" },
     ]);

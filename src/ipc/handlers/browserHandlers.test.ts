@@ -1,21 +1,36 @@
 import { createBrowserHandlers } from "./browserHandlers";
-import { ViewStore } from "../../services/ViewStore";
+import { WindowPresentationStore } from "../../services/WindowPresentationStore";
+import type { BrowserPresentationCoordinator } from "../../services/BrowserPresentationCoordinator";
+
+const coordinatorStub = (
+  overrides: Partial<BrowserPresentationCoordinator> = {}
+) =>
+  ({
+    openReference: () => undefined,
+    detachPlacement: () => undefined,
+    removePlacement: () => undefined,
+    getLivePagesProjection: () => ({ revision: 0, references: [] }),
+    ...overrides,
+  }) as BrowserPresentationCoordinator;
 
 describe("browser handlers", () => {
   it("routes presentation through sender ownership and canonical placement", () => {
     let received: any;
-    const store = {
+    const store = {} as WindowPresentationStore;
+    const coordinator = coordinatorStub({
       openReference: (command: unknown) => {
         received = command;
+        return undefined;
       },
-    } as ViewStore;
+    });
     const event = { sender: { id: 22 } } as any;
     const handlers = createBrowserHandlers(
       (candidate) => {
         expect(candidate).toBe(event);
         return store;
       },
-      () => "placement-window-b"
+      () => "placement-window-b",
+      coordinator
     );
     const handler = handlers["update-browser-view"];
     if (handler.type !== "on") throw new Error("expected event handler");
@@ -73,9 +88,13 @@ describe("browser handlers", () => {
       notifyBrowserSelection: (selection: { sourceUrl: string }) => {
         notification = selection;
       },
-    } as unknown as ViewStore;
+    } as unknown as WindowPresentationStore;
 
-    const handler = createBrowserHandlers(viewStore)[
+    const handler = createBrowserHandlers(
+      viewStore,
+      (_event, placementId) => placementId,
+      coordinatorStub()
+    )[
       "browser:capture-selection"
     ] as { fn: (event: unknown, viewId: string) => Promise<unknown> };
     const result = await handler.fn(undefined, "primary-browser");

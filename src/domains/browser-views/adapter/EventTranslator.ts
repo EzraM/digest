@@ -2,7 +2,7 @@ import { WebContentsView } from 'electron';
 import { Command } from '../core/commands';
 import { log } from '../../../utils/mainLogger';
 import { toBlockId } from '../../../utils/viewId';
-import type { ViewContextMenus } from '../../../services/ViewStoreContracts';
+import type { ViewContextMenus } from '../../../services/BrowserPresentationContracts';
 import {
   httpResponseMonitor,
   type HttpResponseMonitor,

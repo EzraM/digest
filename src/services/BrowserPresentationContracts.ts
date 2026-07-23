@@ -12,9 +12,7 @@ import type {
   BrowserPresentationIdentity,
   LivePagesProjection,
 } from "../types/browser";
-import type { BrowsingJourneyStore } from "./BrowsingJourneyStore";
 import type { CacheMissReason } from "./LivePageOpenPolicy";
-import type { LivePageProjectionStore } from "./LivePageProjectionStore";
 
 /** Strict main-process command. All presentation identity is explicit. */
 export type OpenReferenceCommand = {
@@ -103,12 +101,26 @@ export interface ViewHandleOperations {
   goBack(id: string): Result<{ canGoBack: boolean }>;
 }
 
-export type ViewStoreDependencies = {
+export type WindowPresentationStoreDependencies = {
   now?: () => number;
   createHandleId?: (placementId: string) => string;
-  journeys?: BrowsingJourneyStore;
-  livePages?: LivePageProjectionStore;
   handles?: HandleRegistry;
+  resolvePresentationIdentity?: (
+    handleId: string
+  ) => BrowserPresentationIdentity | null | undefined;
+  resolveHandleIdForPlacement?: (
+    placementId: string
+  ) => string | undefined;
+  onRendererGone?: (handleId: string) => string | undefined;
+  onNavigation?: (
+    handleId: string,
+    url: string,
+    historyIndex?: number
+  ) => void;
+  publishLivePages?: () => void;
+  subscribeLivePages?: (
+    listener: (projection: LivePagesProjection) => void
+  ) => () => void;
   notifications?: ViewNotifications;
   events?: ViewEvents;
   contextMenus?: ViewContextMenus;

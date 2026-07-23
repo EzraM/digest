@@ -5,7 +5,7 @@ import type {
 import type {
   DetachPlacementCommand,
   OpenReferenceCommand,
-} from "../services/ViewStoreContracts";
+} from "../services/BrowserPresentationContracts";
 
 type UnknownRecord = Record<string, unknown>;
 

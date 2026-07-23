@@ -7,7 +7,7 @@ import {
   session,
 } from "electron";
 import path from "path";
-import { ViewStore } from "./services/ViewStore";
+import { WindowPresentationStore } from "./services/WindowPresentationStore";
 import { viteConfig } from "./config/vite";
 import { LinkInterceptionService } from "./services/LinkInterceptionService";
 import { log } from "./utils/mainLogger";
@@ -39,6 +39,8 @@ import { randomUUID } from "node:crypto";
 import { WindowRegistry } from "./application/WindowRegistry";
 import { PlacementRegistry } from "./application/PlacementRegistry";
 import { BrowsingJourneyStore } from "./services/BrowsingJourneyStore";
+import { ApplicationJourneyAllocator } from "./services/ApplicationJourneyAllocator";
+import { BrowserPresentationCoordinator } from "./services/BrowserPresentationCoordinator";
 import { HandleRegistry } from "./domains/browser-views/adapter/HandleRegistry";
 import { DocumentEditRegistry } from "./application/DocumentEditRegistry";
 
@@ -100,10 +102,14 @@ let globalAppView: WebContentsView | null = null;
 const serviceContainer = new Container();
 const windowRegistry = new WindowRegistry();
 const placementRegistry = new PlacementRegistry();
-const viewStoreByRendererId = new Map<number, ViewStore>();
+const viewStoreByRendererId = new Map<number, WindowPresentationStore>();
 const placementIdByRendererId = new Map<number, string>();
 const sharedJourneys = new BrowsingJourneyStore(10);
 const sharedHandles = new HandleRegistry();
+const journeyAllocator = new ApplicationJourneyAllocator({
+  journeys: sharedJourneys,
+  handles: sharedHandles,
+});
 const documentEditRegistry = new DocumentEditRegistry();
 const ipcRouter = new IPCRouter();
 let applicationServices: ReturnType<typeof getServices> | undefined;
@@ -232,12 +238,30 @@ const createWindow = async (initialHash?: string) => {
   // Set up link interception for the main renderer process
   const linkInterceptionService = new LinkInterceptionService(appViewInstance);
 
-  const viewStore = new ViewStore(
+  const viewStore = new WindowPresentationStore(
     baseWindow,
     viewLayerManager,
     appViewInstance.webContents,
     new LivePageCacheTelemetry(services.database as Database.Database),
-    { journeys: sharedJourneys, handles: sharedHandles }
+    {
+      handles: journeyAllocator.getHandleRegistry(),
+      resolvePresentationIdentity: (handleId) =>
+        journeyAllocator.getActiveMappingForHandle(handleId),
+      resolveHandleIdForPlacement: (placementId) =>
+        journeyAllocator.getHandleIdForPlacement(placementId),
+      onRendererGone: (handleId) => {
+        const placementId = journeyAllocator.getActivePlacementId(handleId);
+        journeyAllocator.removeJourney(handleId);
+        return placementId;
+      },
+      onNavigation: (handleId, url, historyIndex) =>
+        journeyAllocator.recordNavigation(handleId, url, historyIndex),
+      publishLivePages: () => {
+        journeyAllocator.syncLivePages();
+      },
+      subscribeLivePages: (listener) =>
+        journeyAllocator.subscribeLivePages(listener),
+    }
   );
   viewStoreByRendererId.set(appViewInstance.webContents.id, viewStore);
   // A renderer `_blank` request means another Digest window. Preserve the
@@ -336,7 +360,7 @@ const createWindow = async (initialHash?: string) => {
   // Pass download manager to view store so it can attach to browser block sessions
   viewStore.setDownloadManager(downloadManager);
 
-  // Set up background link click callback for ViewStore (page context - inserts inline links)
+  // Set up background link click callback for WindowPresentationStore (page context - inserts inline links)
   viewStore.setBackgroundLinkClickCallback(insertInlineLink);
 
   viewStore.setImageContextCallback(async ({
@@ -458,6 +482,7 @@ const createWindow = async (initialHash?: string) => {
 
   baseWindow.on("closed", () => {
     const rendererId = appViewInstance.webContents.id;
+    viewStore.dispose();
     viewStoreByRendererId.delete(rendererId);
     documentEditRegistry.releaseRenderer(rendererId);
     placementIdByRendererId.delete(rendererId);
@@ -516,12 +541,27 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
 
 const setupIpcHandlers = (
   router: IPCRouter,
-  viewStore: ViewStore,
+  viewStore: WindowPresentationStore,
   services: ReturnType<typeof getServices>,
   rendererView: WebContentsView,
   downloadManager: DownloadManager
 ) => {
   const { documentManager, profileManager } = services;
+  const presentationCoordinator = new BrowserPresentationCoordinator(
+    journeyAllocator,
+    (placementId) => {
+      const placement = placementRegistry.get(placementId);
+      if (!placement || placement.state !== "active") {
+        throw new Error(`Unknown or retired placement: ${placementId}`);
+      }
+      const store = viewStoreByRendererId.get(placement.ownerRendererId);
+      if (!store) {
+        throw new Error(`No presentation store for placement: ${placementId}`);
+      }
+      return store;
+    },
+    new LivePageCacheTelemetry(services.database as Database.Database)
+  );
 
   const sendToRenderer = (
     channel: string,
@@ -687,7 +727,8 @@ const setupIpcHandlers = (
         }
         placementRegistry.requireOwnedActive(placementId, event.sender.id);
         return placementId;
-      }
+      },
+      presentationCoordinator
     )
   );
   registerMap(

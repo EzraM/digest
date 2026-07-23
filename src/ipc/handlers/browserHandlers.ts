@@ -1,6 +1,7 @@
 import { IpcMainEvent, IpcMainInvokeEvent } from "electron";
 import { IPCHandlerMap } from "../IPCRouter";
-import { ViewStore } from "../../services/ViewStore";
+import { WindowPresentationStore } from "../../services/WindowPresentationStore";
+import type { BrowserPresentationCoordinator } from "../../services/BrowserPresentationCoordinator";
 import { SelectionCaptureService } from "../../services/SelectionCaptureService";
 import { log } from "../../utils/mainLogger";
 import { toBlockId } from "../../utils/viewId";
@@ -16,11 +17,12 @@ import {
 type BrowserSenderEvent = IpcMainEvent | IpcMainInvokeEvent;
 
 export function createBrowserHandlers(
-  viewStoreOrResolver: ViewStore | ((event: BrowserSenderEvent) => ViewStore),
+  viewStoreOrResolver: WindowPresentationStore | ((event: BrowserSenderEvent) => WindowPresentationStore),
   resolvePlacementId: (
     event: BrowserSenderEvent,
     rendererPlacementId: string
-  ) => string = (_event, placementId) => placementId
+  ) => string = (_event, placementId) => placementId,
+  coordinator: BrowserPresentationCoordinator
 ): IPCHandlerMap {
   const storeFor = (event: BrowserSenderEvent) =>
     typeof viewStoreOrResolver === "function"
@@ -40,7 +42,8 @@ export function createBrowserHandlers(
       type: "on",
       fn: (event, blockId: string) => {
         log.debug(`Received remove-browser event for block ${blockId}`, "main");
-        storeFor(event).handleRemoveView(placementFor(event, blockId));
+        const placementId = placementFor(event, blockId);
+        coordinator.removePlacement(placementId);
       },
     },
     "browser:get-devtools-state": {
@@ -138,7 +141,7 @@ export function createBrowserHandlers(
             `Received update-browser-view event for placement ${command.placementId}`,
             "main"
           );
-          storeFor(event).openReference(command);
+          coordinator.openReference(command);
         } catch (error) {
           log.error(
             `Rejected update-browser-view event: ${
@@ -162,7 +165,7 @@ export function createBrowserHandlers(
             `Received detach request for placement ${command.placementId}`,
             "main"
           );
-          storeFor(event).handleDetachView(command);
+          coordinator.detachPlacement(command);
         } catch (error) {
           log.error(
             `Rejected remove-view event: ${
@@ -175,7 +178,7 @@ export function createBrowserHandlers(
     },
     "browser:get-live-pages": {
       type: "invoke",
-      fn: (event) => storeFor(event).getLivePagesProjection(),
+      fn: () => coordinator.getLivePagesProjection(),
     },
     "browser:capture-selection": {
       type: "invoke",

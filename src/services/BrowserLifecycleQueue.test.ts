@@ -19,7 +19,7 @@ type LifecycleEvent =
 /**
  * Exercises the renderer-to-main boundary as a delayed queue: mount updates and
  * cleanup messages may be delivered out of order, while accepted messages drive
- * the same journey transitions used by ViewStore.
+ * the same journey transitions used by BrowserPresentationCoordinator.
  */
 describe("queued browser lifecycle", () => {
   it("never lets delayed cleanup detach a newer visible mount", () => {
