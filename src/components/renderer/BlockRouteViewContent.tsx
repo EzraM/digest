@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
 import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
@@ -11,6 +11,7 @@ import { LeftRail } from "./LeftRail";
 import { BlockRouteStatusBar } from "./BlockRouteStatusBar";
 import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
 import { useBrowserLoadState } from "../../hooks/useBrowserLoadState";
+import { useTitleBar } from "../../context/TitleBarContext";
 
 type BlockRouteViewContentProps = {
   blockId: string | undefined; // undefined for ephemeral URL routes
@@ -109,8 +110,42 @@ export const BlockRouteViewContent = ({
 
   // Build grid template rows conditionally
   const gridTemplateRows = useMemo(() => {
-    return `1fr 28px${hasPageTool ? " auto" : ""}`;
+    return `1fr${hasPageTool ? " auto" : ""}`;
   }, [hasPageTool]);
+
+  const { setContextualContent } = useTitleBar();
+  const siteTitleBar = useMemo(
+    () => (
+      <BlockRouteStatusBar
+        placement="titlebar"
+        url={displayUrl}
+        loadStatus={loadStatus}
+        onReload={handleReload}
+        copied={copied}
+        onCopy={handleCopy}
+        devToolsAvailable={devToolsAvailable}
+        devToolsOpen={devToolsOpen}
+        isTogglingDevTools={isTogglingDevTools}
+        onToggleDevTools={toggleDevTools}
+      />
+    ),
+    [
+      copied,
+      devToolsAvailable,
+      devToolsOpen,
+      displayUrl,
+      handleCopy,
+      handleReload,
+      isTogglingDevTools,
+      loadStatus,
+      toggleDevTools,
+    ]
+  );
+
+  useLayoutEffect(() => {
+    setContextualContent(siteTitleBar);
+    return () => setContextualContent(null);
+  }, [setContextualContent, siteTitleBar]);
 
   const resolvedProfileId = profileId ?? DEFAULT_PROFILE_ID;
 
@@ -118,7 +153,7 @@ export const BlockRouteViewContent = ({
     <DocumentProvider profileId={resolvedProfileId} documentId={docId}>
       <div
         style={{
-          position: "fixed",
+          position: "absolute",
           inset: 0,
           width: "100%",
           height: "100%",
@@ -167,17 +202,6 @@ export const BlockRouteViewContent = ({
             />
           </div>
 
-          <BlockRouteStatusBar
-            url={displayUrl}
-            loadStatus={loadStatus}
-            onReload={handleReload}
-            copied={copied}
-            onCopy={handleCopy}
-            devToolsAvailable={devToolsAvailable}
-            devToolsOpen={devToolsOpen}
-            isTogglingDevTools={isTogglingDevTools}
-            onToggleDevTools={toggleDevTools}
-          />
           <BlockRoutePageToolSlot
             content={pageToolContent}
             isVisible={hasPageTool}

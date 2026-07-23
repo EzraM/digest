@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MantineProvider } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { theme } from "./config/theme";
@@ -32,8 +32,12 @@ import { useLinkCaptureNotification } from "./domains/link-capture/ui/useLinkCap
 import { DownloadProvider } from "./domains/downloads/ui/DownloadContext";
 import { DownloadNotification } from "./domains/downloads/ui/DownloadNotification";
 import { useDownloadNotification } from "./domains/downloads/ui/useDownloadNotification";
+import { StatusBar } from "./components/renderer/StatusBar";
+import { useStatusBar } from "./hooks/useStatusBar";
+import { TitleBarContext } from "./context/TitleBarContext";
 
 const RendererAppContent = () => {
+  const [contextualTitleBar, setContextualTitleBar] = useState<React.ReactNode>(null);
   const [isNavbarOpened, { toggle: toggleNavbar, close: closeNavbar }] =
     useDisclosure(true);
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
@@ -216,6 +220,15 @@ const RendererAppContent = () => {
   });
 
   const activeDocumentTitle = activeDocument?.title ?? null;
+  const { breadcrumbText, handleClick: handleTitleBarClick } = useStatusBar({
+    profileName: activeProfileName,
+    documentTitle: activeDocumentTitle,
+    onToggleSidebar: toggleNavbar,
+  });
+  const titleBarContextValue = useMemo(
+    () => ({ setContextualContent: setContextualTitleBar }),
+    []
+  );
   const showDebug = useCallback(async () => {
     setIsDebugSidebarVisible(true);
 
@@ -301,6 +314,22 @@ const RendererAppContent = () => {
 
   return (
     <MantineProvider theme={theme} defaultColorScheme="auto">
+      <TitleBarContext.Provider value={titleBarContextValue}>
+      <div
+        style={{
+          height: "100vh",
+          display: "grid",
+          gridTemplateRows: "38px minmax(0, 1fr)",
+          overflow: "hidden",
+        }}
+      >
+        {contextualTitleBar ?? (
+          <StatusBar
+            breadcrumbText={breadcrumbText}
+            onClick={handleTitleBarClick}
+          />
+        )}
+        <div style={{ position: "relative", minHeight: 0, overflow: "hidden" }}>
       {route.kind === "block" && (
         <BlockRouteView
           blockId={route.blockId}
@@ -335,8 +364,6 @@ const RendererAppContent = () => {
           isNavbarOpened={isNavbarOpened}
           onNavbarToggle={toggleNavbar}
           isDebugSidebarVisible={isDebugSidebarVisible}
-          profileName={activeProfileName}
-          documentTitle={activeDocumentTitle}
           navbar={
             <FileTreePane
               profiles={profiles}
@@ -383,6 +410,9 @@ const RendererAppContent = () => {
           }
         />
       )}
+        </div>
+      </div>
+      </TitleBarContext.Provider>
       <ProfileModal
         opened={isCreateProfileModalOpen}
         profileName={profileModalName}

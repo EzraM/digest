@@ -1,15 +1,12 @@
 import { ReactNode, useMemo, useContext, useRef, useEffect } from "react";
 import { Box, Transition } from "@mantine/core";
 import { useElementScrollRestoration } from "@tanstack/react-router";
-import { StatusBar } from "./StatusBar";
-import { useStatusBar } from "../../hooks/useStatusBar";
 import { SidebarToggleButton } from "./SidebarToggleButton";
 import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { ScrollContainerProvider } from "../../context/ScrollContainerContext";
 
 const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
-const FOOTER_HEIGHT = 28;
 const TOGGLE_BAR_WIDTH = 32; // 2rem in pixels
 const NAVBAR_TRANSITION_MS = 180;
 
@@ -20,8 +17,6 @@ type RendererLayoutProps = {
   isNavbarOpened: boolean;
   onNavbarToggle: () => void;
   isDebugSidebarVisible: boolean;
-  profileName: string | null;
-  documentTitle: string | null;
 };
 
 export const RendererLayout = ({
@@ -31,15 +26,7 @@ export const RendererLayout = ({
   isNavbarOpened,
   onNavbarToggle,
   isDebugSidebarVisible,
-  profileName,
-  documentTitle,
 }: RendererLayoutProps) => {
-  const { breadcrumbText, handleClick } = useStatusBar({
-    profileName,
-    documentTitle,
-    onToggleSidebar: onNavbarToggle,
-  });
-
   // Get page tool slot content
   const pageToolContext = useContext(PageToolSlotContext);
   const pageToolContent = pageToolContext?.content ?? null;
@@ -77,7 +64,7 @@ export const RendererLayout = ({
   }, [scrollEntry?.scrollY]);
 
   // Build grid template rows conditionally
-  const gridTemplateRows = `minmax(0, 1fr) ${FOOTER_HEIGHT}px${hasPageTool ? " auto" : ""}`;
+  const gridTemplateRows = `minmax(0, 1fr)${hasPageTool ? " auto" : ""}`;
 
   return (
     <Box
@@ -85,8 +72,8 @@ export const RendererLayout = ({
         display: "grid",
         gridTemplateColumns: `${TOGGLE_BAR_WIDTH}px ${navWidth}px 1fr ${asideWidth}px`,
         gridTemplateRows,
-        gridTemplateAreas: `"toggle nav main aside" "toggle footer footer footer"${hasPageTool ? ' "toggle tool tool tool"' : ""}`,
-        height: "100vh",
+        gridTemplateAreas: `"toggle nav main aside"${hasPageTool ? ' "toggle tool tool tool"' : ""}`,
+        height: "100%",
         width: "100%",
         minWidth: 0,
         overflow: "hidden",
@@ -137,7 +124,7 @@ export const RendererLayout = ({
             zIndex: 0,
             minWidth: 0,
             minHeight: 0,
-            paddingBottom: FOOTER_HEIGHT + 8,
+            paddingBottom: 8,
             overflow: "auto",
           }}
         >
@@ -160,22 +147,6 @@ export const RendererLayout = ({
         p="md"
       >
         {aside}
-      </Box>
-
-      <Box
-        component="footer"
-        style={{
-          gridArea: "footer",
-          height: FOOTER_HEIGHT,
-          backgroundColor: "var(--mantine-color-body)",
-          borderTop: "1px solid var(--mantine-color-default-border)",
-          display: "flex",
-          alignItems: "center",
-          zIndex: 1,
-        }}
-        p={0}
-      >
-        <StatusBar breadcrumbText={breadcrumbText} onClick={handleClick} />
       </Box>
 
       {hasPageTool && (

@@ -100,6 +100,11 @@ const createWindow = async () => {
   const baseWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    // Let the renderer use the title-bar area on macOS while retaining the
+    // native traffic-light controls in their standard inset position.
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset" as const }
+      : {}),
   });
 
   const appViewInstance = new WebContentsView({

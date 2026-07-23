@@ -1,4 +1,5 @@
 import { Box, Text, Group } from "@mantine/core";
+import "./StatusBar.css";
 
 type StatusBarProps = {
   breadcrumbText: string;
@@ -8,13 +9,15 @@ type StatusBarProps = {
 export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
   return (
     <Box
+      component="header"
+      className="app-title-bar"
       h="100%"
       style={{
         backgroundColor: "var(--mantine-color-body)",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        paddingLeft: "var(--mantine-spacing-sm)",
+        paddingLeft: "max(var(--mantine-spacing-sm), 78px)",
         paddingRight: "var(--mantine-spacing-sm)",
         fontSize: "11px",
         fontFamily: "var(--mantine-font-family-monospace)",
@@ -23,6 +26,7 @@ export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
     >
       <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
         <Box
+          className="app-title-bar__control"
           onClick={onClick}
           style={{
             minWidth: 0,
