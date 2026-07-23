@@ -31,12 +31,22 @@ describe("queued browser lifecycle", () => {
 
       const deliver = (event: LifecycleEvent) => {
         if (event.type === "update") {
-          if (generations.acceptUpdate("page:full", event.generation)) {
+          if (
+            generations.acceptUpdate(
+              "page:full",
+              event.generation,
+              event.generation
+            )
+          ) {
             journeys.markVisible("handle", "page:full");
             expectedVisible = true;
           }
         } else if (
-          generations.acceptDetach("page:full", event.generation)
+          generations.acceptDetach(
+            "page:full",
+            event.generation,
+            event.generation
+          )
         ) {
           journeys.markDetached("handle");
           expectedVisible = false;

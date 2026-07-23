@@ -1,5 +1,11 @@
-import type { OpenReferenceIPCRequest } from "../types/browser";
-import type { OpenReferenceCommand } from "../services/ViewStoreContracts";
+import type {
+  DetachPlacementIPCRequest,
+  OpenReferenceIPCRequest,
+} from "../types/browser";
+import type {
+  DetachPlacementCommand,
+  OpenReferenceCommand,
+} from "../services/ViewStoreContracts";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -80,6 +86,22 @@ export function parseOpenReferenceCommand(
     profileId: requireString(input, "profileId"),
     layout,
     referenceKind,
+    placementGeneration: requireGeneration(input, "placementGeneration"),
+    transitionGeneration: requireGeneration(input, "transitionGeneration"),
+  };
+}
+
+export function parseDetachPlacementCommand(
+  input: unknown
+): DetachPlacementCommand {
+  if (!isRecord(input)) {
+    throw new Error("Invalid browser detach request");
+  }
+  return {
+    placementId: requireString(
+      input,
+      "viewId" satisfies keyof DetachPlacementIPCRequest
+    ),
     placementGeneration: requireGeneration(input, "placementGeneration"),
     transitionGeneration: requireGeneration(input, "transitionGeneration"),
   };

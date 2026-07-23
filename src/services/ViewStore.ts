@@ -29,6 +29,7 @@ import { LivePagesProjection } from "../types/browser";
 import { LivePageProjectionStore } from "./LivePageProjectionStore";
 import { PlacementGenerationStore } from "./PlacementGenerationStore";
 import type {
+  DetachPlacementCommand,
   OpenReferenceCommand,
   OpenReferenceResult,
   ViewContextMenus,
@@ -183,7 +184,8 @@ export class ViewStore {
     if (
       !this.placementGenerations.acceptUpdate(
         update.placementId,
-        update.placementGeneration
+        update.placementGeneration,
+        update.transitionGeneration
       )
     ) {
       log.debug(
@@ -477,36 +479,49 @@ export class ViewStore {
   }
 
   /** Detach a notebook page while retaining its live WebContents. */
-  handleDetachView(viewId: string, placementGeneration?: number): void {
+  handleDetachView(command: DetachPlacementCommand): void {
+    const {
+      placementId,
+      placementGeneration,
+      transitionGeneration,
+    } = command;
     if (
-      !this.placementGenerations.acceptDetach(viewId, placementGeneration)
+      !this.placementGenerations.acceptDetach(
+        placementId,
+        placementGeneration,
+        transitionGeneration
+      )
     ) {
       log.debug(
-        `[${viewId}] Ignoring stale detach generation ${placementGeneration}`,
+        `[${placementId}] Ignoring stale detach generations ${JSON.stringify({
+          placementGeneration,
+          transitionGeneration,
+        })}`,
         "ViewStore"
       );
       return;
     }
-    const handleId = this.getHandleIdForPlacement(viewId);
+    const handleId = this.getHandleIdForPlacement(placementId);
     if (!handleId) {
-      log.debug(`[${viewId}] No handle found for detach`, "ViewStore");
+      log.debug(`[${placementId}] No handle found for detach`, "ViewStore");
       return;
     }
     if (!this.journeys.has(handleId)) {
-      this.handleRemoveView(viewId);
+      this.handleRemoveView(placementId);
       return;
     }
 
-    log.debug(`[${viewId}] Detaching live page`, "ViewStore");
+    log.debug(`[${placementId}] Detaching live page`, "ViewStore");
     this.interpreter.detachView(handleId);
     this.destroyEvictedViews(this.journeys.markDetached(handleId));
     this.publishLiveReferences();
     log.debug(
-      `[${viewId}] Detach committed: ${JSON.stringify({
+      `[${placementId}] Detach committed: ${JSON.stringify({
         handleId,
         placementGeneration,
+        transitionGeneration,
         journeyDetached: this.journeys.isDetached(handleId),
-        worldHasPlacement: this.getWorld().has(viewId),
+        worldHasPlacement: this.getWorld().has(placementId),
         handleRetained: this.getHandleRegistry().has(handleId),
       })}`,
       "ViewStore"

@@ -29,6 +29,12 @@ export type OpenReferenceIPCRequest = {
   transitionGeneration: number;
 };
 
+export type DetachPlacementIPCRequest = {
+  viewId: string;
+  placementGeneration: number;
+  transitionGeneration: number;
+};
+
 export type BrowserLifecycleEvent =
   | {
       blockId: string;

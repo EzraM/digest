@@ -159,10 +159,18 @@ describe("ViewStore fake-native integration", () => {
     });
     expect(store.getWorld().get("page:full")?.bounds.height).toBe(520);
 
-    store.handleDetachView("page:full", 1000);
+    store.handleDetachView({
+      placementId: "page:full",
+      placementGeneration: 1000,
+      transitionGeneration: 1000,
+    });
     advanceTime();
     expect(
-      store.openReference({ ...baseRequest, placementGeneration: 2000 })
+      store.openReference({
+        ...baseRequest,
+        placementGeneration: 2000,
+        transitionGeneration: 2000,
+      })
     ).toMatchObject({ outcome: "hit_current", loadAvoided: true });
 
     store.handleRemoveView("page:full");
@@ -220,7 +228,11 @@ describe("ViewStore fake-native integration", () => {
       attachSucceeds: false,
     });
     store.openReference(request("first:full"));
-    store.handleDetachView("first:full", 1000);
+    store.handleDetachView({
+      placementId: "first:full",
+      placementGeneration: 1000,
+      transitionGeneration: 1000,
+    });
     advanceTime();
 
     expect(
@@ -237,7 +249,11 @@ describe("ViewStore fake-native integration", () => {
   it("evicts an older detached renderer when a new journey exceeds capacity", () => {
     const { store, handles, request } = createHarness({ cacheLimit: 1 });
     store.openReference(request("first:full", "https://first.test/"));
-    store.handleDetachView("first:full", 1000);
+    store.handleDetachView({
+      placementId: "first:full",
+      placementGeneration: 1000,
+      transitionGeneration: 1000,
+    });
     store.openReference(
       request("second:full", "https://second.test/", 2000)
     );
@@ -252,13 +268,21 @@ describe("ViewStore fake-native integration", () => {
   it("rejects cleanup from the pre-reload renderer generation", () => {
     const { store, effects, request } = createHarness();
     store.openReference(request("page:full", undefined, 1000));
-    store.handleDetachView("page:full", 1000);
+    store.handleDetachView({
+      placementId: "page:full",
+      placementGeneration: 1000,
+      transitionGeneration: 1000,
+    });
     store.openReference(request("page:full", undefined, 2000));
     const detachCount = effects.filter(
       (effect) => effect.type === "detach"
     ).length;
 
-    store.handleDetachView("page:full", 1000);
+    store.handleDetachView({
+      placementId: "page:full",
+      placementGeneration: 1000,
+      transitionGeneration: 1000,
+    });
 
     expect(
       effects.filter((effect) => effect.type === "detach").length
@@ -272,7 +296,11 @@ describe("ViewStore fake-native integration", () => {
     const url = "https://identity.test/";
 
     store.openReference(request(retainedHandleId, url, 40));
-    store.handleDetachView(retainedHandleId, 40);
+    store.handleDetachView({
+      placementId: retainedHandleId,
+      placementGeneration: 40,
+      transitionGeneration: 40,
+    });
     const result = store.openReference({
       ...request(requestedPlacementId, url, 41),
       routeId: "route-PD-3772",

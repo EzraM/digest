@@ -3,23 +3,57 @@
  * Generations are monotonically increasing within the renderer process.
  */
 export class PlacementGenerationStore {
-  private activeByPlacement = new Map<string, number>();
-  private highestSeenByPlacement = new Map<string, number>();
+  private activeByPlacement = new Map<
+    string,
+    { placementGeneration: number; transitionGeneration: number }
+  >();
+  private highestPlacementGeneration = new Map<string, number>();
+  private highestTransitionGeneration = new Map<string, number>();
 
-  acceptUpdate(placementId: string, generation?: number): boolean {
-    if (generation === undefined) return true;
+  acceptUpdate(
+    placementId: string,
+    placementGeneration: number,
+    transitionGeneration: number
+  ): boolean {
     const active = this.activeByPlacement.get(placementId);
-    const highestSeen = this.highestSeenByPlacement.get(placementId);
-    if (active === generation) return true;
-    if (highestSeen !== undefined && generation <= highestSeen) return false;
-    this.activeByPlacement.set(placementId, generation);
-    this.highestSeenByPlacement.set(placementId, generation);
+    if (
+      active?.placementGeneration === placementGeneration &&
+      active.transitionGeneration === transitionGeneration
+    ) {
+      return true;
+    }
+    const highestPlacement = this.highestPlacementGeneration.get(placementId);
+    const highestTransition =
+      this.highestTransitionGeneration.get(placementId);
+    if (
+      (highestPlacement !== undefined &&
+        placementGeneration <= highestPlacement) ||
+      (highestTransition !== undefined &&
+        transitionGeneration <= highestTransition)
+    ) {
+      return false;
+    }
+    this.activeByPlacement.set(placementId, {
+      placementGeneration,
+      transitionGeneration,
+    });
+    this.highestPlacementGeneration.set(placementId, placementGeneration);
+    this.highestTransitionGeneration.set(placementId, transitionGeneration);
     return true;
   }
 
-  acceptDetach(placementId: string, generation?: number): boolean {
-    if (generation === undefined) return true;
-    if (this.activeByPlacement.get(placementId) !== generation) return false;
+  acceptDetach(
+    placementId: string,
+    placementGeneration: number,
+    transitionGeneration: number
+  ): boolean {
+    const active = this.activeByPlacement.get(placementId);
+    if (
+      active?.placementGeneration !== placementGeneration ||
+      active.transitionGeneration !== transitionGeneration
+    ) {
+      return false;
+    }
     this.activeByPlacement.delete(placementId);
     return true;
   }

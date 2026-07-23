@@ -3,6 +3,7 @@ import { DocumentRecord, DocumentTreeNode, ProfileRecord } from "./documents";
 import {
   BrowserLifecycleEvent,
   BrowserPageInfo,
+  DetachPlacementIPCRequest,
   LivePagesProjection,
   OpenReferenceIPCRequest,
 } from "./browser";
@@ -16,7 +17,7 @@ interface ElectronAPI {
   };
   updateBrowser: (data: OpenReferenceIPCRequest) => void;
   removeBrowser: (blockId: string) => void;
-  removeView: (viewId: string, placementGeneration?: number) => void;
+  removeView: (request: DetachPlacementIPCRequest) => void;
   browser: {
     getDevToolsState: (
       viewId: string

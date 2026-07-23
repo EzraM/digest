@@ -104,7 +104,11 @@ export function Page({
           visibilityState: document.visibilityState,
         })}`
       );
-      window.electronAPI.removeView(viewId, placementGeneration);
+      window.electronAPI.removeView({
+        viewId,
+        placementGeneration,
+        transitionGeneration: placementGeneration,
+      });
     };
   }, [viewId, layout, placementGeneration]);
 

@@ -30,6 +30,12 @@ export type OpenReferenceCommand = {
   transitionGeneration: number;
 };
 
+export type DetachPlacementCommand = {
+  placementId: string;
+  placementGeneration: number;
+  transitionGeneration: number;
+};
+
 export type OpenReferenceResult = {
   journeyId?: string;
   outcome: "hit_current" | "hit_history" | "miss";

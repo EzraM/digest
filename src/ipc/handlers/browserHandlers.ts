@@ -7,7 +7,10 @@ import {
   BrowserLoadStatus,
   BrowserPageInfo,
 } from "../../types/browser";
-import { parseOpenReferenceCommand } from "../BrowserPresentationIPC";
+import {
+  parseDetachPlacementCommand,
+  parseOpenReferenceCommand,
+} from "../BrowserPresentationIPC";
 
 export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
   const selectionCaptureService = new SelectionCaptureService();
@@ -125,15 +128,22 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "remove-view": {
       type: "on",
-      fn: (
-        _event,
-        data: { viewId: string; placementGeneration?: number } | string
-      ) => {
-        const viewId = typeof data === "string" ? data : data.viewId;
-        const placementGeneration =
-          typeof data === "string" ? undefined : data.placementGeneration;
-        log.debug(`Received detach request for view ${viewId}`, "main");
-        viewStore.handleDetachView(viewId, placementGeneration);
+      fn: (_event, data: unknown) => {
+        try {
+          const command = parseDetachPlacementCommand(data);
+          log.debug(
+            `Received detach request for placement ${command.placementId}`,
+            "main"
+          );
+          viewStore.handleDetachView(command);
+        } catch (error) {
+          log.error(
+            `Rejected remove-view event: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            "main"
+          );
+        }
       },
     },
     "browser:get-live-pages": {

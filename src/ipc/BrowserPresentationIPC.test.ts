@@ -1,4 +1,7 @@
-import { parseOpenReferenceCommand } from "./BrowserPresentationIPC";
+import {
+  parseDetachPlacementCommand,
+  parseOpenReferenceCommand,
+} from "./BrowserPresentationIPC";
 
 const validRequest = {
   viewId: "primary-browser",
@@ -57,5 +60,32 @@ describe("browser presentation IPC contract", () => {
     }
 
     expect(message).toBe("Invalid browser presentation field: bounds");
+  });
+
+  it("requires both generations when detaching a placement", () => {
+    expect(
+      parseDetachPlacementCommand({
+        viewId: "primary-browser",
+        placementGeneration: 7,
+        transitionGeneration: 11,
+      })
+    ).toEqual({
+      placementId: "primary-browser",
+      placementGeneration: 7,
+      transitionGeneration: 11,
+    });
+
+    let message = "";
+    try {
+      parseDetachPlacementCommand({
+        viewId: "primary-browser",
+        placementGeneration: 7,
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toBe(
+      "Invalid browser presentation field: transitionGeneration"
+    );
   });
 });

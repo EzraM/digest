@@ -5,6 +5,7 @@ import { log } from "./utils/mainLogger";
 import {
   BrowserLifecycleEvent,
   BrowserPageInfo,
+  DetachPlacementIPCRequest,
   LivePagesProjection,
   OpenReferenceIPCRequest,
 } from "./types/browser";
@@ -45,9 +46,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeBrowser: (blockId: string) => {
     ipcRenderer.send("remove-browser", blockId);
   },
-  removeView: (viewId: string, placementGeneration?: number) => {
-    log.debug(`Removing view ${viewId}`, "preload");
-    ipcRenderer.send("remove-view", { viewId, placementGeneration });
+  removeView: (request: DetachPlacementIPCRequest) => {
+    log.debug(`Removing view ${request.viewId}`, "preload");
+    ipcRenderer.send("remove-view", request);
   },
   browser: {
     getDevToolsState: (blockId: string) =>

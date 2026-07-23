@@ -5,12 +5,22 @@ describe("PlacementGenerationStore", () => {
   it("rejects cleanup from an older React mount", () => {
     const generations = new PlacementGenerationStore();
 
-    expect(generations.acceptUpdate("page:full", 1)).toBe(true);
-    expect(generations.acceptUpdate("page:full", 2)).toBe(true);
-    expect(generations.acceptDetach("page:full", 1)).toBe(false);
-    expect(generations.acceptDetach("page:full", 2)).toBe(true);
-    expect(generations.acceptUpdate("page:full", 2)).toBe(false);
-    expect(generations.acceptUpdate("page:full", 3)).toBe(true);
+    expect(generations.acceptUpdate("page:full", 1, 1)).toBe(true);
+    expect(generations.acceptUpdate("page:full", 2, 2)).toBe(true);
+    expect(generations.acceptDetach("page:full", 1, 1)).toBe(false);
+    expect(generations.acceptDetach("page:full", 2, 2)).toBe(true);
+    expect(generations.acceptUpdate("page:full", 2, 2)).toBe(false);
+    expect(generations.acceptUpdate("page:full", 3, 3)).toBe(true);
+  });
+
+  it("rejects a command when either generation is stale", () => {
+    const generations = new PlacementGenerationStore();
+
+    expect(generations.acceptUpdate("page:full", 10, 20)).toBe(true);
+    expect(generations.acceptUpdate("page:full", 11, 19)).toBe(false);
+    expect(generations.acceptUpdate("page:full", 9, 21)).toBe(false);
+    expect(generations.acceptDetach("page:full", 10, 19)).toBe(false);
+    expect(generations.acceptDetach("page:full", 10, 20)).toBe(true);
   });
 
   it("survives randomized delivery while preserving the newest mount", () => {
@@ -24,7 +34,11 @@ describe("PlacementGenerationStore", () => {
       for (let step = 0; step < operationCount; step += 1) {
         const generation = random(20) + 1;
         if (random(3) < 2) {
-          const accepted = generations.acceptUpdate("page:full", generation);
+          const accepted = generations.acceptUpdate(
+            "page:full",
+            generation,
+            generation
+          );
           if (
             generation > highestSeen ||
             (generation === newestActive && newestActive !== 0)
@@ -36,7 +50,11 @@ describe("PlacementGenerationStore", () => {
             expect(accepted).toBe(false);
           }
         } else {
-          const accepted = generations.acceptDetach("page:full", generation);
+          const accepted = generations.acceptDetach(
+            "page:full",
+            generation,
+            generation
+          );
           expect(accepted).toBe(
             generation === newestActive && newestActive !== 0
           );
