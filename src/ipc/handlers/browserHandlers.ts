@@ -6,8 +6,8 @@ import { toBlockId } from "../../utils/viewId";
 import {
   BrowserLoadStatus,
   BrowserPageInfo,
-  OpenReferenceIPCRequest,
 } from "../../types/browser";
+import { parseOpenReferenceCommand } from "../BrowserPresentationIPC";
 
 export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
   const selectionCaptureService = new SelectionCaptureService();
@@ -99,23 +99,22 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "update-browser-view": {
       type: "on",
-      fn: (_event, data: OpenReferenceIPCRequest) => {
-        log.debug(
-          `Received update-browser-view event for view ${data.viewId}`,
-          "main"
-        );
-        viewStore.openReference({
-          routeId: data.routeId,
-          placementId: data.viewId,
-          referenceId: data.blockId,
-          url: data.url,
-          bounds: data.bounds,
-          profileId: data.profileId,
-          layout: data.layout,
-          referenceKind: data.referenceKind,
-          placementGeneration: data.placementGeneration,
-          transitionGeneration: data.transitionGeneration,
-        });
+      fn: (_event, data: unknown) => {
+        try {
+          const command = parseOpenReferenceCommand(data);
+          log.debug(
+            `Received update-browser-view event for placement ${command.placementId}`,
+            "main"
+          );
+          viewStore.openReference(command);
+        } catch (error) {
+          log.error(
+            `Rejected update-browser-view event: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            "main"
+          );
+        }
       },
     },
     "remove-view": {
