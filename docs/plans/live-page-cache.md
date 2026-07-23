@@ -395,15 +395,24 @@ The first useful vertical slice is working for both legacy site blocks and norma
 - Full-page ephemeral URL routes are retained as live journeys. “Ephemeral” now describes route durability rather than whether the browser runtime may be cached.
 - Leaving a retained page detaches its `WebContentsView`; reopening the same normalized URL in the same profile reattaches it without `loadURL()`.
 - Current-document reuse is intentionally distinct from an older URL merely visited by the journey. Older entries are reused only when their recorded Chromium history index still contains the exact normalized URL.
-- `ViewStore.openReference()` is the authoritative main-process opening workflow used by the existing renderer update channel.
-- Opening policy and miss classification live in the functional core (`BrowsingJourneyStore` and `LivePageOpenPolicy`); `ViewStore` orchestrates the workflow, `Interpreter` executes Electron view effects, and placement changes are committed only after attachment succeeds.
+- `BrowserPresentationCoordinator.openReference()` is the authoritative
+  main-process opening workflow used by the renderer update channel.
+- Opening policy and miss classification live in the functional core
+  (`BrowsingJourneyStore` and `LivePageOpenPolicy`);
+  `ApplicationJourneyAllocator` owns the shared pool,
+  `BrowserPresentationCoordinator` orchestrates the workflow, and each
+  `WindowPresentationStore` executes window-local Electron effects. Placement
+  changes are committed only after attachment succeeds.
 - Attachment failure and destroyed renderer paths discard stale journey state and fall back to fresh creation.
 - Migration 8 creates `live_page_cache_attempts`. Opens record privacy-conscious `hit_current` or `miss` outcomes, miss reasons, hashed URL/profile identity, cache occupancy, and `load_avoided` without storing complete URLs.
 - Application logs confirmed repeated normal-link opens detach and reattach the same live journey with no second `Creating new view` or `Loading URL` event.
 - The renderer now receives a complete runtime-only projection of current live pages keyed by profile and normalized URL. The initial snapshot is fetched through IPC, and the main process republishes it after creation, reuse, navigation, detach, eviction, and destruction.
 - Site blocks and ordinary inline notebook links render a restrained green dot when their profile and URL resolve to a current live page. The indicator has the accessible description and tooltip “Page is kept live.”
 - Liveness is not written into BlockNote props or SQLite notebook content. Journey and handle identity remain main-process implementation details.
-- `NotificationLayer` owns renderer IPC for live-reference, placement-ready, navigation, and browser-selection events. `ViewStore` decides when domain changes warrant notification but does not access renderer `WebContents` or call `send()` directly.
+- `NotificationLayer` owns renderer IPC for live-reference, placement-ready,
+  navigation, and browser-selection events. Application live-reference changes
+  are published to every subscribed window store; window stores do not access
+  renderer `WebContents` or call `send()` directly.
 - Logical Back boundaries are deferred and are no longer required for the next implementation stages.
 - Manual `scrollPercent` capture, persistence, IPC, and restoration have been removed. Existing document properties are tolerated as ignored legacy data.
 
@@ -412,7 +421,9 @@ Remaining work is primarily richer miss diagnostics and eviction tombstones, ref
 ### Lifecycle verification update: July 22, 2026
 
 - Renderer placements carry monotonically increasing generations. The main process rejects delayed updates and detach messages from older React mounts, retaining a high-water mark after detach so stale updates cannot resurrect a view.
-- Browser event attachment now returns an explicit disposer, and `ViewStore` disposes a view's Electron listeners before destruction.
+- Browser event attachment now returns an explicit disposer, and
+  `WindowPresentationStore` disposes a view's Electron listeners before
+  destruction or cross-window transfer.
 - Download handling is owned once per Electron profile session rather than installed once per `WebContentsView`.
 - Seeded tests now cover queued renderer/main lifecycle delivery in addition to pure journey-store transitions.
 

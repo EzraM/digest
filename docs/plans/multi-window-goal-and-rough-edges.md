@@ -2,10 +2,21 @@
 
 ## Status
 
-This is a problem-framing document, not an implementation plan.
+The browser-presentation ownership split described here was implemented on
+July 23, 2026:
 
-It records the user experience we want, the assumptions that do not yet hold in
-the current architecture, and the boundaries that should guide a later design.
+- `ApplicationJourneyAllocator` owns the application journey catalog, shared
+  native-handle registry, reservations, retention, and live-page projection.
+- `BrowserPresentationCoordinator` resolves placements, selects and reserves
+  journeys, coordinates native effects, and commits or repairs allocation.
+- Each `WindowPresentationStore` owns one window's generations, local
+  presentation world, listeners, bounds/layers, and renderer notifications.
+- `PlacementRegistry` remains the authority used to resolve a placement to its
+  owning window store.
+
+The rest of this document preserves the original problem framing and design
+rationale. Other multi-window rough edges described below are not implicitly
+complete merely because the browser-presentation split is complete.
 
 ## Motivation
 
