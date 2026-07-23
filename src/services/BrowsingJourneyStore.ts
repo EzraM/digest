@@ -247,6 +247,7 @@ export class BrowsingJourneyStore {
       this.activeMappingByPlacementId.delete(activePlacementId);
       this.activePlacementIdByHandleId.delete(handleId);
     }
+    this.assertActiveMappingInvariant();
     return this.enforceLimit(journey.profileId);
   }
 
@@ -437,6 +438,7 @@ export class BrowsingJourneyStore {
       ids?.delete(journey.journeyId);
       if (ids?.size === 0) this.journeyIdsByProfileUrl.delete(key);
     }
+    this.assertActiveMappingInvariant();
   }
 
   /** Keep the handle/placement relationship one-to-one across stale events. */
@@ -460,6 +462,45 @@ export class BrowsingJourneyStore {
       handleId,
     });
     this.activePlacementIdByHandleId.set(handleId, placementId);
+    this.assertActiveMappingInvariant();
+  }
+
+  private assertActiveMappingInvariant(): void {
+    for (const [placementId, mapping] of this.activeMappingByPlacementId) {
+      const actualJourneyId = this.journeyIdByHandle.get(mapping.handleId);
+      const actualPlacementId = this.activePlacementIdByHandleId.get(
+        mapping.handleId
+      );
+      if (
+        mapping.placementId !== placementId ||
+        actualJourneyId !== mapping.journeyId ||
+        actualPlacementId !== placementId
+      ) {
+        throw new Error(
+          `Browser identity invariant failed: ${JSON.stringify({
+            placementId,
+            journeyId: mapping.journeyId,
+            handleId: mapping.handleId,
+            actualJourneyId,
+            actualPlacementId,
+          })}`
+        );
+      }
+    }
+
+    for (const [handleId, placementId] of this.activePlacementIdByHandleId) {
+      const mapping = this.activeMappingByPlacementId.get(placementId);
+      if (!mapping || mapping.handleId !== handleId) {
+        throw new Error(
+          `Browser identity invariant failed: ${JSON.stringify({
+            placementId,
+            journeyId: this.journeyIdByHandle.get(handleId),
+            handleId,
+            mappedHandleId: mapping?.handleId,
+          })}`
+        );
+      }
+    }
   }
 
   private urlKey(profileId: string, url: string): string {
