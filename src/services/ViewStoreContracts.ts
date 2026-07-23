@@ -105,6 +105,7 @@ export interface ViewHandleOperations {
 
 export type ViewStoreDependencies = {
   now?: () => number;
+  createHandleId?: (placementId: string) => string;
   journeys?: BrowsingJourneyStore;
   livePages?: LivePageProjectionStore;
   handles?: HandleRegistry;

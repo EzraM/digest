@@ -1,4 +1,5 @@
 import { BrowserWindow, WebContents, WebContentsView } from "electron";
+import { randomUUID } from "node:crypto";
 import {
   ViewEntry,
   ViewWorld,
@@ -59,6 +60,7 @@ export class ViewStore {
   private journeys: BrowsingJourneyStore;
   private livePages: LivePageProjectionStore;
   private readonly now: () => number;
+  private readonly createHandleId: (placementId: string) => string;
   private placementGenerations = new PlacementGenerationStore();
 
   // Rate limiting: track pending creates to prevent duplicate URL loads
@@ -74,6 +76,8 @@ export class ViewStore {
     dependencies: ViewStoreDependencies = {}
   ) {
     this.now = dependencies.now ?? Date.now;
+    this.createHandleId =
+      dependencies.createHandleId ?? (() => `handle-${randomUUID()}`);
     this.journeys = dependencies.journeys ?? new BrowsingJourneyStore(10);
     this.livePages = dependencies.livePages ?? new LivePageProjectionStore();
     this.handles = dependencies.handles ?? new HandleRegistry();
@@ -344,23 +348,27 @@ export class ViewStore {
       url: update.url,
       timestamp: now,
     });
+    const handleId =
+      update.layout === "full"
+        ? this.createHandleId(update.placementId)
+        : update.placementId;
     this.dispatch({
       type: "create",
-      id: update.placementId,
+      id: handleId,
       url: update.url,
       bounds: update.bounds,
       profile: update.profileId,
       layout: update.layout,
     });
 
-    const createdView = this.handles.get(update.placementId);
+    const createdView = this.handles.get(handleId);
     const rendererAvailable = Boolean(
       createdView && !createdView.webContents.isDestroyed()
     );
     if (shouldRetainJourney(update.layout) && rendererAvailable) {
       this.destroyEvictedViews(
         this.journeys.addVisible(
-          update.placementId,
+          handleId,
           update.profileId,
           update.url,
           {
@@ -374,7 +382,7 @@ export class ViewStore {
       this.publishLiveReferences();
     }
     return this.finishCacheAttempt(update, diagnostics, {
-      journeyId: this.journeys.getJourneyId(update.placementId),
+      journeyId: this.journeys.getJourneyId(handleId),
       outcome: "miss",
       missReason: rendererAvailable ? missReason : "renderer_unavailable",
       loadAvoided: false,

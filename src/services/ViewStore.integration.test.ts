@@ -28,6 +28,8 @@ function fakeView(url: string): WebContentsView {
   return { webContents } as WebContentsView;
 }
 
+const handleIdFor = (placementId: string) => `native:${placementId}`;
+
 function createHarness(options: {
   attachSucceeds?: boolean;
   cacheLimit?: number;
@@ -103,6 +105,7 @@ function createHarness(options: {
     undefined,
     {
       now: () => now,
+      createHandleId: handleIdFor,
       journeys: new BrowsingJourneyStore(options.cacheLimit ?? 10),
       handles,
       notifications,
@@ -151,13 +154,15 @@ describe("ViewStore fake-native integration", () => {
       outcome: "miss",
       loadAvoided: false,
     });
-    expect(handles.has("page:full")).toBe(true);
+    expect(handles.has(handleIdFor("page:full"))).toBe(true);
 
     store.openReference({
       ...baseRequest,
       bounds: { ...baseRequest.bounds, height: 520 },
     });
-    expect(store.getWorld().get("page:full")?.bounds.height).toBe(520);
+    expect(
+      store.getWorld().get(handleIdFor("page:full"))?.bounds.height
+    ).toBe(520);
 
     store.handleDetachView({
       placementId: "page:full",
@@ -174,7 +179,7 @@ describe("ViewStore fake-native integration", () => {
     ).toMatchObject({ outcome: "hit_current", loadAvoided: true });
 
     store.handleRemoveView("page:full");
-    expect(handles.has("page:full")).toBe(false);
+    expect(handles.has(handleIdFor("page:full"))).toBe(false);
     expect(effects.map((effect) => effect.type)).toEqual([
       "create",
       "listeners-attached",
@@ -196,15 +201,15 @@ describe("ViewStore fake-native integration", () => {
 
     store.dispatch({
       type: "rendererGone",
-      id: "page:full",
+      id: handleIdFor("page:full"),
       reason: "crashed",
     });
     const effectCountAfterCrash = effects.length;
-    store.dispatch({ type: "markReady", id: "page:full" });
+    store.dispatch({ type: "markReady", id: handleIdFor("page:full") });
 
-    expect(store.getWorld().has("page:full")).toBe(false);
+    expect(store.getWorld().has(handleIdFor("page:full"))).toBe(false);
     expect(store.getLiveReferences()).toEqual([]);
-    expect(handles.has("page:full")).toBe(false);
+    expect(handles.has(handleIdFor("page:full"))).toBe(false);
     expect(effects.length).toBe(effectCountAfterCrash);
   });
 
@@ -213,14 +218,14 @@ describe("ViewStore fake-native integration", () => {
     store.openReference(request("page:full"));
     store.dispatch({
       type: "rendererGone",
-      id: "page:full",
+      id: handleIdFor("page:full"),
       reason: "crashed",
     });
 
     expect(
       store.openReference(request("page:full", undefined, 2000))
     ).toMatchObject({ outcome: "miss", loadAvoided: false });
-    expect(handles.has("page:full")).toBe(true);
+    expect(handles.has(handleIdFor("page:full"))).toBe(true);
   });
 
   it("destroys a failed reuse candidate and creates a fresh view", () => {
@@ -242,8 +247,8 @@ describe("ViewStore fake-native integration", () => {
       missReason: "attach_failed",
       loadAvoided: false,
     });
-    expect(handles.has("first:full")).toBe(false);
-    expect(handles.has("second:full")).toBe(true);
+    expect(handles.has(handleIdFor("first:full"))).toBe(false);
+    expect(handles.has(handleIdFor("second:full"))).toBe(true);
   });
 
   it("evicts an older detached renderer when a new journey exceeds capacity", () => {
@@ -258,8 +263,8 @@ describe("ViewStore fake-native integration", () => {
       request("second:full", "https://second.test/", 2000)
     );
 
-    expect(handles.has("first:full")).toBe(false);
-    expect(handles.has("second:full")).toBe(true);
+    expect(handles.has(handleIdFor("first:full"))).toBe(false);
+    expect(handles.has(handleIdFor("second:full"))).toBe(true);
     expect(store.getLiveReferences()).toEqual([
       { profileId: "profile", url: "https://second.test/" },
     ]);
@@ -291,13 +296,14 @@ describe("ViewStore fake-native integration", () => {
 
   it("traces retained-handle reuse with one complete identity mapping", () => {
     const { store, effects, request } = createHarness();
-    const retainedHandleId = "ephemeral-profile/browse/PS-5606:full";
+    const retainedPlacementId = "ephemeral-profile/browse/PS-5606:full";
+    const retainedHandleId = handleIdFor(retainedPlacementId);
     const requestedPlacementId = "ephemeral-profile/browse/PD-3772:full";
     const url = "https://identity.test/";
 
-    store.openReference(request(retainedHandleId, url, 40));
+    store.openReference(request(retainedPlacementId, url, 40));
     store.handleDetachView({
-      placementId: retainedHandleId,
+      placementId: retainedPlacementId,
       placementGeneration: 40,
       transitionGeneration: 40,
     });
