@@ -1,5 +1,63 @@
-.left-rail__browser-back {
+.left-rail {
   box-sizing: border-box;
+  gap: 0;
+  padding: 0;
+  background: #fff;
+}
+
+.left-rail button {
+  box-sizing: border-box;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #666c80;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background-color 150ms ease, color 150ms ease, transform 100ms ease;
+  position: relative;
+}
+
+.left-rail button::before {
+  position: absolute;
+  inset: 4px 3px;
+  border-radius: 8px;
+  background: rgba(99, 112, 174, 0.055);
+  content: "";
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.left-rail button > * {
+  position: relative;
+  z-index: 1;
+}
+
+.left-rail button:hover:not(:disabled) {
+  background: transparent;
+  color: #505b96;
+}
+
+.left-rail button:hover:not(:disabled)::before {
+  background: rgba(91, 105, 175, 0.13);
+}
+
+.left-rail button:active:not(:disabled) {
+  background: transparent;
+}
+
+.left-rail button:active:not(:disabled)::before {
+  background: rgba(82, 96, 166, 0.18);
+}
+
+.left-rail button:focus-visible {
+  outline: 2px solid rgba(82, 100, 186, 0.45);
+  outline-offset: 1px;
+}
+
+.left-rail__browser-back {
   flex: 0 0 0%;
   min-height: 0;
   overflow: hidden;
@@ -34,35 +92,45 @@
   min-height: 0;
 }
 
+.left-rail__notebook::before {
+  background: rgba(116, 96, 184, 0.06);
+}
+
+.left-rail__notebook:hover::before {
+  background: rgba(116, 96, 184, 0.14) !important;
+}
+
+.left-rail__notebook span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
 .left-rail__add {
-  box-sizing: border-box;
   flex: 0 0 15%;
   min-height: 2rem;
-  border: 0;
-  border-right: 1px solid #1864ab;
-  border-bottom: 1px solid #1864ab;
-  background: #228be6;
-  color: #fff;
-  cursor: pointer;
-  font-size: 22px;
+  color: #59669c !important;
+  font-size: 20px;
   font-weight: 400;
   line-height: 1;
-  transition:
-    background-color 150ms ease,
-    transform 100ms ease;
 }
 
 .left-rail__add:hover {
-  background: #1c7ed6;
+  background: transparent !important;
 }
 
-.left-rail__add:active {
-  background: #1971c2;
+.left-rail__add::before {
+  background: rgba(77, 145, 205, 0.075);
+}
+
+.left-rail__add:hover::before {
+  background: rgba(77, 145, 205, 0.16) !important;
 }
 
 .left-rail__add:disabled {
   cursor: wait;
-  opacity: 0.75;
+  opacity: 0.55;
 }
 
 @media (prefers-reduced-motion: reduce) {

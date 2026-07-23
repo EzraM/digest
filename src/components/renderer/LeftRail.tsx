@@ -1,6 +1,4 @@
-import React, { useState } from "react";
-import { useMantineColorScheme } from "@mantine/core";
-import { sidebarButtonColors } from "../../config/theme";
+import React from "react";
 import { AddPageButton } from "../clip/AddPageButton";
 import "./LeftRail.css";
 
@@ -63,19 +61,9 @@ export const LeftRail = ({
   isNavigatingBrowserBack,
   onBrowserBack,
 }: LeftRailProps) => {
-  const [hoveredButton, setHoveredButton] = useState<"browser" | "document" | null>(
-    null
-  );
-  const { colorScheme } = useMantineColorScheme();
-  const documentColors =
-    sidebarButtonColors.close[colorScheme === "dark" ? "dark" : "light"];
-  const browserColors =
-    sidebarButtonColors.browserBack[
-      colorScheme === "dark" ? "dark" : "light"
-    ];
-
   return (
     <div
+      className="left-rail"
       style={{
         width: "2rem",
         height: "100%",
@@ -92,28 +80,8 @@ export const LeftRail = ({
         disabled={!canGoBrowserBack || isNavigatingBrowserBack}
         tabIndex={canGoBrowserBack ? 0 : -1}
         aria-hidden={!canGoBrowserBack}
-        style={{
-          width: "100%",
-          border: "none",
-          borderRight: `1px solid ${browserColors.border}`,
-          borderBottom: `1px solid ${browserColors.border}`,
-          backgroundColor:
-            hoveredButton === "browser"
-              ? browserColors.hover
-              : browserColors.background,
-          color: browserColors.text,
-          cursor: canGoBrowserBack ? "pointer" : "default",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 0,
-          fontSize: "16px",
-          fontWeight: 600,
-        }}
         title={canGoBrowserBack ? "Go back in browser" : undefined}
         aria-label={canGoBrowserBack ? "Go back in browser" : undefined}
-        onMouseEnter={() => setHoveredButton("browser")}
-        onMouseLeave={() => setHoveredButton(null)}
       >
         {isNavigatingBrowserBack ? "…" : <BrowserBackIcon />}
       </button>
@@ -121,35 +89,10 @@ export const LeftRail = ({
         className="left-rail__notebook"
         type="button"
         onClick={onBack}
-        style={{
-          width: "100%",
-          border: "none",
-          borderRight: `1px solid ${documentColors.border}`,
-          backgroundColor:
-            hoveredButton === "document"
-              ? documentColors.hover
-              : documentColors.background,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 0,
-          transition: "background-color 150ms ease",
-        }}
         title="Back to document"
         aria-label="Back to document"
-        onMouseEnter={() => setHoveredButton("document")}
-        onMouseLeave={() => setHoveredButton(null)}
       >
-        <span
-          style={{
-            color: documentColors.text,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            userSelect: "none",
-          }}
-        >
+        <span>
           <NotebookIcon />
         </span>
       </button>

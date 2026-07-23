@@ -1,4 +1,5 @@
 .app-title-bar {
+  box-sizing: border-box;
   -webkit-app-region: drag;
   user-select: none;
 }
