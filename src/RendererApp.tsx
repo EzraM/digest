@@ -22,7 +22,6 @@ import { DocumentProvider } from "./context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "./config/profiles";
 import { useActiveProfileData } from "./hooks/useActiveProfileData";
 import { AppRouteProvider, useAppRoute } from "./context/AppRouteContext";
-import { toFullViewId } from "./utils/viewId";
 import { PageToolSlotProvider } from "./context/PageToolSlotContext";
 import { useBrowserSelection } from "./hooks/useBrowserSelection";
 import { useBrowserImageClips } from "./hooks/useBrowserImageClips";
@@ -31,6 +30,8 @@ import { LinkCaptureNotification } from "./domains/link-capture/ui/LinkCaptureNo
 import { useLinkCaptureNotification } from "./domains/link-capture/ui/useLinkCaptureNotification";
 import { DownloadProvider } from "./domains/downloads/ui/DownloadContext";
 import { DownloadNotification } from "./domains/downloads/ui/DownloadNotification";
+
+const PRIMARY_BROWSER_PLACEMENT_ID = "primary-browser";
 import { useDownloadNotification } from "./domains/downloads/ui/useDownloadNotification";
 import { StatusBar } from "./components/renderer/StatusBar";
 import { useStatusBar } from "./hooks/useStatusBar";
@@ -341,7 +342,7 @@ const RendererAppContent = () => {
           profileId={activeDocument?.profileId ?? null}
           url={blockRouteProps?.url ?? null}
           title={blockRouteProps?.title ?? "Block"}
-          viewId={toFullViewId(route.blockId)}
+          viewId={PRIMARY_BROWSER_PLACEMENT_ID}
           editor={editor}
           onUrlChange={(nextUrl) =>
             updateCachedBlockUrl(route.blockId, nextUrl)
@@ -355,7 +356,7 @@ const RendererAppContent = () => {
           profileId={activeDocument?.profileId ?? null}
           url={route.url}
           title={route.url}
-          viewId={toFullViewId(`ephemeral-${btoa(route.url).replace(/[^a-zA-Z0-9]/g, '')}`)}
+          viewId={PRIMARY_BROWSER_PLACEMENT_ID}
           editor={editor}
         />
       )}

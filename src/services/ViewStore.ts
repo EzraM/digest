@@ -202,18 +202,32 @@ export class ViewStore {
     const handleId =
       this.getHandleIdForPlacement(update.placementId) ?? update.placementId;
     const existing = this.world.get(handleId);
+    const activeMapping = this.journeys.getActiveMapping(update.placementId);
     const diagnostics = this.journeys.getDiagnostics(
       update.profileId,
       update.url
     );
 
-    if (existing) {
+    if (
+      existing &&
+      activeMapping?.routeId === update.routeId &&
+      activeMapping.transitionGeneration === update.transitionGeneration
+    ) {
       return this.updateExistingReference(
         update,
         handleId,
         existing,
         diagnostics
       );
+    }
+    if (existing && activeMapping) {
+      log.debug(
+        `[${update.placementId}] Releasing previous slot occupant: ${JSON.stringify(activeMapping)}`,
+        "ViewStore"
+      );
+      this.interpreter.detachView(handleId);
+      this.destroyEvictedViews(this.journeys.markDetached(handleId));
+      this.publishLiveReferences();
     }
 
     const corePlan = this.journeys.planOpenReference({

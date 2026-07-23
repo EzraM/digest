@@ -28,7 +28,7 @@ function fakeView(url: string): WebContentsView {
   return { webContents } as WebContentsView;
 }
 
-const handleIdFor = (placementId: string) => `native:${placementId}`;
+const firstHandleIdFor = (placementId: string) => `native:${placementId}:1`;
 
 function createHarness(options: {
   attachSucceeds?: boolean;
@@ -37,6 +37,7 @@ function createHarness(options: {
   const effects: Effect[] = [];
   const handles = new HandleRegistry();
   let now = 100;
+  let nextHandleId = 0;
   const notifications: ViewNotifications = {
     notify: () => undefined,
     notifyPlacementReady: (identity) =>
@@ -105,7 +106,8 @@ function createHarness(options: {
     undefined,
     {
       now: () => now,
-      createHandleId: handleIdFor,
+      createHandleId: (placementId) =>
+        `native:${placementId}:${++nextHandleId}`,
       journeys: new BrowsingJourneyStore(options.cacheLimit ?? 10),
       handles,
       notifications,
@@ -154,14 +156,14 @@ describe("ViewStore fake-native integration", () => {
       outcome: "miss",
       loadAvoided: false,
     });
-    expect(handles.has(handleIdFor("page:full"))).toBe(true);
+    expect(handles.has(firstHandleIdFor("page:full"))).toBe(true);
 
     store.openReference({
       ...baseRequest,
       bounds: { ...baseRequest.bounds, height: 520 },
     });
     expect(
-      store.getWorld().get(handleIdFor("page:full"))?.bounds.height
+      store.getWorld().get(firstHandleIdFor("page:full"))?.bounds.height
     ).toBe(520);
 
     store.handleDetachView({
@@ -179,7 +181,7 @@ describe("ViewStore fake-native integration", () => {
     ).toMatchObject({ outcome: "hit_current", loadAvoided: true });
 
     store.handleRemoveView("page:full");
-    expect(handles.has(handleIdFor("page:full"))).toBe(false);
+    expect(handles.has(firstHandleIdFor("page:full"))).toBe(false);
     expect(effects.map((effect) => effect.type)).toEqual([
       "create",
       "listeners-attached",
@@ -201,15 +203,15 @@ describe("ViewStore fake-native integration", () => {
 
     store.dispatch({
       type: "rendererGone",
-      id: handleIdFor("page:full"),
+      id: firstHandleIdFor("page:full"),
       reason: "crashed",
     });
     const effectCountAfterCrash = effects.length;
-    store.dispatch({ type: "markReady", id: handleIdFor("page:full") });
+    store.dispatch({ type: "markReady", id: firstHandleIdFor("page:full") });
 
-    expect(store.getWorld().has(handleIdFor("page:full"))).toBe(false);
+    expect(store.getWorld().has(firstHandleIdFor("page:full"))).toBe(false);
     expect(store.getLiveReferences()).toEqual([]);
-    expect(handles.has(handleIdFor("page:full"))).toBe(false);
+    expect(handles.has(firstHandleIdFor("page:full"))).toBe(false);
     expect(effects.length).toBe(effectCountAfterCrash);
   });
 
@@ -218,14 +220,14 @@ describe("ViewStore fake-native integration", () => {
     store.openReference(request("page:full"));
     store.dispatch({
       type: "rendererGone",
-      id: handleIdFor("page:full"),
+      id: firstHandleIdFor("page:full"),
       reason: "crashed",
     });
 
     expect(
       store.openReference(request("page:full", undefined, 2000))
     ).toMatchObject({ outcome: "miss", loadAvoided: false });
-    expect(handles.has(handleIdFor("page:full"))).toBe(true);
+    expect(handles.has("native:page:full:2")).toBe(true);
   });
 
   it("destroys a failed reuse candidate and creates a fresh view", () => {
@@ -247,8 +249,8 @@ describe("ViewStore fake-native integration", () => {
       missReason: "attach_failed",
       loadAvoided: false,
     });
-    expect(handles.has(handleIdFor("first:full"))).toBe(false);
-    expect(handles.has(handleIdFor("second:full"))).toBe(true);
+    expect(handles.has(firstHandleIdFor("first:full"))).toBe(false);
+    expect(handles.has("native:second:full:2")).toBe(true);
   });
 
   it("evicts an older detached renderer when a new journey exceeds capacity", () => {
@@ -263,8 +265,8 @@ describe("ViewStore fake-native integration", () => {
       request("second:full", "https://second.test/", 2000)
     );
 
-    expect(handles.has(handleIdFor("first:full"))).toBe(false);
-    expect(handles.has(handleIdFor("second:full"))).toBe(true);
+    expect(handles.has(firstHandleIdFor("first:full"))).toBe(false);
+    expect(handles.has("native:second:full:2")).toBe(true);
     expect(store.getLiveReferences()).toEqual([
       { profileId: "profile", url: "https://second.test/" },
     ]);
@@ -297,7 +299,7 @@ describe("ViewStore fake-native integration", () => {
   it("traces retained-handle reuse with one complete identity mapping", () => {
     const { store, effects, request } = createHarness();
     const retainedPlacementId = "ephemeral-profile/browse/PS-5606:full";
-    const retainedHandleId = handleIdFor(retainedPlacementId);
+    const retainedHandleId = firstHandleIdFor(retainedPlacementId);
     const requestedPlacementId = "ephemeral-profile/browse/PD-3772:full";
     const url = "https://identity.test/";
 
@@ -333,5 +335,31 @@ describe("ViewStore fake-native integration", () => {
         transitionGeneration: 17,
       },
     });
+  });
+
+  it("switches the journey occupying one stable full-page placement", () => {
+    const { store, effects, handles, request } = createHarness();
+    const placementId = "primary-browser";
+    const firstHandleId = firstHandleIdFor(placementId);
+
+    store.openReference({
+      ...request(placementId, "https://first.test/", 10),
+      routeId: "block:first",
+    });
+    store.openReference({
+      ...request(placementId, "https://second.test/", 20),
+      routeId: "block:second",
+    });
+
+    const activeHandleId = store.getHandleIdForPlacement(placementId);
+    expect(activeHandleId).toBe("native:primary-browser:2");
+    expect(handles.has(firstHandleId)).toBe(true);
+    expect(
+      effects.filter((effect) => effect.type === "detach").slice(-1)[0]
+    ).toEqual({ type: "detach", id: firstHandleId });
+    expect(store.getLiveReferences()).toEqual([
+      { profileId: "profile", url: "https://first.test/" },
+      { profileId: "profile", url: "https://second.test/" },
+    ]);
   });
 });
