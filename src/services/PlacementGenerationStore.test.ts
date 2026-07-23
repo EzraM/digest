@@ -28,37 +28,47 @@ describe("PlacementGenerationStore", () => {
     for (let seed = firstSeed; seed < firstSeed + seedCount; seed += 1) {
       const random = seededIndex(seed);
       const generations = new PlacementGenerationStore();
-      let newestActive = 0;
-      let highestSeen = 0;
+      let active:
+        | { placementGeneration: number; transitionGeneration: number }
+        | undefined;
+      let highestPlacement = 0;
+      let highestTransition = 0;
 
       for (let step = 0; step < operationCount; step += 1) {
-        const generation = random(20) + 1;
+        const placementGeneration = random(20) + 1;
+        const transitionGeneration = random(20) + 1;
         if (random(3) < 2) {
           const accepted = generations.acceptUpdate(
             "page:full",
-            generation,
-            generation
+            placementGeneration,
+            transitionGeneration
           );
+          const duplicatesActive =
+            active?.placementGeneration === placementGeneration &&
+            active.transitionGeneration === transitionGeneration;
+          const advancesBoth =
+            placementGeneration > highestPlacement &&
+            transitionGeneration > highestTransition;
+          expect(accepted).toBe(duplicatesActive || advancesBoth);
           if (
-            generation > highestSeen ||
-            (generation === newestActive && newestActive !== 0)
+            accepted &&
+            !duplicatesActive
           ) {
-            expect(accepted).toBe(true);
-            newestActive = generation;
-            highestSeen = Math.max(highestSeen, generation);
-          } else {
-            expect(accepted).toBe(false);
+            active = { placementGeneration, transitionGeneration };
+            highestPlacement = placementGeneration;
+            highestTransition = transitionGeneration;
           }
         } else {
           const accepted = generations.acceptDetach(
             "page:full",
-            generation,
-            generation
+            placementGeneration,
+            transitionGeneration
           );
-          expect(accepted).toBe(
-            generation === newestActive && newestActive !== 0
-          );
-          if (accepted) newestActive = 0;
+          const matchesActive =
+            active?.placementGeneration === placementGeneration &&
+            active.transitionGeneration === transitionGeneration;
+          expect(accepted).toBe(matchesActive);
+          if (accepted) active = undefined;
         }
       }
     }

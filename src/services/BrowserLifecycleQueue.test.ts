@@ -4,8 +4,17 @@ import { DeterministicScheduler } from "../testing/DeterministicScheduler";
 import { getFuzzConfig, seededIndex } from "../testing/FuzzConfig";
 
 type LifecycleEvent =
-  | { type: "update"; generation: number }
-  | { type: "detach"; generation: number };
+  | {
+      type: "update";
+      placementGeneration: number;
+      transitionGeneration: number;
+    }
+  | {
+      type: "detach";
+      placementGeneration: number;
+      transitionGeneration: number;
+      deliberatelyMismatched?: boolean;
+    };
 
 /**
  * Exercises the renderer-to-main boundary as a delayed queue: mount updates and
@@ -26,7 +35,8 @@ describe("queued browser lifecycle", () => {
         "reference"
       );
       const scheduler = new DeterministicScheduler();
-      let newestGeneration = 0;
+      let newestPlacementGeneration = 0;
+      let newestTransitionGeneration = 0;
       let expectedVisible = true;
 
       const deliver = (event: LifecycleEvent) => {
@@ -34,22 +44,26 @@ describe("queued browser lifecycle", () => {
           if (
             generations.acceptUpdate(
               "page:full",
-              event.generation,
-              event.generation
+              event.placementGeneration,
+              event.transitionGeneration
             )
           ) {
             journeys.markVisible("handle", "page:full");
             expectedVisible = true;
           }
-        } else if (
-          generations.acceptDetach(
+        } else {
+          const accepted = generations.acceptDetach(
             "page:full",
-            event.generation,
-            event.generation
-          )
-        ) {
-          journeys.markDetached("handle");
-          expectedVisible = false;
+            event.placementGeneration,
+            event.transitionGeneration
+          );
+          if (event.deliberatelyMismatched) {
+            expect(accepted).toBe(false);
+          }
+          if (accepted) {
+            journeys.markDetached("handle");
+            expectedVisible = false;
+          }
         }
 
         expect(journeys.isDetached("handle")).toBe(!expectedVisible);
@@ -57,31 +71,59 @@ describe("queued browser lifecycle", () => {
 
       for (let step = 0; step < operationCount; step += 1) {
         if (random(2) === 0) {
-          newestGeneration += 1;
+          const previousPlacementGeneration = newestPlacementGeneration;
+          const previousTransitionGeneration = newestTransitionGeneration;
+          newestPlacementGeneration += 1;
+          newestTransitionGeneration += random(3) + 1;
           const update: LifecycleEvent = {
             type: "update",
-            generation: newestGeneration,
+            placementGeneration: newestPlacementGeneration,
+            transitionGeneration: newestTransitionGeneration,
           };
           scheduler.enqueue(
             "renderer-ipc",
-            `update-${newestGeneration}`,
+            `update-${newestPlacementGeneration}-${newestTransitionGeneration}`,
             () => deliver(update)
           );
-          if (newestGeneration > 1) {
-            const detach: LifecycleEvent = {
+          if (previousPlacementGeneration > 0) {
+            const oldDetach: LifecycleEvent = {
               type: "detach",
-              generation: newestGeneration - 1,
+              placementGeneration: previousPlacementGeneration,
+              transitionGeneration: previousTransitionGeneration,
             };
             scheduler.enqueue(
               "renderer-ipc",
-              `detach-${newestGeneration - 1}`,
-              () => deliver(detach)
+              `detach-${previousPlacementGeneration}-${previousTransitionGeneration}`,
+              () => deliver(oldDetach)
+            );
+            const stalePlacement: LifecycleEvent = {
+              type: "detach",
+              placementGeneration: previousPlacementGeneration,
+              transitionGeneration: newestTransitionGeneration,
+              deliberatelyMismatched: true,
+            };
+            scheduler.enqueue(
+              "renderer-ipc",
+              `detach-mixed-${previousPlacementGeneration}-${newestTransitionGeneration}`,
+              () => deliver(stalePlacement)
+            );
+            const staleTransition: LifecycleEvent = {
+              type: "detach",
+              placementGeneration: newestPlacementGeneration,
+              transitionGeneration: previousTransitionGeneration,
+              deliberatelyMismatched: true,
+            };
+            scheduler.enqueue(
+              "renderer-ipc",
+              `detach-mixed-${newestPlacementGeneration}-${previousTransitionGeneration}`,
+              () => deliver(staleTransition)
             );
           }
         }
 
         scheduler.deliverRandom(random);
       }
+      while (scheduler.size > 0) scheduler.deliverRandom(random);
     }
   });
 });
