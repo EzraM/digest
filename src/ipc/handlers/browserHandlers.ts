@@ -1,3 +1,4 @@
+import { IpcMainEvent, IpcMainInvokeEvent } from "electron";
 import { IPCHandlerMap } from "../IPCRouter";
 import { ViewStore } from "../../services/ViewStore";
 import { SelectionCaptureService } from "../../services/SelectionCaptureService";
@@ -12,7 +13,21 @@ import {
   parseOpenReferenceCommand,
 } from "../BrowserPresentationIPC";
 
-export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
+type BrowserSenderEvent = IpcMainEvent | IpcMainInvokeEvent;
+
+export function createBrowserHandlers(
+  viewStoreOrResolver: ViewStore | ((event: BrowserSenderEvent) => ViewStore),
+  resolvePlacementId: (
+    event: BrowserSenderEvent,
+    rendererPlacementId: string
+  ) => string = (_event, placementId) => placementId
+): IPCHandlerMap {
+  const storeFor = (event: BrowserSenderEvent) =>
+    typeof viewStoreOrResolver === "function"
+      ? viewStoreOrResolver(event)
+      : viewStoreOrResolver;
+  const placementFor = (event: BrowserSenderEvent, placementId: string) =>
+    resolvePlacementId(event, placementId);
   const selectionCaptureService = new SelectionCaptureService();
   return {
     "update-browser": {
@@ -23,44 +38,46 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "remove-browser": {
       type: "on",
-      fn: (_event, blockId: string) => {
+      fn: (event, blockId: string) => {
         log.debug(`Received remove-browser event for block ${blockId}`, "main");
-        viewStore.handleRemoveView(blockId);
+        storeFor(event).handleRemoveView(placementFor(event, blockId));
       },
     },
     "browser:get-devtools-state": {
       type: "invoke",
-      fn: (_event, blockId: string) => {
+      fn: (event, blockId: string) => {
         log.debug(
           `Received browser:get-devtools-state request for block ${blockId}`,
           "main"
         );
-        return viewStore.getDevToolsState(blockId);
+        return storeFor(event).getDevToolsState(placementFor(event, blockId));
       },
     },
     "browser:toggle-devtools": {
       type: "invoke",
-      fn: (_event, blockId: string) => {
+      fn: (event, blockId: string) => {
         log.debug(
           `Received browser:toggle-devtools request for block ${blockId}`,
           "main"
         );
-        return viewStore.toggleDevTools(blockId);
+        return storeFor(event).toggleDevTools(placementFor(event, blockId));
       },
     },
     "browser:go-back": {
       type: "invoke",
-      fn: async (_event, blockId: string) => {
+      fn: async (event, blockId: string) => {
         log.debug(
           `Received browser:go-back request for block ${blockId}`,
           "main"
         );
-        return viewStore.goBack(blockId);
+        return storeFor(event).goBack(placementFor(event, blockId));
       },
     },
     "browser:reload": {
       type: "invoke",
-      fn: (_event, viewId: string) => {
+      fn: (event, rendererViewId: string) => {
+        const viewStore = storeFor(event);
+        const viewId = placementFor(event, rendererViewId);
         const handleId = viewStore.getHandleIdForPlacement(viewId);
         if (!handleId) {
           return { success: false, error: `No active view found for ${viewId}` };
@@ -80,7 +97,9 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "browser:get-page-info": {
       type: "invoke",
-      fn: (_event, viewId: string): BrowserPageInfo => {
+      fn: (event, rendererViewId: string): BrowserPageInfo => {
+        const viewStore = storeFor(event);
+        const viewId = placementFor(event, rendererViewId);
         const handleId = viewStore.getHandleIdForPlacement(viewId);
         if (!handleId) {
           return { success: false, error: `No active view found for ${viewId}` };
@@ -108,14 +127,18 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "update-browser-view": {
       type: "on",
-      fn: (_event, data: unknown) => {
+      fn: (event, data: unknown) => {
         try {
-          const command = parseOpenReferenceCommand(data);
+          const parsed = parseOpenReferenceCommand(data);
+          const command = {
+            ...parsed,
+            placementId: placementFor(event, parsed.placementId),
+          };
           log.debug(
             `Received update-browser-view event for placement ${command.placementId}`,
             "main"
           );
-          viewStore.openReference(command);
+          storeFor(event).openReference(command);
         } catch (error) {
           log.error(
             `Rejected update-browser-view event: ${
@@ -128,14 +151,18 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "remove-view": {
       type: "on",
-      fn: (_event, data: unknown) => {
+      fn: (event, data: unknown) => {
         try {
-          const command = parseDetachPlacementCommand(data);
+          const parsed = parseDetachPlacementCommand(data);
+          const command = {
+            ...parsed,
+            placementId: placementFor(event, parsed.placementId),
+          };
           log.debug(
             `Received detach request for placement ${command.placementId}`,
             "main"
           );
-          viewStore.handleDetachView(command);
+          storeFor(event).handleDetachView(command);
         } catch (error) {
           log.error(
             `Rejected remove-view event: ${
@@ -148,11 +175,13 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "browser:get-live-pages": {
       type: "invoke",
-      fn: () => viewStore.getLivePagesProjection(),
+      fn: (event) => storeFor(event).getLivePagesProjection(),
     },
     "browser:capture-selection": {
       type: "invoke",
-      fn: async (_event, viewId: string) => {
+      fn: async (event, rendererViewId: string) => {
+        const viewStore = storeFor(event);
+        const viewId = placementFor(event, rendererViewId);
         log.debug(
           `Received browser:capture-selection request for view ${viewId}`,
           "main"

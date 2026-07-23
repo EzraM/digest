@@ -2,10 +2,10 @@ import { IPCHandlerMap } from "../IPCRouter";
 import { log } from "../../utils/mainLogger";
 
 interface RendererHandlersConfig {
-  loadInitialDocument: () => Promise<void>;
-  broadcastProfiles: () => void;
-  broadcastDocumentTree: (profileId: string | null) => void;
-  broadcastActiveDocument: () => void;
+  loadInitialDocument: (rendererId: number) => Promise<void>;
+  broadcastProfiles: (rendererId?: number) => void;
+  broadcastDocumentTree: (profileId: string | null, rendererId?: number) => void;
+  broadcastActiveDocument: (rendererId?: number) => void;
   getActiveProfileId: () => string | null;
 }
 
@@ -13,11 +13,12 @@ export function createRendererHandlers(config: RendererHandlersConfig): IPCHandl
   return {
     "renderer-ready": {
       type: "on",
-      fn: async () => {
-        await config.loadInitialDocument();
-        config.broadcastProfiles();
-        config.broadcastDocumentTree(config.getActiveProfileId());
-        config.broadcastActiveDocument();
+      fn: async (event) => {
+        const rendererId = event.sender.id;
+        await config.loadInitialDocument(rendererId);
+        config.broadcastProfiles(rendererId);
+        config.broadcastDocumentTree(config.getActiveProfileId(), rendererId);
+        config.broadcastActiveDocument(rendererId);
       },
     },
     "renderer-log": {

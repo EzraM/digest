@@ -247,6 +247,34 @@ export class ViewStore {
     );
 
     if (execution.type === "reuse-current") {
+      // A retained handle may have been created by another window store. Adopt
+      // a local presentation entry without creating or reloading the native
+      // view so this window can own bounds and layer effects after attachment.
+      if (!this.world.has(execution.plan.handleId)) {
+        const adopted = new Map(this.world);
+        adopted.set(execution.plan.handleId, {
+          url: execution.plan.requestedUrl,
+          history: { canGoBack: false },
+          bounds: update.bounds,
+          profile: update.profileId,
+          layout: update.layout,
+          loadState: { type: "ready" },
+        });
+        this.world = adopted;
+        const view = this.handles.get(execution.plan.handleId);
+        if (view) {
+          this.eventDisposers.get(execution.plan.handleId)?.();
+          this.eventDisposers.set(
+            execution.plan.handleId,
+            this.events.attach(
+              execution.plan.handleId,
+              view,
+              (cmd) => this.dispatch(cmd),
+              update.profileId
+            )
+          );
+        }
+      }
       const targetIndex =
         execution.plan.type === "reuse-history"
           ? execution.plan.historyIndex

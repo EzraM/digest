@@ -29,6 +29,13 @@ const EVENTS = {
 } as const;
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  windows: {
+    openRoute: (route: {
+      kind: "url" | "doc";
+      url?: string;
+      documentId?: string;
+    }) => ipcRenderer.invoke("windows:open-route", route),
+  },
   clipboard: {
     readText: () => clipboard.readText(),
     readHTML: () => clipboard.readHTML(),

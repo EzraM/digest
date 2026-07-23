@@ -9,6 +9,13 @@ import {
 } from "./browser";
 
 interface ElectronAPI {
+  windows: {
+    openRoute: (route: {
+      kind: "url" | "doc";
+      url?: string;
+      documentId?: string;
+    }) => Promise<{ windowId: string }>;
+  };
   clipboard: {
     readText: () => string;
     readHTML: () => string;

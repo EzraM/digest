@@ -4,10 +4,11 @@ export function createDocumentHandlers(
   documentManager: DocumentManager,
   profileIdResolver: () => string | null,
   broadcastDocumentTree: (profileId: string | null) => void,
-  broadcastActiveDocument: () => void,
+  broadcastActiveDocument: (rendererId?: number) => void,
   loadDocumentIntoRenderer: (
     documentId: string,
-    options?: { seedIfEmpty?: boolean }
+    options?: { seedIfEmpty?: boolean },
+    rendererId?: number
   ) => Promise<void>
 ): IPCHandlerMap {
   return {
@@ -65,7 +66,7 @@ export function createDocumentHandlers(
     },
     "documents:delete": {
       type: "invoke",
-      fn: async (_event, documentId: string) => {
+      fn: async (event, documentId: string) => {
         const document = documentManager.getDocument(documentId);
         await documentManager.deleteDocument(documentId);
         broadcastDocumentTree(document.profileId);
@@ -107,12 +108,16 @@ export function createDocumentHandlers(
     },
     "documents:switch": {
       type: "invoke",
-      fn: async (_event, documentId: string) => {
+      fn: async (event, documentId: string) => {
         const document = documentManager.switchDocument(documentId);
 
-        await loadDocumentIntoRenderer(documentId, { seedIfEmpty: true });
+        await loadDocumentIntoRenderer(
+          documentId,
+          { seedIfEmpty: true },
+          event.sender.id
+        );
         broadcastDocumentTree(document.profileId);
-        broadcastActiveDocument();
+        broadcastActiveDocument(event.sender.id);
 
         return document;
       },

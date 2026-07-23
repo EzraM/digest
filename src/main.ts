@@ -35,6 +35,11 @@ import { fetchPageTitle } from "./domains/link-capture/adapter/fetchPageTitle";
 import { DownloadManager } from "./services/DownloadManager";
 import Database from "better-sqlite3";
 import { LivePageCacheTelemetry } from "./services/LivePageCacheTelemetry";
+import { randomUUID } from "node:crypto";
+import { WindowRegistry } from "./application/WindowRegistry";
+import { PlacementRegistry } from "./application/PlacementRegistry";
+import { BrowsingJourneyStore } from "./services/BrowsingJourneyStore";
+import { HandleRegistry } from "./domains/browser-views/adapter/HandleRegistry";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -92,25 +97,36 @@ const EVENTS = {
 let globalAppView: WebContentsView | null = null;
 // Global service container
 const serviceContainer = new Container();
+const windowRegistry = new WindowRegistry();
+const placementRegistry = new PlacementRegistry();
+const viewStoreByRendererId = new Map<number, ViewStore>();
+const placementIdByRendererId = new Map<number, string>();
+const sharedJourneys = new BrowsingJourneyStore(10);
+const sharedHandles = new HandleRegistry();
+const ipcRouter = new IPCRouter();
+let applicationServices: ReturnType<typeof getServices> | undefined;
+let applicationInitialization: Promise<ReturnType<typeof getServices>> | undefined;
+let ipcInitialized = false;
+let sharedIpcServicesExposed = false;
+let imageProtocolInitialized = false;
 
-const createWindow = async () => {
-  // Register all services with their dependencies
-  registerServices(serviceContainer);
-
-  // Initialize all services in dependency order
-  try {
+const initializeApplication = () => {
+  if (applicationInitialization) return applicationInitialization;
+  applicationInitialization = (async () => {
+    registerServices(serviceContainer);
     await initializeAllServices(serviceContainer);
-    log.debug("All services initialized successfully", "main");
-  } catch (error) {
-    log.debug(`Service initialization failed: ${error}`, "main");
-    throw error;
-  }
+    applicationServices = getServices(serviceContainer);
+    log.debug("Application services initialized", "main");
+    return applicationServices;
+  })();
+  return applicationInitialization;
+};
 
-  // Get service instances
-  const services = getServices(serviceContainer);
+const createWindow = async (initialHash?: string) => {
+  const services = await initializeApplication();
   const { blockEventManager, documentManager } = services;
-  const ipcRouter = new IPCRouter();
   const ipcServiceBridge = new IPCServiceBridge(ipcRouter, serviceContainer);
+  const windowId = `window-${randomUUID()}`;
   const baseWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -134,6 +150,19 @@ const createWindow = async () => {
       partition: "persist:main-app",
     },
   });
+  windowRegistry.register({
+    windowId,
+    browserWindow: baseWindow,
+    rendererView: appViewInstance,
+  });
+  const placement = placementRegistry.register(
+    windowId,
+    appViewInstance.webContents.id
+  );
+  placementIdByRendererId.set(
+    appViewInstance.webContents.id,
+    placement.placementId
+  );
 
   // Helper function to update view bounds to match the window's content area (not the frame)
   const updateViewBounds = () => {
@@ -172,13 +201,13 @@ const createWindow = async () => {
   baseWindow.contentView.addChildView(appViewInstance);
 
   if (viteConfig.mainWindow.devServerUrl) {
-    appViewInstance.webContents.loadURL(viteConfig.mainWindow.devServerUrl);
+    appViewInstance.webContents.loadURL(
+      `${viteConfig.mainWindow.devServerUrl}${initialHash ?? ""}`
+    );
   } else {
     appViewInstance.webContents.loadFile(
-      path.join(
-        __dirname,
-        `../renderer/${viteConfig.mainWindow.name}/index.html`
-      )
+      path.join(__dirname, `../renderer/${viteConfig.mainWindow.name}/index.html`),
+      initialHash ? { hash: initialHash.replace(/^#/, "") } : undefined
     );
   }
 
@@ -205,17 +234,24 @@ const createWindow = async () => {
     baseWindow,
     viewLayerManager,
     appViewInstance.webContents,
-    new LivePageCacheTelemetry(services.database as Database.Database)
+    new LivePageCacheTelemetry(services.database as Database.Database),
+    { journeys: sharedJourneys, handles: sharedHandles }
   );
-  // Helper to navigate to URL route (used by LinkInterceptionService for notebook context)
-  const navigateToUrl = (url: string) => {
-    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-      // Use executeJavaScript to navigate by setting window.location.hash
-      const encodedUrl = encodeURIComponent(url);
-      globalAppView.webContents.executeJavaScript(
-        `window.location.hash = '#/url/${encodedUrl}';`
-      );
-    }
+  viewStoreByRendererId.set(appViewInstance.webContents.id, viewStore);
+  // A renderer `_blank` request means another Digest window. Preserve the
+  // originating document as explicit return context on the URL route.
+  const openUrlInDigestWindow = async (url: string) => {
+    const currentHash = await appViewInstance.webContents
+      .executeJavaScript("window.location.hash")
+      .catch(() => "");
+    const documentMatch = String(currentHash).match(
+      /#\/(?:doc\/([^?]+)|(?:block|url)\/[^?]+\?[^#]*\bdoc=([^&#]+))/
+    );
+    const documentId = documentMatch?.[1] ?? documentMatch?.[2];
+    const query = documentId
+      ? `?doc=${encodeURIComponent(decodeURIComponent(documentId))}`
+      : "";
+    await createWindow(`#/url/${encodeURIComponent(url)}${query}`);
   };
 
   // Helper to insert inline link (used by EventTranslator for page background clicks)
@@ -341,7 +377,9 @@ const createWindow = async () => {
   });
 
   // Set up the link click callback for LinkInterceptionService (notebook context - navigates to URL)
-  linkInterceptionService.setLinkClickCallback(navigateToUrl);
+  linkInterceptionService.setLinkClickCallback((url) => {
+    void openUrlInDigestWindow(url);
+  });
 
   // Store global references (baseWindow and viewManager are kept alive by their usage)
 
@@ -365,51 +403,66 @@ const createWindow = async () => {
   services.debugEventService.setMainRendererWebContents(appViewInstance);
   blockEventManager.setRendererWebContents(appViewInstance);
 
-  ipcServiceBridge.exposeService(
-    "profileManager",
-    [{ method: "listProfiles", alias: "list" }],
-    "profiles"
-  );
+  if (!sharedIpcServicesExposed) {
+    ipcServiceBridge.exposeService(
+      "profileManager",
+      [{ method: "listProfiles", alias: "list" }],
+      "profiles"
+    );
 
-  // Expose ImageService methods
-  ipcServiceBridge.exposeService(
-    "imageService",
-    [
-      { method: "saveImage", alias: "saveImage" },
-      { method: "getImageInfo", alias: "getImageInfo" },
-      { method: "downloadAndSaveImage", alias: "downloadAndSaveImage" },
-      { method: "deleteImage", alias: "deleteImage" },
-      { method: "attachImageToDocument", alias: "attachImageToDocument" },
-    ],
-    "image"
-  );
+    ipcServiceBridge.exposeService(
+      "imageService",
+      [
+        { method: "saveImage", alias: "saveImage" },
+        { method: "getImageInfo", alias: "getImageInfo" },
+        { method: "downloadAndSaveImage", alias: "downloadAndSaveImage" },
+        { method: "deleteImage", alias: "deleteImage" },
+        { method: "attachImageToDocument", alias: "attachImageToDocument" },
+      ],
+      "image"
+    );
+    sharedIpcServicesExposed = true;
+  }
 
   // Initialize and register the image protocol handler
   // Register on the session used by the renderer (not the default protocol)
   const rendererSession = session.fromPartition("persist:main-app");
   const imageProtocolService = ImageProtocolService.getInstance();
-  imageProtocolService.initialize(
-    services.imageService,
-    rendererSession.protocol
-  );
+  if (!imageProtocolInitialized) {
+    imageProtocolService.initialize(
+      services.imageService,
+      rendererSession.protocol
+    );
+    imageProtocolInitialized = true;
+  }
 
   // Document loading/seeding will happen when renderer signals it's ready
   // This prevents race condition where Y.js updates are broadcast before renderer can receive them
 
   // Set up IPC handlers (including renderer-ready handler)
-  setupIpcHandlers(
-    ipcRouter,
-    viewStore,
-    services,
-    appViewInstance,
-    downloadManager
-  );
+  if (!ipcInitialized) {
+    setupIpcHandlers(
+      ipcRouter,
+      viewStore,
+      services,
+      appViewInstance,
+      downloadManager
+    );
+    ipcInitialized = true;
+  }
 
   // Update view bounds when window is resized
   baseWindow.on("resize", updateViewBounds);
 
   baseWindow.on("closed", () => {
-    globalAppView = null;
+    const rendererId = appViewInstance.webContents.id;
+    viewStoreByRendererId.delete(rendererId);
+    placementIdByRendererId.delete(rendererId);
+    placementRegistry.retireWindow(windowId);
+    windowRegistry.retire(windowId);
+    if (globalAppView === appViewInstance) {
+      globalAppView = windowRegistry.list()[0]?.rendererView ?? null;
+    }
   });
 };
 
@@ -467,38 +520,60 @@ const setupIpcHandlers = (
 ) => {
   const { documentManager, profileManager } = services;
 
-  const sendToRenderer = (channel: string, payload: any) => {
-    if (
-      rendererView.webContents.isDestroyed() ||
-      rendererView.webContents === null
-    ) {
-      return;
+  const sendToRenderer = (
+    channel: string,
+    payload: any,
+    rendererId?: number
+  ) => {
+    const targets = rendererId
+      ? windowRegistry
+          .list()
+          .filter((session) => session.rendererView.webContents.id === rendererId)
+      : windowRegistry.list();
+    for (const target of targets) {
+      if (!target.rendererView.webContents.isDestroyed()) {
+        target.rendererView.webContents.send(channel, payload);
+      }
     }
-    rendererView.webContents.send(channel, payload);
   };
 
-  const broadcastDocumentTree = (profileId: string | null) => {
+  const broadcastDocumentTree = (
+    profileId: string | null,
+    rendererId?: number
+  ) => {
     if (!profileId) return;
     const tree = documentManager.getDocumentTree(profileId);
-    sendToRenderer("document-tree:updated", { profileId, tree });
+    sendToRenderer("document-tree:updated", { profileId, tree }, rendererId);
   };
 
-  const broadcastProfiles = () => {
+  const broadcastProfiles = (rendererId?: number) => {
     const profiles = profileManager.listProfiles();
-    sendToRenderer("profiles:updated", { profiles });
+    sendToRenderer("profiles:updated", { profiles }, rendererId);
   };
 
-  const broadcastActiveDocument = () => {
+  const broadcastActiveDocument = (rendererId?: number) => {
     const activeDocument = documentManager.activeDocument;
-    sendToRenderer("document:switched", { document: activeDocument });
+    sendToRenderer(
+      "document:switched",
+      { document: activeDocument },
+      rendererId
+    );
   };
 
   const loadDocumentIntoRenderer = async (
     documentId: string,
-    { seedIfEmpty = false }: { seedIfEmpty?: boolean } = {}
+    { seedIfEmpty = false }: { seedIfEmpty?: boolean } = {},
+    rendererId?: number
   ) => {
+    const targetView = rendererId
+      ? windowRegistry
+          .list()
+          .find((session) => session.rendererView.webContents.id === rendererId)
+          ?.rendererView
+      : rendererView;
+    if (!targetView) throw new Error(`Unknown renderer: ${rendererId}`);
     const blockService = documentManager.getBlockService(documentId);
-    blockService.setRendererWebContents(rendererView);
+    blockService.setRendererWebContents(targetView);
 
     const blocks = await blockService.loadDocument();
     if (seedIfEmpty && blocks.length === 0) {
@@ -509,7 +584,7 @@ const setupIpcHandlers = (
     await blockService.createSnapshot();
   };
 
-  const loadInitialDocument = async () => {
+  const loadInitialDocument = async (rendererId: number) => {
     log.debug("Renderer ready signal received - loading document", "main");
     const activeDocument =
       documentManager.activeDocument ?? documentManager.listDocuments()[0];
@@ -520,7 +595,11 @@ const setupIpcHandlers = (
     }
 
     try {
-      await loadDocumentIntoRenderer(activeDocument.id, { seedIfEmpty: true });
+      await loadDocumentIntoRenderer(
+        activeDocument.id,
+        { seedIfEmpty: true },
+        rendererId
+      );
       log.debug("Document loaded - Y.js will sync to renderer", "main");
     } catch (error) {
       log.debug(`Error loading document: ${error}`, "main");
@@ -535,6 +614,48 @@ const setupIpcHandlers = (
     );
   };
 
+  registerMap({
+    "windows:open-route": {
+      type: "invoke",
+      fn: async (event, input: unknown) => {
+        if (!windowRegistry.resolve(event.sender)) {
+          throw new Error("Unknown Digest renderer");
+        }
+        if (!input || typeof input !== "object") {
+          throw new Error("Invalid Digest window route");
+        }
+        const route = input as {
+          kind?: unknown;
+          url?: unknown;
+          documentId?: unknown;
+        };
+        let hash: string;
+        if (route.kind === "url" && typeof route.url === "string") {
+          const documentQuery =
+            typeof route.documentId === "string"
+              ? `?doc=${encodeURIComponent(route.documentId)}`
+              : "";
+          hash = `#/url/${encodeURIComponent(route.url)}${documentQuery}`;
+        } else if (
+          route.kind === "doc" &&
+          typeof route.documentId === "string"
+        ) {
+          hash = `#/doc/${encodeURIComponent(route.documentId)}`;
+        } else {
+          throw new Error("Invalid Digest window route");
+        }
+        const before = new Set(
+          windowRegistry.list().map((session) => session.windowId)
+        );
+        await createWindow(hash);
+        const created = windowRegistry
+          .list()
+          .find((session) => !before.has(session.windowId));
+        return { windowId: created?.windowId ?? "" };
+      },
+    },
+  });
+
   registerMap(
     createRendererHandlers({
       loadInitialDocument,
@@ -546,12 +667,32 @@ const setupIpcHandlers = (
     })
   );
 
-  registerMap(createBrowserHandlers(viewStore));
+  registerMap(
+    createBrowserHandlers(
+      (event) => {
+        const store = viewStoreByRendererId.get(event.sender.id);
+        if (!store) {
+          throw new Error(`Unknown Digest renderer: ${event.sender.id}`);
+        }
+        return store;
+      },
+      (event) => {
+        const placementId = placementIdByRendererId.get(event.sender.id);
+        if (!placementId) {
+          throw new Error(`No active placement for renderer: ${event.sender.id}`);
+        }
+        placementRegistry.requireOwnedActive(placementId, event.sender.id);
+        return placementId;
+      }
+    )
+  );
   registerMap(
     createBlockHandlers(
       documentManager,
       rendererView,
       services.blockOperationsApplier
+      ,
+      (rendererId) => windowRegistry.resolve({ id: rendererId } as any)?.windowId
     )
   );
   registerMap(
