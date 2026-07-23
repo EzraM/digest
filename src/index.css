@@ -72,7 +72,7 @@ body {
   font-style: normal;
 }
 
-.bn-editor a[data-digest-live-page="true"]::before {
+.bn-editor .digest-live-page::before {
   content: "";
   display: inline-block;
   width: 7px;

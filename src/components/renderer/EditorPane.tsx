@@ -4,12 +4,12 @@ import {
   SuggestionMenuProps,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
-import React, { useRef } from "react";
+import React, { useEffect } from "react";
 import { CustomBlockNoteEditor } from "../../types/schema";
 import { SlashCommandOption } from "../../types/slashCommand";
 import { useEditorScrollIntoView } from "../../hooks/useEditorScrollIntoView";
 import { useDocumentContext } from "../../context/DocumentContext";
-import { useLiveInlineLinkIndicators } from "../../Browser/useLiveInlineLinkIndicators";
+import { setLiveIndicatorProfileId } from "../../Browser/livePageStore";
 import { NotebookFormattingToolbar } from "./NotebookFormattingToolbar";
 
 type EditorPaneProps = {
@@ -29,11 +29,10 @@ export const EditorPane = ({
 }: EditorPaneProps) => {
   useEditorScrollIntoView(focusBlockId, editor);
   const { profileId } = useDocumentContext();
-  const editorRootRef = useRef<HTMLDivElement>(null);
-  useLiveInlineLinkIndicators(editorRootRef, profileId);
+  useEffect(() => setLiveIndicatorProfileId(profileId), [profileId]);
 
   return (
-    <div className="App" ref={editorRootRef}>
+    <div className="App">
       <EditorErrorBoundary>
         <BlockNoteView
           editor={editor}
