@@ -16,17 +16,18 @@ import type { BrowsingJourneyStore } from "./BrowsingJourneyStore";
 import type { CacheMissReason } from "./LivePageOpenPolicy";
 import type { LivePageProjectionStore } from "./LivePageProjectionStore";
 
-export type OpenReferenceRequest = {
-  viewId: string;
-  routeId?: string;
-  blockId: string;
+/** Strict main-process command. All presentation identity is explicit. */
+export type OpenReferenceCommand = {
+  routeId: string;
+  placementId: string;
+  referenceId: string;
   url: string;
   bounds: { x: number; y: number; width: number; height: number };
   profileId: string;
-  layout?: "inline" | "full";
-  referenceKind?: "site-block" | "ephemeral-url";
-  placementGeneration?: number;
-  transitionGeneration?: number;
+  layout: "inline" | "full";
+  referenceKind: "site-block" | "ephemeral-url";
+  placementGeneration: number;
+  transitionGeneration: number;
 };
 
 export type OpenReferenceResult = {

@@ -24,6 +24,12 @@ export function Page({
   // Layout-qualified view ID: separates inline from fullscreen views
   const viewId =
     explicitViewId ?? (layout === "full" ? toFullViewId(blockId) : blockId);
+  const routeId =
+    layout === "inline"
+      ? `inline:${blockId}`
+      : providedBlockId
+        ? `block:${providedBlockId}`
+        : `url:${url}`;
 
   console.log(
     `[Page] Render: blockId=${blockId}, layout=${layout}, viewId=${viewId}`
@@ -37,6 +43,7 @@ export function Page({
     useBrowserViewUpdater(
       viewId,
       blockId,
+      routeId,
       layout,
       providedBlockId ? "site-block" : "ephemeral-url"
     );

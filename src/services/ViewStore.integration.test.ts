@@ -120,13 +120,16 @@ function createHarness(options: {
     url = "https://example.test/",
     placementGeneration = 1000
   ) => ({
-    viewId,
-    blockId: viewId.replace(":full", ""),
+    routeId: `route:${viewId}`,
+    placementId: viewId,
+    referenceId: viewId.replace(":full", ""),
     url,
     bounds: { x: 10, y: 20, width: 800, height: 600 },
     profileId: "profile",
     layout: "full" as const,
+    referenceKind: "site-block" as const,
     placementGeneration,
+    transitionGeneration: placementGeneration,
   });
   return {
     store,

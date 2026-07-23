@@ -4,6 +4,7 @@ import {
   BrowserLifecycleEvent,
   BrowserPageInfo,
   LivePagesProjection,
+  OpenReferenceIPCRequest,
 } from "./browser";
 
 interface ElectronAPI {
@@ -13,16 +14,7 @@ interface ElectronAPI {
     availableFormats: () => string[];
     writeImage: (arrayBuffer: ArrayBuffer) => void;
   };
-  updateBrowser: (data: {
-    viewId: string;
-    blockId: string;
-    url: string;
-    bounds: { x: number; y: number; width: number; height: number };
-    profileId: string;
-    layout?: "inline" | "full";
-    referenceKind?: "site-block" | "ephemeral-url";
-    placementGeneration?: number;
-  }) => void;
+  updateBrowser: (data: OpenReferenceIPCRequest) => void;
   removeBrowser: (blockId: string) => void;
   removeView: (viewId: string, placementGeneration?: number) => void;
   browser: {

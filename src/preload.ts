@@ -6,6 +6,7 @@ import {
   BrowserLifecycleEvent,
   BrowserPageInfo,
   LivePagesProjection,
+  OpenReferenceIPCRequest,
 } from "./types/browser";
 log.debug("Preload script initialized", "preload");
 
@@ -39,16 +40,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       clipboard.writeImage(image);
     },
   },
-  updateBrowser: (data: {
-    viewId: string;
-    blockId: string;
-    url: string;
-    bounds: { x: number; y: number; width: number; height: number };
-    profileId: string;
-    layout?: "inline" | "full";
-    referenceKind?: "site-block" | "ephemeral-url";
-    placementGeneration?: number;
-  }) => ipcRenderer.send("update-browser-view", data),
+  updateBrowser: (data: OpenReferenceIPCRequest) =>
+    ipcRenderer.send("update-browser-view", data),
   removeBrowser: (blockId: string) => {
     ipcRenderer.send("remove-browser", blockId);
   },

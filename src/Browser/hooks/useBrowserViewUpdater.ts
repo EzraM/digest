@@ -16,17 +16,19 @@ type Bounds = { x: number; y: number; width: number; height: number };
 export const useBrowserViewUpdater = (
   viewId: string,
   blockId: string,
-  layout?: "inline" | "full",
+  routeId: string,
+  layout: "inline" | "full",
   referenceKind: "site-block" | "ephemeral-url" = "site-block"
 ) => {
   const { profileId } = useDocumentContext();
   const urlRef = useRef<string | null>(null);
   const boundsRef = useRef<Bounds | null>(null);
-  const layoutRef = useRef<"inline" | "full" | undefined>(layout);
-  const placementGenerationRef = useRef<number | undefined>(undefined);
-  if (placementGenerationRef.current === undefined) {
+  const layoutRef = useRef<"inline" | "full">(layout);
+  const placementGenerationRef = useRef<number | null>(null);
+  if (placementGenerationRef.current === null) {
     placementGenerationRef.current = nextPlacementGeneration();
   }
+  const placementGeneration = placementGenerationRef.current;
 
   // Update layout ref when it changes
   useEffect(() => {
@@ -38,16 +40,25 @@ export const useBrowserViewUpdater = (
     if (urlRef.current && boundsRef.current) {
       window.electronAPI.updateBrowser({
         viewId,
+        routeId,
         blockId,
         url: urlRef.current,
         bounds: boundsRef.current,
         profileId,
         layout: layoutRef.current,
         referenceKind,
-        placementGeneration: placementGenerationRef.current,
+        placementGeneration,
+        transitionGeneration: placementGeneration,
       });
     }
-  }, [viewId, blockId, profileId, referenceKind]);
+  }, [
+    viewId,
+    routeId,
+    blockId,
+    profileId,
+    referenceKind,
+    placementGeneration,
+  ]);
 
   const handleUrlChange = useCallback(
     (url: string | null) => {
@@ -81,7 +92,7 @@ export const useBrowserViewUpdater = (
   return {
     handleUrlChange,
     handleBoundsChange,
-    placementGeneration: placementGenerationRef.current,
+    placementGeneration,
   };
 };
 

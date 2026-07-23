@@ -3,7 +3,11 @@ import { ViewStore } from "../../services/ViewStore";
 import { SelectionCaptureService } from "../../services/SelectionCaptureService";
 import { log } from "../../utils/mainLogger";
 import { toBlockId } from "../../utils/viewId";
-import { BrowserLoadStatus, BrowserPageInfo } from "../../types/browser";
+import {
+  BrowserLoadStatus,
+  BrowserPageInfo,
+  OpenReferenceIPCRequest,
+} from "../../types/browser";
 
 export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
   const selectionCaptureService = new SelectionCaptureService();
@@ -95,12 +99,23 @@ export function createBrowserHandlers(viewStore: ViewStore): IPCHandlerMap {
     },
     "update-browser-view": {
       type: "on",
-      fn: (_event, data) => {
+      fn: (_event, data: OpenReferenceIPCRequest) => {
         log.debug(
           `Received update-browser-view event for view ${data.viewId}`,
           "main"
         );
-        viewStore.openReference(data);
+        viewStore.openReference({
+          routeId: data.routeId,
+          placementId: data.viewId,
+          referenceId: data.blockId,
+          url: data.url,
+          bounds: data.bounds,
+          profileId: data.profileId,
+          layout: data.layout,
+          referenceKind: data.referenceKind,
+          placementGeneration: data.placementGeneration,
+          transitionGeneration: data.transitionGeneration,
+        });
       },
     },
     "remove-view": {

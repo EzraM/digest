@@ -29,7 +29,7 @@ import { LivePagesProjection } from "../types/browser";
 import { LivePageProjectionStore } from "./LivePageProjectionStore";
 import { PlacementGenerationStore } from "./PlacementGenerationStore";
 import type {
-  OpenReferenceRequest,
+  OpenReferenceCommand,
   OpenReferenceResult,
   ViewContextMenus,
   ViewEffects,
@@ -178,26 +178,21 @@ export class ViewStore {
 
   // Public API methods that dispatch commands
 
-  /** Compatibility adapter for the existing renderer update channel. */
-  handleBlockViewUpdate(update: OpenReferenceRequest): void {
-    this.openReference(update);
-  }
-
   /** Authoritative main-process operation for opening any URL reference. */
-  openReference(update: OpenReferenceRequest): OpenReferenceResult | undefined {
+  openReference(update: OpenReferenceCommand): OpenReferenceResult | undefined {
     if (
       !this.placementGenerations.acceptUpdate(
-        update.viewId,
+        update.placementId,
         update.placementGeneration
       )
     ) {
       log.debug(
-        `[${update.viewId}] Ignoring stale placement update generation ${update.placementGeneration}`,
+        `[${update.placementId}] Ignoring stale placement update generation ${update.placementGeneration}`,
         "ViewStore"
       );
       return undefined;
     }
-    const handleId = this.resolveHandleId(update.viewId);
+    const handleId = this.resolveHandleId(update.placementId);
     const existing = this.world.get(handleId);
     const diagnostics = this.journeys.getDiagnostics(
       update.profileId,
@@ -214,8 +209,8 @@ export class ViewStore {
     }
 
     const corePlan = this.journeys.planOpenReference({
-      placementId: update.viewId,
-      referenceId: update.blockId,
+      placementId: update.placementId,
+      referenceId: update.referenceId,
       profileId: update.profileId,
       url: update.url,
     });
@@ -262,7 +257,7 @@ export class ViewStore {
         });
       }
       this.discardJourney(execution.plan.handleId);
-      this.pendingCreates.delete(update.viewId);
+      this.pendingCreates.delete(update.placementId);
       return this.createReference(update, diagnostics, "attach_failed");
     }
 
@@ -273,7 +268,7 @@ export class ViewStore {
   }
 
   private updateExistingReference(
-    update: OpenReferenceRequest,
+    update: OpenReferenceCommand,
     handleId: string,
     existing: ViewEntry,
     diagnostics: ReturnType<BrowsingJourneyStore["getDiagnostics"]>
@@ -298,18 +293,18 @@ export class ViewStore {
     );
     if (!prepared.success) {
       this.discardJourney(handleId);
-      this.pendingCreates.delete(update.viewId);
+      this.pendingCreates.delete(update.placementId);
       return this.createReference(update, diagnostics, "stale_association");
     }
 
     if (!this.interpreter.attachView(handleId)) {
       this.discardJourney(handleId);
-      this.pendingCreates.delete(update.viewId);
+      this.pendingCreates.delete(update.placementId);
       return this.createReference(update, diagnostics, "attach_failed");
     }
 
     // Commit only after the Electron attachment succeeds.
-    this.journeys.markVisible(handleId, update.viewId);
+    this.journeys.markVisible(handleId, update.placementId);
     this.updatePlacementBounds(handleId, update, existing);
     this.notifyPlacementReady(update);
     this.publishLiveReferences();
@@ -321,11 +316,11 @@ export class ViewStore {
   }
 
   private createReference(
-    update: OpenReferenceRequest,
+    update: OpenReferenceCommand,
     diagnostics: ReturnType<BrowsingJourneyStore["getDiagnostics"]>,
     missReason: CacheMissReason
   ): OpenReferenceResult | undefined {
-    const pending = this.pendingCreates.get(update.viewId);
+    const pending = this.pendingCreates.get(update.placementId);
     const now = this.now();
     if (
       pending?.url === update.url &&
@@ -333,61 +328,62 @@ export class ViewStore {
     ) {
       return undefined;
     }
-    this.pendingCreates.set(update.viewId, { url: update.url, timestamp: now });
+    this.pendingCreates.set(update.placementId, {
+      url: update.url,
+      timestamp: now,
+    });
     this.dispatch({
       type: "create",
-      id: update.viewId,
+      id: update.placementId,
       url: update.url,
       bounds: update.bounds,
       profile: update.profileId,
-      layout: update.layout ?? "inline",
+      layout: update.layout,
     });
 
-    const createdView = this.handles.get(update.viewId);
+    const createdView = this.handles.get(update.placementId);
     const rendererAvailable = Boolean(
       createdView && !createdView.webContents.isDestroyed()
     );
     if (shouldRetainJourney(update.layout) && rendererAvailable) {
       this.destroyEvictedViews(
         this.journeys.addVisible(
-          update.viewId,
+          update.placementId,
           update.profileId,
           update.url,
-          update.blockId
+          update.referenceId
         )
       );
       this.publishLiveReferences();
     }
     return this.finishCacheAttempt(update, diagnostics, {
-      journeyId: this.journeys.getJourneyId(update.viewId),
+      journeyId: this.journeys.getJourneyId(update.placementId),
       outcome: "miss",
       missReason: rendererAvailable ? missReason : "renderer_unavailable",
       loadAvoided: false,
     });
   }
 
-  private notifyPlacementReady(update: OpenReferenceRequest): void {
-    const mapping = this.journeys.getActiveMapping(update.viewId);
+  private notifyPlacementReady(update: OpenReferenceCommand): void {
+    const mapping = this.journeys.getActiveMapping(update.placementId);
     if (!mapping) {
       log.error(
-        `[${update.viewId}] Refusing ready notification without an active identity mapping: ${JSON.stringify({
-          routeId: update.routeId ?? update.blockId,
-          placementId: update.viewId,
-          transitionGeneration:
-            update.transitionGeneration ?? update.placementGeneration ?? 0,
+        `[${update.placementId}] Refusing ready notification without an active identity mapping: ${JSON.stringify({
+          routeId: update.routeId,
+          placementId: update.placementId,
+          transitionGeneration: update.transitionGeneration,
         })}`,
         "ViewStore"
       );
       return;
     }
     const identity = {
-      routeId: update.routeId ?? update.blockId,
+      routeId: update.routeId,
       ...mapping,
-      transitionGeneration:
-        update.transitionGeneration ?? update.placementGeneration ?? 0,
+      transitionGeneration: update.transitionGeneration,
     };
     log.debug(
-      `[${update.viewId}] Presentation ready: ${JSON.stringify(identity)}`,
+      `[${update.placementId}] Presentation ready: ${JSON.stringify(identity)}`,
       "ViewStore"
     );
     this.notifications.notifyPlacementReady(identity);
@@ -395,7 +391,7 @@ export class ViewStore {
 
   private updatePlacementBounds(
     handleId: string,
-    update: OpenReferenceRequest,
+    update: OpenReferenceCommand,
     existing = this.world.get(handleId)
   ): void {
     if (!existing) return;
@@ -404,8 +400,7 @@ export class ViewStore {
       existing.bounds.y !== update.bounds.y ||
       existing.bounds.width !== update.bounds.width ||
       existing.bounds.height !== update.bounds.height;
-    const layoutChanged =
-      update.layout !== undefined && existing.layout !== update.layout;
+    const layoutChanged = existing.layout !== update.layout;
     if (boundsChanged || layoutChanged) {
       this.dispatch({
         type: "updateBounds",
@@ -423,7 +418,7 @@ export class ViewStore {
   }
 
   private finishCacheAttempt(
-    update: OpenReferenceRequest,
+    update: OpenReferenceCommand,
     diagnostics: ReturnType<BrowsingJourneyStore["getDiagnostics"]>,
     result: OpenReferenceResult
   ): OpenReferenceResult {
@@ -432,7 +427,7 @@ export class ViewStore {
   }
 
   private recordCacheAttempt(
-    update: OpenReferenceRequest,
+    update: OpenReferenceCommand,
     diagnostics: ReturnType<BrowsingJourneyStore["getDiagnostics"]>,
     result: OpenReferenceResult
   ): void {
@@ -443,7 +438,7 @@ export class ViewStore {
     );
     const attempt: CacheAttempt = {
       profileId: update.profileId,
-      referenceKind: update.referenceKind ?? "site-block",
+      referenceKind: update.referenceKind,
       requestedUrl: update.url,
       outcome: result.outcome,
       missReason: result.missReason,

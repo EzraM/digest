@@ -15,6 +15,20 @@ export type BrowserPresentationIdentity = {
   transitionGeneration: number;
 };
 
+/** Renderer-to-main request. Main converts this IPC naming at the boundary. */
+export type OpenReferenceIPCRequest = {
+  viewId: string;
+  routeId: string;
+  blockId: string;
+  url: string;
+  bounds: { x: number; y: number; width: number; height: number };
+  profileId: string;
+  layout: "inline" | "full";
+  referenceKind: "site-block" | "ephemeral-url";
+  placementGeneration: number;
+  transitionGeneration: number;
+};
+
 export type BrowserLifecycleEvent =
   | {
       blockId: string;
