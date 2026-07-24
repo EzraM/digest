@@ -1,16 +1,17 @@
 import type { Block } from "../domains/blocks/core";
+import {
+  analyzeCanonicalDocument,
+  type ProseMirrorJsonNode,
+} from "./analyzeCanonicalDocument";
 
-export type CanonicalProjection = {
+export type CanonicalDocumentSnapshot = {
   documentId: string;
-  blocks: Block[];
+  prosemirrorJson: ProseMirrorJsonNode;
 };
 
 type Dependencies = {
   reindexDocument: (documentId: string, blocks: Block[]) => Promise<void>;
-  extractImageIds: (blocks: Block[]) => Set<string>;
   deleteImage: (imageId: string) => boolean;
-  updateBlockCount: (documentId: string, blockCount: number) => void;
-  countBlocks: (blocks: Block[]) => number;
   onError?: (documentId: string, error: unknown) => void;
   debounceMs?: number;
 };
@@ -19,8 +20,8 @@ type Dependencies = {
  * Debounces derived projections of canonical Yjs state. Search, image cleanup,
  * and metadata are consumers of accepted canonical state, not renderer IPC.
  */
-export class CanonicalProjectionCoordinator {
-  private readonly latestByDocumentId = new Map<string, CanonicalProjection>();
+export class CanonicalDerivedDataCoordinator {
+  private readonly latestByDocumentId = new Map<string, CanonicalDocumentSnapshot>();
   private readonly imageIdsByDocumentId = new Map<string, Set<string>>();
   private readonly timerByDocumentId = new Map<
     string,
@@ -29,15 +30,16 @@ export class CanonicalProjectionCoordinator {
 
   constructor(private readonly dependencies: Dependencies) {}
 
-  seed(projection: CanonicalProjection): void {
+  seed(projection: CanonicalDocumentSnapshot): void {
+    const analysis = analyzeCanonicalDocument(projection.prosemirrorJson);
     this.imageIdsByDocumentId.set(
       projection.documentId,
-      this.dependencies.extractImageIds(projection.blocks)
+      analysis.imageIds
     );
     this.schedule(projection);
   }
 
-  schedule(projection: CanonicalProjection): void {
+  schedule(projection: CanonicalDocumentSnapshot): void {
     this.latestByDocumentId.set(projection.documentId, projection);
     const existing = this.timerByDocumentId.get(projection.documentId);
     if (existing) clearTimeout(existing);
@@ -57,7 +59,8 @@ export class CanonicalProjectionCoordinator {
     this.latestByDocumentId.delete(documentId);
 
     try {
-      const nextImageIds = this.dependencies.extractImageIds(projection.blocks);
+      const analysis = analyzeCanonicalDocument(projection.prosemirrorJson);
+      const nextImageIds = analysis.imageIds;
       const previousImageIds =
         this.imageIdsByDocumentId.get(documentId) ?? new Set<string>();
       for (const imageId of previousImageIds) {
@@ -66,13 +69,9 @@ export class CanonicalProjectionCoordinator {
         }
       }
       this.imageIdsByDocumentId.set(documentId, nextImageIds);
-      this.dependencies.updateBlockCount(
-        documentId,
-        this.dependencies.countBlocks(projection.blocks)
-      );
       await this.dependencies.reindexDocument(
         documentId,
-        projection.blocks
+        analysis.searchBlocks
       );
     } catch (error) {
       this.dependencies.onError?.(documentId, error);

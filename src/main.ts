@@ -42,9 +42,7 @@ import { BrowserPresentationCoordinator } from "./services/BrowserPresentationCo
 import { HandleRegistry } from "./domains/browser-views/adapter/HandleRegistry";
 import { CollaborationDocumentService } from "./application/CollaborationDocumentService";
 import { createCollaborationHandlers } from "./ipc/handlers/collaborationHandlers";
-import { CanonicalProjectionCoordinator } from "./application/CanonicalProjectionCoordinator";
-import { countProjectedBlocks } from "./application/projectCanonicalDocument";
-import { ImageService } from "./services/ImageService";
+import { CanonicalDerivedDataCoordinator } from "./application/CanonicalDerivedDataCoordinator";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -113,7 +111,7 @@ const journeyAllocator = new ApplicationJourneyAllocator({
   handles: sharedHandles,
 });
 let collaborationDocuments: CollaborationDocumentService | undefined;
-let projectionCoordinator: CanonicalProjectionCoordinator | undefined;
+let derivedDataCoordinator: CanonicalDerivedDataCoordinator | undefined;
 const ipcRouter = new IPCRouter();
 let applicationServices: ReturnType<typeof getServices> | undefined;
 let applicationInitialization: Promise<ReturnType<typeof getServices>> | undefined;
@@ -130,39 +128,26 @@ const initializeApplication = () => {
     collaborationDocuments = new CollaborationDocumentService(
       applicationServices.database as Database.Database
     );
-    projectionCoordinator = new CanonicalProjectionCoordinator({
+    derivedDataCoordinator = new CanonicalDerivedDataCoordinator({
       reindexDocument: (documentId, blocks) =>
         applicationServices!.searchIndexManager.reindexDocument(
           documentId,
           blocks
         ),
-      extractImageIds: (blocks) =>
-        new Set(
-          blocks.flatMap((block) =>
-            ImageService.extractImageIdsFromBlock(block)
-          )
-        ),
       deleteImage: (imageId) =>
         applicationServices!.imageService.deleteImage(imageId),
-      updateBlockCount: (documentId, blockCount) => {
-        applicationServices!.documentManager.updateBlockCount(
-          documentId,
-          blockCount
-        );
-      },
-      countBlocks: countProjectedBlocks,
       onError: (documentId, error) =>
         log.debug(
-          `Canonical projection failed for ${documentId}: ${error}`,
+          `Canonical derived-data update failed for ${documentId}: ${error}`,
           "main"
         ),
     });
-    collaborationDocuments.subscribeProjections((projection) =>
-      projectionCoordinator!.schedule(projection)
+    collaborationDocuments.subscribeCanonicalChanges((snapshot) =>
+      derivedDataCoordinator!.schedule(snapshot)
     );
     for (const document of applicationServices.documentManager.listDocuments()) {
-      projectionCoordinator.seed(
-        collaborationDocuments.projectDocument(document.id)
+      derivedDataCoordinator.seed(
+        collaborationDocuments.readCanonicalDocument(document.id)
       );
     }
     log.debug("Application services initialized", "main");
@@ -790,7 +775,7 @@ app.on("activate", async () => {
 // Clean up global shortcuts when quitting
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
-  projectionCoordinator?.dispose();
+  derivedDataCoordinator?.dispose();
 
   // Close database connection
   try {

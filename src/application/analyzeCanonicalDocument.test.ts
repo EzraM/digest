@@ -1,11 +1,8 @@
-import {
-  countProjectedBlocks,
-  projectCanonicalDocument,
-} from "./projectCanonicalDocument";
+import { analyzeCanonicalDocument } from "./analyzeCanonicalDocument";
 
-describe("projectCanonicalDocument", () => {
-  it("projects block containers, inline content, props, and nested blocks", () => {
-    const blocks = projectCanonicalDocument({
+describe("analyzeCanonicalDocument", () => {
+  it("extracts searchable blocks and image references", () => {
+    const analysis = analyzeCanonicalDocument({
       type: "doc",
       content: [
         {
@@ -51,19 +48,12 @@ describe("projectCanonicalDocument", () => {
       ],
     });
 
-    expect(blocks).toMatchObject([
+    expect(analysis.searchBlocks).toMatchObject([
       {
         id: "parent",
         type: "paragraph",
         props: { textAlignment: "left" },
-        content: [
-          { type: "text", text: "Hello", styles: { bold: true } },
-          {
-            type: "link",
-            href: "https://example.com",
-            content: [{ type: "text", text: " link" }],
-          },
-        ],
+        content: "Hello link",
         children: [
           {
             id: "image",
@@ -73,6 +63,6 @@ describe("projectCanonicalDocument", () => {
         ],
       },
     ]);
-    expect(countProjectedBlocks(blocks)).toBe(2);
+    expect(Array.from(analysis.imageIds)).toEqual(["image-1"]);
   });
 });

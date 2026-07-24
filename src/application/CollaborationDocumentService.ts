@@ -1,8 +1,7 @@
 import Database from "better-sqlite3";
 import * as Y from "yjs";
 import { yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
-import type { Block } from "../domains/blocks/core";
-import { projectCanonicalDocument } from "./projectCanonicalDocument";
+import type { ProseMirrorJsonNode } from "./analyzeCanonicalDocument";
 
 export type CollaborationSubscription = {
   update: Uint8Array;
@@ -31,8 +30,11 @@ export class CollaborationDocumentService {
   private readonly states = new Map<string, DocumentState>();
   private readonly documentIdByRendererId = new Map<number, string>();
   private readonly rendererIdsByDocumentId = new Map<string, Set<number>>();
-  private readonly projectionListeners = new Set<
-    (projection: { documentId: string; blocks: Block[] }) => void
+  private readonly canonicalChangeListeners = new Set<
+    (snapshot: {
+      documentId: string;
+      prosemirrorJson: ProseMirrorJsonNode;
+    }) => void
   >();
   private publish: (event: AcceptedCollaborationUpdate) => void = () => undefined;
 
@@ -44,11 +46,14 @@ export class CollaborationDocumentService {
     this.publish = publish;
   }
 
-  subscribeProjections(
-    listener: (projection: { documentId: string; blocks: Block[] }) => void
+  subscribeCanonicalChanges(
+    listener: (snapshot: {
+      documentId: string;
+      prosemirrorJson: ProseMirrorJsonNode;
+    }) => void
   ): () => void {
-    this.projectionListeners.add(listener);
-    return () => this.projectionListeners.delete(listener);
+    this.canonicalChangeListeners.add(listener);
+    return () => this.canonicalChangeListeners.delete(listener);
   }
 
   subscribe(
@@ -140,9 +145,9 @@ export class CollaborationDocumentService {
       });
       outcome = { accepted: true, duplicate: false };
       this.publish(input);
-      const projection = this.projectDocument(input.documentId);
-      for (const listener of this.projectionListeners) {
-        listener(projection);
+      const snapshot = this.readCanonicalDocument(input.documentId);
+      for (const listener of this.canonicalChangeListeners) {
+        listener(snapshot);
       }
     });
 
@@ -155,16 +160,14 @@ export class CollaborationDocumentService {
     return Y.encodeStateAsUpdate(this.getState(documentId).doc);
   }
 
-  projectDocument(documentId: string): {
+  readCanonicalDocument(documentId: string): {
     documentId: string;
-    blocks: Block[];
+    prosemirrorJson: ProseMirrorJsonNode;
   } {
     const fragment = this.getState(documentId).doc.getXmlFragment("document");
     return {
       documentId,
-      blocks: projectCanonicalDocument(
-        yXmlFragmentToProsemirrorJSON(fragment)
-      ),
+      prosemirrorJson: yXmlFragmentToProsemirrorJSON(fragment),
     };
   }
 

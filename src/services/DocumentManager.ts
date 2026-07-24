@@ -300,22 +300,6 @@ export class DocumentManager {
     return document;
   }
 
-  updateBlockCount(documentId: string, blockCount: number): DocumentRecord {
-    const document = this.getDocument(documentId);
-    if (document.blockCount === blockCount) return document;
-    const now = Date.now();
-    this.database
-      .prepare(
-        `UPDATE documents
-         SET block_count = ?, updated_at = ?
-         WHERE id = ?`
-      )
-      .run(blockCount, now, documentId);
-    const updated = { ...document, blockCount, updatedAt: now };
-    this.documents.set(documentId, updated);
-    return updated;
-  }
-
   private loadDocumentsFromDatabase(): void {
     try {
       const rows = this.database
