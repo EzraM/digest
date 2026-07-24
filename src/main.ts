@@ -156,9 +156,15 @@ const initializeApplication = () => {
   return applicationInitialization;
 };
 
-const createWindow = async (initialHash?: string) => {
+const createWindow = async (
+  initialHash?: string,
+  initialDocumentId: string | null = null
+) => {
   const services = await initializeApplication();
   const { documentManager } = services;
+  const selectedDocumentId = initialDocumentId
+    ? documentManager.getDocument(initialDocumentId).id
+    : null;
   const ipcServiceBridge = new IPCServiceBridge(ipcRouter, serviceContainer);
   const windowId = `window-${randomUUID()}`;
   const baseWindow = new BrowserWindow({
@@ -188,7 +194,7 @@ const createWindow = async (initialHash?: string) => {
     windowId,
     browserWindow: baseWindow,
     rendererView: appViewInstance,
-    selectedDocumentId: null,
+    selectedDocumentId,
   });
   const placement = placementRegistry.register(
     windowId,
@@ -300,11 +306,17 @@ const createWindow = async (initialHash?: string) => {
     const documentMatch = String(currentHash).match(
       /#\/(?:doc\/([^?]+)|(?:block|url)\/[^?]+\?[^#]*\bdoc=([^&#]+))/
     );
-    const documentId = documentMatch?.[1] ?? documentMatch?.[2];
+    const encodedDocumentId = documentMatch?.[1] ?? documentMatch?.[2];
+    const documentId = encodedDocumentId
+      ? decodeURIComponent(encodedDocumentId)
+      : null;
     const query = documentId
-      ? `?doc=${encodeURIComponent(decodeURIComponent(documentId))}`
+      ? `?doc=${encodeURIComponent(documentId)}`
       : "";
-    await createWindow(`#/url/${encodeURIComponent(url)}${query}`);
+    await createWindow(
+      `#/url/${encodeURIComponent(url)}${query}`,
+      documentId
+    );
   };
 
   // Helper to insert inline link (used by EventTranslator for page background clicks)
@@ -678,7 +690,10 @@ const setupIpcHandlers = (
         const before = new Set(
           windowRegistry.list().map((session) => session.windowId)
         );
-        await createWindow(hash);
+        await createWindow(
+          hash,
+          typeof route.documentId === "string" ? route.documentId : null
+        );
         const created = windowRegistry
           .list()
           .find((session) => !before.has(session.windowId));
