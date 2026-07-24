@@ -76,10 +76,6 @@ export const useDocumentSync = (
         );
         subscribed = true;
 
-        if (response.legacyBlocks.length > 0) {
-          editor.replaceBlocks(editor.document, response.legacyBlocks as any);
-        }
-
         // The collaboration extension may have initialized the local fragment
         // before the update listener was connected. Send the complete local
         // state once; Yjs safely deduplicates state already known by main.

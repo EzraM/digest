@@ -1,4 +1,3 @@
-import { BlockOperation, OperationResult } from "./operations";
 import { DocumentRecord, DocumentTreeNode, ProfileRecord } from "./documents";
 import {
   BrowserLifecycleEvent,
@@ -95,18 +94,6 @@ interface ElectronAPI {
   onLinkCaptured: (
     callback: (data: { url: string; title: string; capturedAt: number }) => void
   ) => () => void;
-  applyBlockOperations: (
-    documentId: string,
-    operations: BlockOperation[],
-    origin?: import("./operations").TransactionOrigin
-  ) => Promise<OperationResult>;
-  onDocumentUpdate: (
-    callback: (updateData: import("./operations").DocumentUpdate) => void
-  ) => () => void;
-  removeDocumentUpdateListener: (
-    callback: (updateData: import("./operations").DocumentUpdate) => void
-  ) => void;
-  signalRendererReady: () => void;
   collaboration: {
     subscribe: (
       documentId: string,
@@ -114,7 +101,6 @@ interface ElectronAPI {
     ) => Promise<{
       document: DocumentRecord;
       update: Uint8Array;
-      legacyBlocks: unknown[];
     }>;
     applyUpdate: (
       documentId: string,

@@ -15,16 +15,6 @@ export function createCollaborationHandlers(
   documents: DocumentManager,
   windows: WindowRegistry
 ): IPCHandlerMap {
-  const legacyLoadByDocumentId = new Map<string, Promise<unknown[]>>();
-  const loadLegacyBlocks = (documentId: string) => {
-    let loading = legacyLoadByDocumentId.get(documentId);
-    if (!loading) {
-      loading = documents.getBlockService(documentId).loadDocument();
-      legacyLoadByDocumentId.set(documentId, loading);
-    }
-    return loading;
-  };
-
   return {
     "documents:collaboration-subscribe": {
       type: "invoke",
@@ -38,7 +28,6 @@ export function createCollaborationHandlers(
         const session = windows.resolve(event.sender);
         if (!session) throw new Error("Unknown Digest renderer");
         const document = documents.getDocument(payload.documentId);
-        const legacyBlocks = await loadLegacyBlocks(document.id);
         const subscription = collaboration.subscribe(
           document.id,
           event.sender.id,
@@ -48,7 +37,6 @@ export function createCollaborationHandlers(
         return {
           document,
           update: subscription.update,
-          legacyBlocks: subscription.isCanonicalEmpty ? legacyBlocks : [],
         };
       },
     },

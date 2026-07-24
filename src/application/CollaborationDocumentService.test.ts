@@ -123,7 +123,6 @@ describe("CollaborationDocumentService", () => {
     );
     Y.applyUpdate(replica, subscription.update);
     expect(replica.getMap("values").get("answer")).toBe(42);
-    expect(subscription.isCanonicalEmpty).toBe(false);
     database.close();
   });
 

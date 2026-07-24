@@ -13,13 +13,17 @@ The first collaborative vertical slice was implemented on July 23, 2026:
   them to canonical state, and publishes them to the other subscribers.
 - Window sessions own their selected document; `documents:get-active` and
   switching are sender-scoped.
-- Existing notebooks bootstrap once from legacy block history into the
-  collaboration representation.
+- Existing notebooks were bootstrapped once from legacy block history into the
+  collaboration representation before compatibility removal.
 - Browser text and image clips now transact through the local collaborative
   editor.
 - Concurrent replica, state-vector catch-up, subscription authorization,
   production packaging, legacy bootstrap, and two-real-window loading have
   been verified.
+- The one prototype database has collaboration state for every live document.
+- The legacy block-operation IPC, renderer-ready handshake, block-array update
+  notifications, edit-lease registry, and legacy block persistence services
+  have been removed.
 
 Remaining hardening:
 
@@ -28,8 +32,6 @@ Remaining hardening:
 - Compact the append-only Yjs update log into collaboration snapshots.
 - Recreate a renderer replica automatically after a locally generated update is
   rejected for persistence or authorization reasons.
-- Retire the legacy block-array update channels after any remaining internal
-  callers have migrated.
 - Add optional awareness, presence, and remote cursors.
 
 ## Goal

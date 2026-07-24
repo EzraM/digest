@@ -13,7 +13,6 @@ import { LinkInterceptionService } from "./services/LinkInterceptionService";
 import { log } from "./utils/mainLogger";
 import { shouldOpenDevTools } from "./config/development";
 import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
-import { welcomeContent } from "./content/welcomeContent";
 import { DatabaseManager } from "./database/DatabaseManager";
 import { Container } from "./services/Container";
 import {
@@ -26,7 +25,6 @@ import { createProfileHandlers } from "./ipc/handlers/profileHandlers";
 import { createDocumentHandlers } from "./ipc/handlers/documentHandlers";
 import { createRendererHandlers } from "./ipc/handlers/rendererHandlers";
 import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
-import { createBlockHandlers } from "./ipc/handlers/blockHandlers";
 import { createSearchHandlers } from "./ipc/handlers/searchHandlers";
 import { createDownloadHandlers } from "./ipc/handlers/downloadHandlers";
 import { IPCServiceBridge } from "./services/IPCServiceBridge";
@@ -136,7 +134,7 @@ const initializeApplication = () => {
 
 const createWindow = async (initialHash?: string) => {
   const services = await initializeApplication();
-  const { blockEventManager, documentManager } = services;
+  const { documentManager } = services;
   const ipcServiceBridge = new IPCServiceBridge(ipcRouter, serviceContainer);
   const windowId = `window-${randomUUID()}`;
   const baseWindow = new BrowserWindow({
@@ -417,22 +415,7 @@ const createWindow = async (initialHash?: string) => {
   // Set up console log forwarding from renderer
   setupConsoleLogForwarding(appViewInstance);
 
-  // Attach renderer web contents to the active document's block service
-  const attachRendererToActiveDocument = () => {
-    const activeDocument = documentManager.activeDocument;
-    if (!activeDocument) {
-      log.debug("No active document available to attach renderer", "main");
-      return;
-    }
-
-    const blockService = documentManager.getBlockService(activeDocument.id);
-    blockService.setRendererWebContents(appViewInstance);
-  };
-
-  attachRendererToActiveDocument();
-
   services.debugEventService.setMainRendererWebContents(appViewInstance);
-  blockEventManager.setRendererWebContents(appViewInstance);
 
   if (!sharedIpcServicesExposed) {
     ipcServiceBridge.exposeService(
@@ -467,16 +450,12 @@ const createWindow = async (initialHash?: string) => {
     imageProtocolInitialized = true;
   }
 
-  // Document loading/seeding will happen when renderer signals it's ready
-  // This prevents race condition where Y.js updates are broadcast before renderer can receive them
-
-  // Set up IPC handlers (including renderer-ready handler)
+  // Set up process-wide IPC handlers.
   if (!ipcInitialized) {
     setupIpcHandlers(
       ipcRouter,
       viewStore,
       services,
-      appViewInstance,
       downloadManager
     );
     ipcInitialized = true;
@@ -548,7 +527,6 @@ const setupIpcHandlers = (
   router: IPCRouter,
   viewStore: WindowPresentationStore,
   services: ReturnType<typeof getServices>,
-  rendererView: WebContentsView,
   downloadManager: DownloadManager
 ) => {
   const { documentManager, profileManager } = services;
@@ -635,54 +613,6 @@ const setupIpcHandlers = (
     }
   };
 
-  const loadDocumentIntoRenderer = async (
-    documentId: string,
-    { seedIfEmpty = false }: { seedIfEmpty?: boolean } = {},
-    rendererId?: number
-  ) => {
-    const targetView = rendererId
-      ? windowRegistry
-          .list()
-          .find((session) => session.rendererView.webContents.id === rendererId)
-          ?.rendererView
-      : rendererView;
-    if (!targetView) throw new Error(`Unknown renderer: ${rendererId}`);
-    const blockService = documentManager.getBlockService(documentId);
-    blockService.setRendererWebContents(targetView);
-    const session = windowRegistry.resolve(targetView.webContents);
-    if (session) session.selectedDocumentId = documentId;
-
-    const blocks = await blockService.loadDocument();
-    if (seedIfEmpty && blocks.length === 0) {
-      await blockService.seedInitialContent(welcomeContent);
-    }
-
-    // Create snapshot when page is opened to avoid jank on reopen
-    await blockService.createSnapshot();
-  };
-
-  const loadInitialDocument = async (rendererId: number) => {
-    log.debug("Renderer ready signal received - loading document", "main");
-    const activeDocument =
-      documentManager.activeDocument ?? documentManager.listDocuments()[0];
-
-    if (!activeDocument) {
-      log.debug("No document available to load", "main");
-      return;
-    }
-
-    try {
-      await loadDocumentIntoRenderer(
-        activeDocument.id,
-        { seedIfEmpty: true },
-        rendererId
-      );
-      log.debug("Document loaded - Y.js will sync to renderer", "main");
-    } catch (error) {
-      log.debug(`Error loading document: ${error}`, "main");
-    }
-  };
-
   const resolveProfileId = () => profileManager.listProfiles()[0]?.id ?? null;
 
   const registerMap = (handlers: IPCHandlerMap) => {
@@ -733,16 +663,7 @@ const setupIpcHandlers = (
     },
   });
 
-  registerMap(
-    createRendererHandlers({
-      loadInitialDocument,
-      broadcastProfiles,
-      broadcastDocumentTree,
-      broadcastActiveDocument,
-      getActiveProfileId: () =>
-        documentManager.activeDocument?.profileId ?? null,
-    })
-  );
+  registerMap(createRendererHandlers());
 
   registerMap(
     createBrowserHandlers(
@@ -762,15 +683,6 @@ const setupIpcHandlers = (
         return placementId;
       },
       presentationCoordinator
-    )
-  );
-  registerMap(
-    createBlockHandlers(
-      documentManager,
-      rendererView,
-      services.blockOperationsApplier
-      ,
-      (rendererId) => windowRegistry.resolve({ id: rendererId } as any)?.windowId
     )
   );
   registerMap(

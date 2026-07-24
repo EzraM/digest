@@ -200,49 +200,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener(EVENTS.BROWSER.LINK_CAPTURED, subscription);
     };
   },
-  // Block operations for unified processing with transaction metadata
-  applyBlockOperations: (
-    documentId: string,
-    operations: any[],
-    origin?: any
-  ) => {
-    log.debug(
-      `Applying ${operations.length} block operations ${
-        origin?.batchId ? `(batch: ${origin.batchId})` : ""
-      }`,
-      "preload"
-    );
-    return ipcRenderer.invoke("block-operations:apply", {
-      documentId,
-      operations,
-      origin,
-    });
-  },
-
-  // Signal renderer ready to receive document updates
-  signalRendererReady: () => {
-    log.debug("Signaling renderer ready for document updates", "preload");
-    ipcRenderer.send("renderer-ready");
-  },
-
-  onDocumentUpdate: (callback: (updateData: any) => void) => {
-    const subscription = (_: any, updateData: any) => {
-      log.debug(
-        `Received document update: ${updateData?.blocks?.length || 0} blocks`,
-        "preload"
-      );
-      callback(updateData);
-    };
-    ipcRenderer.on("document-update", subscription);
-    return () => {
-      ipcRenderer.removeListener("document-update", subscription);
-    };
-  },
-
-  removeDocumentUpdateListener: (callback: (updateData: any) => void) => {
-    ipcRenderer.removeListener("document-update", callback);
-  },
-
   collaboration: {
     subscribe: (documentId: string, stateVector: Uint8Array) =>
       ipcRenderer.invoke("documents:collaboration-subscribe", {

@@ -3,7 +3,6 @@ import * as Y from "yjs";
 
 export type CollaborationSubscription = {
   update: Uint8Array;
-  isCanonicalEmpty: boolean;
 };
 
 export type AcceptedCollaborationUpdate = {
@@ -56,7 +55,6 @@ export class CollaborationDocumentService {
 
     return {
       update: Y.encodeStateAsUpdate(state.doc, stateVector),
-      isCanonicalEmpty: this.countUpdates(documentId) === 0,
     };
   }
 
@@ -162,14 +160,4 @@ export class CollaborationDocumentService {
     return state;
   }
 
-  private countUpdates(documentId: string): number {
-    const row = this.database
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM yjs_document_updates
-         WHERE document_id = ?`
-      )
-      .get(documentId) as { count: number };
-    return row.count;
-  }
 }

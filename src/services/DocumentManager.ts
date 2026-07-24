@@ -4,7 +4,6 @@ import { DEFAULT_PROFILE_ID } from "../config/profiles";
 import { DocumentRecord, DocumentTreeNode } from "../types/documents";
 import { log } from "../utils/mainLogger";
 import { ProfileManager } from "./ProfileManager";
-import { BlockOperationService } from "../domains/blocks/services";
 import { MAX_DOCUMENT_DEPTH } from "../config/documents";
 
 export interface CreateDocumentOptions {
@@ -30,7 +29,6 @@ interface DocumentRow {
 export class DocumentManager {
   private documents = new Map<string, DocumentRecord>();
   private activeDocumentId: string | null = null;
-  private blockOperationServices = new Map<string, BlockOperationService>();
 
   constructor(
     private database: Database.Database,
@@ -300,16 +298,6 @@ export class DocumentManager {
     const document = this.getDocument(documentId);
     this.activeDocumentId = documentId;
     return document;
-  }
-
-  getBlockService(documentId: string): BlockOperationService {
-    if (this.blockOperationServices.has(documentId)) {
-      return this.blockOperationServices.get(documentId)!;
-    }
-
-    const service = BlockOperationService.getInstance(documentId, this.database);
-    this.blockOperationServices.set(documentId, service);
-    return service;
   }
 
   private loadDocumentsFromDatabase(): void {
