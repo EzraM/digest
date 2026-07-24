@@ -2,7 +2,10 @@ import { useEffect } from "react";
 import { ClipService } from "../domains/clip/services/ClipService";
 import { ClipConverter } from "../domains/clip/services/ClipConverter";
 import { ClipCommitService } from "../domains/clip/services/ClipCommitService";
-import { getCurrentCursorBlockId } from "./useRendererEditor";
+import {
+  applyBlockOperationsToCurrentEditor,
+  getCurrentCursorBlockId,
+} from "./useRendererEditor";
 import { log } from "../utils/rendererLogger";
 
 /**
@@ -50,20 +53,13 @@ export const useBrowserImageClips = (documentId: string | null) => {
           throw new Error("Clipped image was no longer available");
         }
 
-        const { operations, origin } =
-          await clipCommitService.createClipOperations(
-            convertedDraft,
-            insertAfterBlockId
-          );
-        if (!documentId) throw new Error("No document selected");
-        const result = await window.electronAPI.applyBlockOperations(
-          documentId,
-          operations,
-          origin
+        const { operations } = await clipCommitService.createClipOperations(
+          convertedDraft,
+          insertAfterBlockId
         );
-
-        if (!result.success) {
-          throw new Error(result.errors?.join(", ") || "Unknown insertion error");
+        if (!documentId) throw new Error("No document selected");
+        if (!applyBlockOperationsToCurrentEditor(operations)) {
+          throw new Error("No notebook editor is available");
         }
         inserted = true;
 

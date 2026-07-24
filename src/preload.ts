@@ -243,6 +243,39 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.removeListener("document-update", callback);
   },
 
+  collaboration: {
+    subscribe: (documentId: string, stateVector: Uint8Array) =>
+      ipcRenderer.invoke("documents:collaboration-subscribe", {
+        documentId,
+        stateVector,
+      }),
+    applyUpdate: (
+      documentId: string,
+      updateId: string,
+      update: Uint8Array
+    ) =>
+      ipcRenderer.invoke("documents:collaboration-update", {
+        documentId,
+        updateId,
+        update,
+      }),
+    unsubscribe: (documentId: string) =>
+      ipcRenderer.invoke("documents:collaboration-unsubscribe", documentId),
+    onUpdate: (
+      callback: (event: {
+        documentId: string;
+        updateId: string;
+        update: Uint8Array;
+        producerRendererId: number;
+      }) => void
+    ) => {
+      const channel = "documents:collaboration-update";
+      const handler = (_event: unknown, event: any) => callback(event);
+      ipcRenderer.on(channel, handler);
+      return () => ipcRenderer.removeListener(channel, handler);
+    },
+  },
+
   // Console log forwarding
   forwardLog: (logData: {
     level: string;

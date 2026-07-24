@@ -42,7 +42,8 @@ import { BrowsingJourneyStore } from "./services/BrowsingJourneyStore";
 import { ApplicationJourneyAllocator } from "./services/ApplicationJourneyAllocator";
 import { BrowserPresentationCoordinator } from "./services/BrowserPresentationCoordinator";
 import { HandleRegistry } from "./domains/browser-views/adapter/HandleRegistry";
-import { DocumentEditRegistry } from "./application/DocumentEditRegistry";
+import { CollaborationDocumentService } from "./application/CollaborationDocumentService";
+import { createCollaborationHandlers } from "./ipc/handlers/collaborationHandlers";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -110,7 +111,7 @@ const journeyAllocator = new ApplicationJourneyAllocator({
   journeys: sharedJourneys,
   handles: sharedHandles,
 });
-const documentEditRegistry = new DocumentEditRegistry();
+let collaborationDocuments: CollaborationDocumentService | undefined;
 const ipcRouter = new IPCRouter();
 let applicationServices: ReturnType<typeof getServices> | undefined;
 let applicationInitialization: Promise<ReturnType<typeof getServices>> | undefined;
@@ -124,6 +125,9 @@ const initializeApplication = () => {
     registerServices(serviceContainer);
     await initializeAllServices(serviceContainer);
     applicationServices = getServices(serviceContainer);
+    collaborationDocuments = new CollaborationDocumentService(
+      applicationServices.database as Database.Database
+    );
     log.debug("Application services initialized", "main");
     return applicationServices;
   })();
@@ -162,6 +166,7 @@ const createWindow = async (initialHash?: string) => {
     windowId,
     browserWindow: baseWindow,
     rendererView: appViewInstance,
+    selectedDocumentId: null,
   });
   const placement = placementRegistry.register(
     windowId,
@@ -484,7 +489,7 @@ const createWindow = async (initialHash?: string) => {
     const rendererId = appViewInstance.webContents.id;
     viewStore.dispose();
     viewStoreByRendererId.delete(rendererId);
-    documentEditRegistry.releaseRenderer(rendererId);
+    collaborationDocuments?.unsubscribe(rendererId);
     placementIdByRendererId.delete(rendererId);
     placementRegistry.retireWindow(windowId);
     windowRegistry.retire(windowId);
@@ -580,6 +585,22 @@ const setupIpcHandlers = (
     }
   };
 
+  if (!collaborationDocuments) {
+    throw new Error("Collaboration document service is not initialized");
+  }
+  collaborationDocuments.setPublisher((event) => {
+    for (const rendererId of collaborationDocuments!.subscribers(
+      event.documentId
+    )) {
+      if (rendererId === event.producerRendererId) continue;
+      sendToRenderer(
+        "documents:collaboration-update",
+        event,
+        rendererId
+      );
+    }
+  });
+
   const broadcastDocumentTree = (
     profileId: string | null,
     rendererId?: number
@@ -595,12 +616,23 @@ const setupIpcHandlers = (
   };
 
   const broadcastActiveDocument = (rendererId?: number) => {
-    const activeDocument = documentManager.activeDocument;
-    sendToRenderer(
-      "document:switched",
-      { document: activeDocument },
-      rendererId
-    );
+    const targets = rendererId
+      ? windowRegistry
+          .list()
+          .filter(
+            (session) => session.rendererView.webContents.id === rendererId
+          )
+      : windowRegistry.list();
+    for (const target of targets) {
+      const document = target.selectedDocumentId
+        ? documentManager.getDocument(target.selectedDocumentId)
+        : documentManager.activeDocument;
+      if (!target.rendererView.webContents.isDestroyed()) {
+        target.rendererView.webContents.send("document:switched", {
+          document,
+        });
+      }
+    }
   };
 
   const loadDocumentIntoRenderer = async (
@@ -616,8 +648,9 @@ const setupIpcHandlers = (
       : rendererView;
     if (!targetView) throw new Error(`Unknown renderer: ${rendererId}`);
     const blockService = documentManager.getBlockService(documentId);
-    documentEditRegistry.acquire(documentId, targetView.webContents.id);
     blockService.setRendererWebContents(targetView);
+    const session = windowRegistry.resolve(targetView.webContents);
+    if (session) session.selectedDocumentId = documentId;
 
     const blocks = await blockService.loadDocument();
     if (seedIfEmpty && blocks.length === 0) {
@@ -737,9 +770,14 @@ const setupIpcHandlers = (
       rendererView,
       services.blockOperationsApplier
       ,
-      (rendererId) => windowRegistry.resolve({ id: rendererId } as any)?.windowId,
-      (documentId, rendererId) =>
-        documentEditRegistry.requireOwner(documentId, rendererId)
+      (rendererId) => windowRegistry.resolve({ id: rendererId } as any)?.windowId
+    )
+  );
+  registerMap(
+    createCollaborationHandlers(
+      collaborationDocuments,
+      documentManager,
+      windowRegistry
     )
   );
   registerMap(
@@ -752,10 +790,10 @@ const setupIpcHandlers = (
   registerMap(
     createDocumentHandlers(
       documentManager,
+      windowRegistry,
       resolveProfileId,
       broadcastDocumentTree,
-      broadcastActiveDocument,
-      loadDocumentIntoRenderer
+      broadcastActiveDocument
     )
   );
   registerMap(

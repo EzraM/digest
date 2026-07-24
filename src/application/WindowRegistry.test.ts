@@ -5,6 +5,7 @@ const session = (windowId: string, rendererId: number) =>
     windowId,
     browserWindow: {},
     rendererView: { webContents: { id: rendererId } },
+    selectedDocumentId: null,
   }) as any;
 
 describe("WindowRegistry", () => {

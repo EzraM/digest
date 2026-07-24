@@ -1,20 +1,23 @@
 import { DocumentManager } from "../../services/DocumentManager";
 import { IPCHandlerMap } from "../IPCRouter";
+import { WindowRegistry } from "../../application/WindowRegistry";
 export function createDocumentHandlers(
   documentManager: DocumentManager,
+  windowRegistry: WindowRegistry,
   profileIdResolver: () => string | null,
   broadcastDocumentTree: (profileId: string | null) => void,
-  broadcastActiveDocument: (rendererId?: number) => void,
-  loadDocumentIntoRenderer: (
-    documentId: string,
-    options?: { seedIfEmpty?: boolean },
-    rendererId?: number
-  ) => Promise<void>
+  broadcastActiveDocument: (rendererId?: number) => void
 ): IPCHandlerMap {
   return {
     "documents:get-active": {
       type: "invoke",
-      fn: () => documentManager.activeDocument,
+      fn: (event) => {
+        const selectedDocumentId =
+          windowRegistry.resolve(event.sender)?.selectedDocumentId;
+        return selectedDocumentId
+          ? documentManager.getDocument(selectedDocumentId)
+          : documentManager.activeDocument;
+      },
     },
     "documents:get-tree": {
       type: "invoke",
@@ -109,13 +112,11 @@ export function createDocumentHandlers(
     "documents:switch": {
       type: "invoke",
       fn: async (event, documentId: string) => {
-        const document = documentManager.switchDocument(documentId);
+        const session = windowRegistry.resolve(event.sender);
+        if (!session) throw new Error("Unknown Digest renderer");
+        const document = documentManager.getDocument(documentId);
+        session.selectedDocumentId = documentId;
 
-        await loadDocumentIntoRenderer(
-          documentId,
-          { seedIfEmpty: true },
-          event.sender.id
-        );
         broadcastDocumentTree(document.profileId);
         broadcastActiveDocument(event.sender.id);
 

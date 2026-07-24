@@ -4,6 +4,7 @@ export type WindowSession = {
   windowId: string;
   browserWindow: BrowserWindow;
   rendererView: WebContentsView;
+  selectedDocumentId: string | null;
 };
 
 /**

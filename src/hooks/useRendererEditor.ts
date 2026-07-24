@@ -1,5 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
+// TypeScript's legacy "node" resolution does not follow this package export,
+// while Vite and Electron resolve it correctly at runtime.
+// @ts-expect-error BlockNote publishes types through the package export map.
+// eslint-disable-next-line import/no-unresolved
+import { withCollaboration } from "@blocknote/core/yjs";
+import * as Y from "yjs";
 import {
   CustomBlockNoteEditor,
   CustomPartialBlock,
@@ -17,6 +23,7 @@ import {
 import { createMiddleClickDeleteExtension } from "../domains/blocks/adapters/createMiddleClickDeleteExtension";
 import { createLiveLinkIndicatorExtension } from "../domains/blocks/adapters/createLiveLinkIndicatorExtension";
 import { useAppRoute } from "../context/AppRouteContext";
+import type { BlockOperation } from "../domains/blocks/core";
 
 let currentEditor: CustomBlockNoteEditor | null = null;
 
@@ -88,6 +95,30 @@ export const insertInlineLinkAtCurrentCursor = (
   });
 };
 
+export const applyBlockOperationsToCurrentEditor = (
+  operations: BlockOperation[]
+): boolean => {
+  const editor = currentEditor;
+  if (!editor) return false;
+
+  for (const operation of operations) {
+    if (operation.type !== "insert" || !operation.block) {
+      throw new Error(
+        `Collaborative renderer operation is not supported: ${operation.type}`
+      );
+    }
+    const anchor =
+      (operation.afterBlockId
+        ? editor.getBlock(operation.afterBlockId)
+        : undefined) ?? editor.document.at(-1);
+    if (!anchor) {
+      throw new Error("Cannot insert into an empty collaborative editor");
+    }
+    editor.insertBlocks([operation.block as any], anchor, "after");
+  }
+  return true;
+};
+
 const isCurrentBlockRoute = (blockId: string): boolean => {
   const blockRouteMatch = window.location.hash.match(/^#\/block\/([^?/]*)/);
   return blockRouteMatch
@@ -103,14 +134,24 @@ export const useRendererEditor = (
   }
 ): CustomBlockNoteEditor => {
   const { navigateToUrl } = useAppRoute();
-  const editor = useCreateBlockNote({
+  const documentId = pluginProfile?.documentId ?? null;
+  const yDoc = useMemo(() => new Y.Doc(), [documentId]);
+  useEffect(() => () => yDoc.destroy(), [yDoc]);
+
+  const editor = useCreateBlockNote(withCollaboration({
     schema,
-    initialContent: undefined,
+    collaboration: {
+      fragment: yDoc.getXmlFragment("document"),
+      user: {
+        name: "Local user",
+        color: "#6d5bd0",
+      },
+    },
     links: {
       HTMLAttributes: {
         target: "_self",
       },
-      onClick: (event) => {
+      onClick: (event: MouseEvent) => {
         event.preventDefault();
 
         const target = event.target;
@@ -133,7 +174,8 @@ export const useRendererEditor = (
       createMiddleClickDeleteExtension,
       createLiveLinkIndicatorExtension,
     ],
-    pasteHandler: (context) => handleElectronPaste(context),
+    pasteHandler: (context: Parameters<typeof handleElectronPaste>[0]) =>
+      handleElectronPaste(context),
     uploadFile: async (file: File): Promise<string> => {
       // Read file as ArrayBuffer
       const arrayBuffer = await file.arrayBuffer();
@@ -186,7 +228,7 @@ export const useRendererEditor = (
 
       return result.url;
     },
-  }) as CustomBlockNoteEditor;
+  }), [documentId]) as CustomBlockNoteEditor;
 
   useEffect(() => {
     if (!pluginProfile) return;
@@ -317,7 +359,7 @@ export const useRendererEditor = (
     return unsubscribe;
   }, []);
 
-  useDocumentSync(editor, pluginProfile?.documentId ?? null);
+  useDocumentSync(editor, documentId, yDoc);
 
   return editor;
 };

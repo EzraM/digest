@@ -1,181 +1,114 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import * as Y from "yjs";
 import { CustomBlockNoteEditor } from "../types/schema";
 import { log } from "../utils/rendererLogger";
-import { useDebounced } from "./useDebounced";
+
+const REMOTE_ORIGIN = { kind: "digest-main" };
 
 /**
- * Custom hook to synchronize document state and operations with the main process.
- * Handles persistence by saving user operations to Y.js + SQLite.
+ * Connects one renderer-local Y.Doc to the main-process canonical Y.Doc.
+ * BlockNote is bound directly to this same local document by useRendererEditor.
  */
 export const useDocumentSync = (
   editor: CustomBlockNoteEditor,
-  documentId: string | null
+  documentId: string | null,
+  yDoc: Y.Doc
 ) => {
-  // Track the last known document state to detect real changes
-  const lastDocumentRef = useRef<any[] | null>(null);
+  useEffect(() => {
+    if (!editor || !documentId || !window.electronAPI?.collaboration) return;
 
-  // Track when we're expecting a Y.js update (cleaner than handler manipulation)
-  const expectingYjsSyncRef = useRef(false);
+    let disposed = false;
+    let subscribed = false;
+    let applyingBootstrap = true;
+    const pending = new Set<Promise<unknown>>();
 
-  // ROLE 1: Debounced function to save user operations for persistence
-  const saveUserOperation = useDebounced<{ document: any[]; changes: any[] }>(
-    ({ document, changes }) => {
-      const operation = {
-        id: `user-edit-${Date.now()}`,
-        type: "update" as const,
-        blockId: "document-root",
-        source: "user" as const,
-        timestamp: Date.now(),
-        block: null as any,
-        document: document,
-        changes: changes,
-        userId: "local-user",
-        requestId: `user-edit-${Date.now()}`,
-      };
+    const sendUpdate = (update: Uint8Array, origin: unknown) => {
+      if (
+        disposed ||
+        !subscribed ||
+        applyingBootstrap ||
+        origin === REMOTE_ORIGIN
+      ) {
+        return;
+      }
 
-      const origin = {
-        source: "user" as const,
-        batchId: `user-batch-${Date.now()}`,
-        requestId: `user-edit-${Date.now()}`,
-        timestamp: Date.now(),
-      };
-
-      log.debug(
-        `Saving user operation with ${document.length} blocks (after 2s delay)`,
-        "useDocumentSync"
-      );
-
-      (window.electronAPI as any)
-        ?.applyBlockOperations(documentId, [operation], origin)
-        .then((result: any) => {
+      const updateId = crypto.randomUUID();
+      const request = window.electronAPI.collaboration
+        .applyUpdate(documentId, updateId, update)
+        .catch((error) => {
           log.debug(
-            `User operation saved: ${result.operationsApplied} operations`,
+            `Collaborative update ${updateId} was rejected: ${error}`,
             "useDocumentSync"
           );
         })
-        .catch((error: any) => {
-          log.debug(`Error saving user operation: ${error}`, "useDocumentSync");
-        });
-    },
-    2000
-  );
-
-  useEffect(() => {
-    if (!editor || !window.electronAPI || !documentId) return;
-
-    // Handle document changes - but filter intelligently
-    const handleDocumentChange = (
-      currentEditor: CustomBlockNoteEditor,
-      options?: { getChanges?: () => any[] }
-    ) => {
-      const currentDocument = currentEditor.document;
-
-      // Check if this change was expected from Y.js sync
-      if (expectingYjsSyncRef.current) {
-        log.debug(
-          "Document changed from Y.js sync - updating tracking without persisting",
-          "useDocumentSync"
-        );
-        lastDocumentRef.current = currentDocument;
-        expectingYjsSyncRef.current = false; // Reset flag
-        return;
-      }
-
-      // Check if document actually changed (avoid duplicate operations)
-      if (
-        lastDocumentRef.current &&
-        JSON.stringify(currentDocument) ===
-          JSON.stringify(lastDocumentRef.current)
-      ) {
-        log.debug("Document unchanged - skipping operation", "useDocumentSync");
-        return;
-      }
-
-      // This is a genuine user edit - persist changes
-      lastDocumentRef.current = currentDocument;
-
-      // Extract changes if available from BlockNote's onChange callback
-      const changes = options?.getChanges?.() ?? [];
-      saveUserOperation({ document: currentDocument, changes });
-
-      log.debug(
-        `User edited document: ${currentDocument.length} blocks (queued for save)`,
-        "useDocumentSync"
-      );
+        .finally(() => pending.delete(request));
+      pending.add(request);
     };
 
-    // Handle Y.js updates from main process
-    const handleYjsSync = (updateData: any) => {
-      if (!updateData?.blocks || !Array.isArray(updateData.blocks)) return;
+    yDoc.on("update", sendUpdate);
 
-      const { blocks, origin } = updateData;
-      if (updateData.documentId && updateData.documentId !== documentId) {
-        return;
-      }
-
-      // Use transaction metadata to determine if we should apply this update
-      const isOwnUserUpdate =
-        origin?.source === "user" &&
-        origin?.rendererId === updateData?.recipientRendererId;
-      const isSystemOriginated = origin?.source === "system" || !origin;
-      const isClipOriginated = origin?.source === "clip";
-
-      if (isOwnUserUpdate) {
-        // Skip user-originated Y.js updates to prevent loops
-        log.debug(
-          `Skipping Y.js sync from user operation (${origin.batchId})`,
-          "useDocumentSync"
-        );
-        return;
-      }
-
-      // Apply clip insertions and system updates
-      if (isClipOriginated || isSystemOriginated) {
-        const sourceType = isClipOriginated ? "clip" : "system";
-        log.debug(
-          `Applying Y.js sync from ${sourceType}: ${blocks.length} blocks${
-            origin ? ` (${origin.batchId})` : ""
-          }`,
-          "useDocumentSync"
-        );
-
+    const unsubscribeRemote = window.electronAPI.collaboration.onUpdate(
+      (event) => {
+        if (disposed || event.documentId !== documentId) return;
         try {
-          // Set expectation flag BEFORE applying blocks
-          expectingYjsSyncRef.current = true;
-
-          // Apply the Y.js update - this will trigger onChange
-          editor.replaceBlocks(editor.document, blocks);
-
-          // The onChange will see the flag and handle it appropriately
-          log.debug("Y.js sync applied successfully", "useDocumentSync");
+          Y.applyUpdate(yDoc, new Uint8Array(event.update), REMOTE_ORIGIN);
         } catch (error) {
-          expectingYjsSyncRef.current = false; // Reset on error
-          log.debug(`Y.js sync failed: ${error}`, "useDocumentSync");
+          log.debug(
+            `Failed to apply collaborative update ${event.updateId}: ${error}`,
+            "useDocumentSync"
+          );
         }
       }
-    };
+    );
 
-    // Send initial document state and set up tracking
-    const initialDocument = editor.document;
-    lastDocumentRef.current = initialDocument;
+    const connect = async () => {
+      try {
+        const response = await window.electronAPI.collaboration.subscribe(
+          documentId,
+          Y.encodeStateVector(yDoc)
+        );
+        if (disposed) return;
 
-    // Set up event listeners (no handler manipulation!)
-    editor.onChange(handleDocumentChange);
+        Y.applyUpdate(
+          yDoc,
+          new Uint8Array(response.update),
+          REMOTE_ORIGIN
+        );
+        subscribed = true;
 
-    if (window.electronAPI?.onDocumentUpdate) {
-      window.electronAPI.onDocumentUpdate(handleYjsSync);
-    }
+        if (response.legacyBlocks.length > 0) {
+          editor.replaceBlocks(editor.document, response.legacyBlocks as any);
+        }
 
-    // Signal to main process that renderer is ready to receive document updates
-    if (window.electronAPI?.signalRendererReady) {
-      window.electronAPI.signalRendererReady();
-    }
-
-    // Cleanup
-    return () => {
-      if (window.electronAPI?.removeDocumentUpdateListener) {
-        window.electronAPI.removeDocumentUpdateListener(handleYjsSync);
+        // The collaboration extension may have initialized the local fragment
+        // before the update listener was connected. Send the complete local
+        // state once; Yjs safely deduplicates state already known by main.
+        applyingBootstrap = false;
+        const initialUpdate = Y.encodeStateAsUpdate(yDoc);
+        if (initialUpdate.length > 2) {
+          sendUpdate(initialUpdate, { kind: "initial-sync" });
+        }
+      } catch (error) {
+        log.debug(
+          `Failed to subscribe to document ${documentId}: ${error}`,
+          "useDocumentSync"
+        );
+      } finally {
+        applyingBootstrap = false;
       }
     };
-  }, [documentId, editor, saveUserOperation]);
+
+    void connect();
+
+    return () => {
+      disposed = true;
+      yDoc.off("update", sendUpdate);
+      unsubscribeRemote();
+      if (subscribed) {
+        void Promise.allSettled(Array.from(pending)).finally(() => {
+          void window.electronAPI.collaboration.unsubscribe(documentId);
+        });
+      }
+    };
+  }, [documentId, editor, yDoc]);
 };

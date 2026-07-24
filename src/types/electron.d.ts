@@ -107,6 +107,32 @@ interface ElectronAPI {
     callback: (updateData: import("./operations").DocumentUpdate) => void
   ) => void;
   signalRendererReady: () => void;
+  collaboration: {
+    subscribe: (
+      documentId: string,
+      stateVector: Uint8Array
+    ) => Promise<{
+      document: DocumentRecord;
+      update: Uint8Array;
+      legacyBlocks: unknown[];
+    }>;
+    applyUpdate: (
+      documentId: string,
+      updateId: string,
+      update: Uint8Array
+    ) => Promise<{ accepted: boolean; duplicate: boolean }>;
+    unsubscribe: (
+      documentId: string
+    ) => Promise<{ unsubscribed: boolean }>;
+    onUpdate: (
+      callback: (event: {
+        documentId: string;
+        updateId: string;
+        update: Uint8Array;
+        producerRendererId: number;
+      }) => void
+    ) => () => void;
+  };
   forwardLog: (logData: {
     level: string;
     message: string;

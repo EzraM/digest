@@ -72,7 +72,9 @@
     "sqlite-vec": "^0.1.9",
     "uuid": "^10.0.0",
     "winston": "^3.17.0",
-    "yjs": "^13.6.10"
+    "y-prosemirror": "^1.3.7",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.27"
   },
   "resolutions": {
     "prosemirror-model": "^1.25.4",
