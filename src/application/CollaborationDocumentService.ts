@@ -1,5 +1,8 @@
 import Database from "better-sqlite3";
 import * as Y from "yjs";
+import { yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
+import type { Block } from "../domains/blocks/core";
+import { projectCanonicalDocument } from "./projectCanonicalDocument";
 
 export type CollaborationSubscription = {
   update: Uint8Array;
@@ -28,6 +31,9 @@ export class CollaborationDocumentService {
   private readonly states = new Map<string, DocumentState>();
   private readonly documentIdByRendererId = new Map<number, string>();
   private readonly rendererIdsByDocumentId = new Map<string, Set<number>>();
+  private readonly projectionListeners = new Set<
+    (projection: { documentId: string; blocks: Block[] }) => void
+  >();
   private publish: (event: AcceptedCollaborationUpdate) => void = () => undefined;
 
   constructor(private readonly database: Database.Database) {}
@@ -36,6 +42,13 @@ export class CollaborationDocumentService {
     publish: (event: AcceptedCollaborationUpdate) => void
   ): void {
     this.publish = publish;
+  }
+
+  subscribeProjections(
+    listener: (projection: { documentId: string; blocks: Block[] }) => void
+  ): () => void {
+    this.projectionListeners.add(listener);
+    return () => this.projectionListeners.delete(listener);
   }
 
   subscribe(
@@ -127,6 +140,10 @@ export class CollaborationDocumentService {
       });
       outcome = { accepted: true, duplicate: false };
       this.publish(input);
+      const projection = this.projectDocument(input.documentId);
+      for (const listener of this.projectionListeners) {
+        listener(projection);
+      }
     });
 
     state.queue = work.catch(() => undefined);
@@ -136,6 +153,19 @@ export class CollaborationDocumentService {
 
   encodeState(documentId: string): Uint8Array {
     return Y.encodeStateAsUpdate(this.getState(documentId).doc);
+  }
+
+  projectDocument(documentId: string): {
+    documentId: string;
+    blocks: Block[];
+  } {
+    const fragment = this.getState(documentId).doc.getXmlFragment("document");
+    return {
+      documentId,
+      blocks: projectCanonicalDocument(
+        yXmlFragmentToProsemirrorJSON(fragment)
+      ),
+    };
   }
 
   private getState(documentId: string): DocumentState {

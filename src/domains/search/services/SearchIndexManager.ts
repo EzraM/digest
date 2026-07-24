@@ -26,8 +26,6 @@ import type {
   RetrievedNote,
 } from "../core/types";
 import type { Block } from "../../blocks/core/types";
-import type { BlockOperation } from "../../blocks/core";
-import { extractTextFromBlock } from "../core/textExtractor";
 import { log } from "../../../utils/mainLogger";
 
 /**
@@ -171,37 +169,6 @@ export class SearchIndexManager {
   }
 
   /**
-   * Index a single block (called when blocks change)
-   */
-  async indexBlock(block: Block, documentId: string): Promise<void> {
-    this.ensureInitialized();
-    // If the block has no searchable content (e.g. link URL cleared), remove from index
-    // so it doesn't appear in results; we only get updates here, not block deletes.
-    const text = extractTextFromBlock(block).trim();
-    if (!text) {
-      await this.removeBlock(block.id);
-      return;
-    }
-    await this.searchService.indexBlock(block, documentId);
-  }
-
-  /**
-   * Queue a block for indexing (debounced)
-   */
-  queueBlock(block: Block, documentId: string): void {
-    this.ensureInitialized();
-    this.searchService.queueBlock(block, documentId);
-  }
-
-  /**
-   * Remove a block from the index
-   */
-  async removeBlock(blockId: string): Promise<void> {
-    this.ensureInitialized();
-    await this.searchService.removeBlock(blockId);
-  }
-
-  /**
    * Reindex an entire document
    */
   async reindexDocument(documentId: string, blocks: Block[]): Promise<void> {
@@ -222,96 +189,11 @@ export class SearchIndexManager {
   }
 
   /**
-   * React to applied block operations (for post-write middleware).
-   * Indexes insert/update blocks and removes deleted blocks from the search index.
-   */
-  async indexOperations(
-    operations: BlockOperation[],
-    documentId: string
-  ): Promise<void> {
-    this.ensureInitialized();
-
-    for (const op of operations) {
-      try {
-        const changes = (
-          op as BlockOperation & {
-            changes?: Array<{ type: string; block?: Block }>;
-          }
-        ).changes;
-        if (changes?.length) {
-          for (const change of changes) {
-            if (change.type === "delete" && change.block?.id) {
-              log.info(
-                `Search index: delete via changes, blockId=${change.block.id}`,
-                "SearchIndexManager"
-              );
-              await this.removeBlock(change.block.id);
-            } else if (
-              (change.type === "insert" || change.type === "update") &&
-              change.block
-            ) {
-              await this.indexBlock(change.block, documentId);
-            }
-          }
-        } else {
-          if (op.type === "delete") {
-            log.info(
-              `Search index: delete via op, blockId=${op.blockId}`,
-              "SearchIndexManager"
-            );
-            await this.removeBlock(op.blockId);
-          } else if (
-            (op.type === "insert" || op.type === "update") &&
-            op.block
-          ) {
-            await this.indexBlock(op.block, documentId);
-          }
-        }
-      } catch (error) {
-        log.debug(
-          `Search index: failed to process operation ${op.blockId}: ${error}`,
-          "SearchIndexManager"
-        );
-      }
-    }
-  }
-
-  /**
    * Get index statistics
    */
   async getStats(): Promise<{ indexedBlocks: number; lastIndexedAt?: number }> {
     this.ensureInitialized();
     return this.searchService.getStats();
-  }
-
-  /**
-   * Bootstrap index for existing documents
-   * Call this on app startup to index any unindexed blocks
-   */
-  async bootstrapIndex(
-    getDocumentBlocks: (documentId: string) => Promise<Block[]>,
-    documentIds: string[]
-  ): Promise<void> {
-    this.ensureInitialized();
-
-    log.debug(
-      `Bootstrapping index for ${documentIds.length} documents`,
-      "SearchIndexManager"
-    );
-
-    for (const documentId of documentIds) {
-      try {
-        const blocks = await getDocumentBlocks(documentId);
-        if (blocks.length > 0) {
-          await this.searchService.reindexDocument(documentId, blocks);
-        }
-      } catch (error) {
-        log.debug(
-          `Failed to bootstrap document ${documentId}: ${error}`,
-          "SearchIndexManager"
-        );
-      }
-    }
   }
 
   /**

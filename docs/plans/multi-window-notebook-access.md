@@ -24,6 +24,9 @@ The first collaborative vertical slice was implemented on July 23, 2026:
 - The legacy block-operation IPC, renderer-ready handshake, block-array update
   notifications, edit-lease registry, and legacy block persistence services
   have been removed.
+- Accepted canonical Yjs state now drives an internal projection pipeline for
+  full-text search indexing, removed-image cleanup, and document block counts;
+  no renderer IPC was added for derived data.
 
 Remaining hardening:
 
