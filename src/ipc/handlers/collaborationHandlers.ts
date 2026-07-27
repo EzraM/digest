@@ -3,6 +3,8 @@ import { CollaborationDocumentService } from "../../application/CollaborationDoc
 import { WindowRegistry } from "../../application/WindowRegistry";
 import { DocumentManager } from "../../services/DocumentManager";
 import { IPCHandlerMap } from "../IPCRouter";
+import { NotebookWriteService } from "../../domains/notebook-content/application/NotebookWriteService";
+import type { InsertNotebookContent } from "../../domains/notebook-content/core/NotebookAddress";
 
 const asUint8Array = (value: unknown, field: string): Uint8Array => {
   if (value instanceof Uint8Array) return value;
@@ -15,7 +17,16 @@ export function createCollaborationHandlers(
   documents: DocumentManager,
   windows: WindowRegistry
 ): IPCHandlerMap {
+  const notebookWrites = new NotebookWriteService(collaboration, documents);
   return {
+    "notebook:insert-content": {
+      type: "invoke",
+      fn: async (event, command: InsertNotebookContent) => {
+        const session = windows.resolve(event.sender);
+        if (!session) throw new Error("Unknown Digest renderer");
+        return notebookWrites.insertContent(command, event.sender.id);
+      },
+    },
     "documents:collaboration-subscribe": {
       type: "invoke",
       fn: async (

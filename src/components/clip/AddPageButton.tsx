@@ -2,12 +2,12 @@ import { useState } from "react";
 import { useClipCapture } from "../../hooks/useClipCapture";
 import { createInlineLinkBlock } from "../../hooks/inlineLinkInsertion";
 import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
-import { RendererNotebookWriter } from "../../domains/notebook-content/application/RendererNotebookWriter";
+import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
 
 type AddPageButtonProps = {
   viewId: string;
   notebookAddress: NotebookAddress;
-  notebookWriter: RendererNotebookWriter;
+  notebookWriter: NotebookWriteClient;
 };
 
 export const AddPageButton = ({
@@ -32,15 +32,20 @@ export const AddPageButton = ({
       const pageInfo = await window.electronAPI.browser.getPageInfo(viewId);
       if (
         pageInfo.success &&
-        notebookWriter.insert(
+        (await notebookWriter.insert(
           notebookAddress,
           [
             createInlineLinkBlock({
               url: pageInfo.url,
               title: pageInfo.title || pageInfo.url,
             }),
-          ]
-        )
+          ],
+          {
+            source: "page-link",
+            sourceUrl: pageInfo.url,
+            capturedAt: Date.now(),
+          }
+        )).status !== "rejected"
       ) {
         console.info("[AddPageButton] Added current page link to notebook", {
           url: pageInfo.url,

@@ -119,6 +119,13 @@ interface ElectronAPI {
       }) => void
     ) => () => void;
   };
+  notebook: {
+    insertContent: (
+      command: import("../domains/notebook-content/core/NotebookAddress").InsertNotebookContent
+    ) => Promise<
+      import("../domains/notebook-content/core/NotebookAddress").NotebookWriteResult
+    >;
+  };
   forwardLog: (logData: {
     level: string;
     message: string;
@@ -285,6 +292,7 @@ interface ElectronAPI {
   ) => () => void;
   onDownloadInsertFileBlock: (
     callback: (data: {
+      id: string;
       fileName: string;
       savePath: string;
       url: string;

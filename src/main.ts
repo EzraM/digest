@@ -383,6 +383,7 @@ const createWindow = async (
 
     // Also send a file block insertion event so the renderer can add a file block at cursor
     sendToApp("download:insert-file-block", {
+      id: info.id,
       fileName: info.fileName,
       savePath: info.savePath,
       url: info.url,

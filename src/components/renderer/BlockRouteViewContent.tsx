@@ -12,7 +12,7 @@ import { BrowserTitleBar } from "./BrowserTitleBar";
 import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
 import { useBrowserLoadState } from "../../hooks/useBrowserLoadState";
 import { useTitleBar } from "../../context/TitleBarContext";
-import { RendererNotebookWriter } from "../../domains/notebook-content/application/RendererNotebookWriter";
+import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
 import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
 
 type BlockRouteViewContentProps = {
@@ -24,7 +24,7 @@ type BlockRouteViewContentProps = {
   placementId: string;
   editor: CustomBlockNoteEditor;
   notebookAddress: NotebookAddress;
-  notebookWriter: RendererNotebookWriter;
+  notebookWriter: NotebookWriteClient;
   onUrlChange?: (url: string) => void;
   onBack: () => void;
 };

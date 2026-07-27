@@ -4,14 +4,14 @@ import { ClipConverter } from "../domains/clip/services/ClipConverter";
 import { ClipCommitService } from "../domains/clip/services/ClipCommitService";
 import { log } from "../utils/rendererLogger";
 import { NotebookAddress } from "../domains/notebook-content/core/NotebookAddress";
-import { RendererNotebookWriter } from "../domains/notebook-content/application/RendererNotebookWriter";
+import { NotebookWriteClient } from "../domains/notebook-content/application/NotebookWriteClient";
 
 /**
  * Listens for right-click image clips and inserts them into the notebook.
  */
 export const useBrowserImageClips = (
   notebookAddress: NotebookAddress | null,
-  notebookWriter: RendererNotebookWriter | null
+  notebookWriter: NotebookWriteClient | null
 ) => {
   const clipService = ClipService.getInstance();
   const clipConverter = ClipConverter.getInstance();
@@ -59,8 +59,18 @@ export const useBrowserImageClips = (
         if (!address || !notebookWriter) {
           throw new Error("No notebook address is available");
         }
-        if (!notebookWriter.applyOperations(address, operations)) {
-          throw new Error("The notebook address has no insertion anchor");
+        const result = await notebookWriter.insert(
+          address,
+          operations.map((operation) => operation.block as any),
+          {
+            source: "image",
+            sourceUrl: data.sourceUrl,
+            capturedAt: data.capturedAt,
+          },
+          draft.id
+        );
+        if (result.status === "rejected") {
+          throw new Error(`Notebook write rejected: ${result.reason}`);
         }
         inserted = true;
 

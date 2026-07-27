@@ -4,7 +4,7 @@ import { BlockRouteViewContent } from "./BlockRouteViewContent";
 import { MissingUrlView } from "./MissingUrlView";
 import { CustomBlockNoteEditor } from "../../types/schema";
 import { hasPreviousDigestRoute } from "./notebookReturnNavigation";
-import { RendererNotebookWriter } from "../../domains/notebook-content/application/RendererNotebookWriter";
+import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
 import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
 
 type BlockRouteViewProps = {
@@ -16,7 +16,7 @@ type BlockRouteViewProps = {
   placementId: string;
   editor: CustomBlockNoteEditor;
   notebookAddress: NotebookAddress;
-  notebookWriter: RendererNotebookWriter;
+  notebookWriter: NotebookWriteClient;
   onUrlChange?: (url: string) => void;
 };
 

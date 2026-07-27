@@ -143,4 +143,57 @@ describe("CollaborationDocumentService", () => {
     expect(String(error)).toContain("not subscribed");
     database.close();
   });
+
+  it("durably applies and broadcasts canonical mutations without a subscriber", async () => {
+    const database = createDatabase();
+    const service = new CollaborationDocumentService(database as any);
+    const published: Array<{ updateId: string }> = [];
+    service.setPublisher((event) => published.push(event));
+
+    const result = await service.applyCanonicalMutation({
+      documentId: "closed-doc",
+      updateId: "application-write-1",
+      producerRendererId: 44,
+      mutate: (doc) => {
+        doc.getText("text").insert(0, "captured");
+        return "inserted";
+      },
+    });
+
+    expect(result).toMatchObject({
+      accepted: true,
+      duplicate: false,
+      value: "inserted",
+    });
+    expect(database.rows.length).toBe(1);
+    expect(published[0]).toMatchObject({
+      updateId: "application-write-1",
+    });
+    const replica = new Y.Doc();
+    Y.applyUpdate(replica, service.encodeState("closed-doc"));
+    expect(replica.getText("text").toString()).toBe("captured");
+  });
+
+  it("deduplicates canonical mutations before running them again", async () => {
+    const database = createDatabase();
+    const service = new CollaborationDocumentService(database as any);
+    let mutationCount = 0;
+    const input = {
+      documentId: "doc",
+      updateId: "same-request",
+      producerRendererId: 1,
+      mutate: (doc: Y.Doc) => {
+        mutationCount += 1;
+        doc.getText("text").insert(0, "once");
+        return true;
+      },
+    };
+
+    await service.applyCanonicalMutation(input);
+    const duplicate = await service.applyCanonicalMutation(input);
+
+    expect(duplicate).toMatchObject({ accepted: true, duplicate: true });
+    expect(mutationCount).toBe(1);
+    expect(database.rows.length).toBe(1);
+  });
 });

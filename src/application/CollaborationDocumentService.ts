@@ -14,6 +14,13 @@ export type AcceptedCollaborationUpdate = {
   producerRendererId: number;
 };
 
+export type CanonicalMutation<T> = {
+  documentId: string;
+  updateId: string;
+  producerRendererId: number;
+  mutate: (doc: Y.Doc) => T;
+};
+
 type DocumentState = {
   doc: Y.Doc;
   queue: Promise<void>;
@@ -149,6 +156,83 @@ export class CollaborationDocumentService {
       for (const listener of this.canonicalChangeListeners) {
         listener(snapshot);
       }
+    });
+
+    state.queue = work.catch(() => undefined);
+    await work;
+    return outcome;
+  }
+
+  async applyCanonicalMutation<T>(
+    input: CanonicalMutation<T>
+  ): Promise<{ accepted: boolean; duplicate: boolean; value?: T }> {
+    const state = this.getState(input.documentId);
+    let outcome: {
+      accepted: boolean;
+      duplicate: boolean;
+      value?: T;
+    } = { accepted: false, duplicate: false };
+
+    const work = state.queue.then(() => {
+      const existing = this.database
+        .prepare(
+          "SELECT 1 FROM yjs_document_updates WHERE update_id = ? LIMIT 1"
+        )
+        .get(input.updateId);
+      if (existing) {
+        outcome = { accepted: true, duplicate: true };
+        return;
+      }
+
+      // Mutate a replica first. The canonical in-memory document does not
+      // advance unless the resulting incremental update has been made durable.
+      const candidate = new Y.Doc();
+      Y.applyUpdate(candidate, Y.encodeStateAsUpdate(state.doc));
+      const before = Y.encodeStateVector(candidate);
+      let value: T;
+      let update: Uint8Array;
+      try {
+        candidate.transact(() => {
+          value = input.mutate(candidate);
+        }, {
+          kind: "application",
+          updateId: input.updateId,
+        });
+        update = Y.encodeStateAsUpdate(candidate, before);
+      } finally {
+        candidate.destroy();
+      }
+
+      this.database
+        .prepare(
+          `INSERT INTO yjs_document_updates
+            (update_id, document_id, update_data, producer_renderer_id, created_at)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .run(
+          input.updateId,
+          input.documentId,
+          Buffer.from(update),
+          input.producerRendererId,
+          Date.now()
+        );
+
+      Y.applyUpdate(state.doc, update, {
+        kind: "application",
+        updateId: input.updateId,
+      });
+      const event: AcceptedCollaborationUpdate = {
+        documentId: input.documentId,
+        updateId: input.updateId,
+        update,
+        producerRendererId: input.producerRendererId,
+      };
+      this.publish(event);
+      const snapshot = this.readCanonicalDocument(input.documentId);
+      for (const listener of this.canonicalChangeListeners) {
+        listener(snapshot);
+      }
+      outcome = { accepted: true, duplicate: false, value: value! };
     });
 
     state.queue = work.catch(() => undefined);

@@ -232,6 +232,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       return () => ipcRenderer.removeListener(channel, handler);
     },
   },
+  notebook: {
+    insertContent: (
+      command: import("./domains/notebook-content/core/NotebookAddress").InsertNotebookContent
+    ) => ipcRenderer.invoke("notebook:insert-content", command),
+  },
 
   // Console log forwarding
   forwardLog: (logData: {
@@ -450,6 +455,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   onDownloadInsertFileBlock: (
     callback: (data: {
+      id: string;
       fileName: string;
       savePath: string;
       url: string;

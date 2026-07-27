@@ -35,7 +35,11 @@ import { useDownloadNotification } from "./domains/downloads/ui/useDownloadNotif
 import { StatusBar } from "./components/renderer/StatusBar";
 import { useStatusBar } from "./hooks/useStatusBar";
 import { TitleBarContext } from "./context/TitleBarContext";
-import { RendererNotebookWriter } from "./domains/notebook-content/application/RendererNotebookWriter";
+import { NotebookWriteClient } from "./domains/notebook-content/application/NotebookWriteClient";
+import {
+  afterNotebookBlock,
+  notebookEnd,
+} from "./domains/notebook-content/core/NotebookAddress";
 
 const RendererAppContent = () => {
   const [contextualTitleBar, setContextualTitleBar] = useState<React.ReactNode>(null);
@@ -91,19 +95,22 @@ const RendererAppContent = () => {
 
   // Get route from TanStack Router context
   const { route, navigateToDoc } = useAppRoute();
-  const notebookWriter = useMemo(
-    () =>
-      activeDocumentId
-        ? new RendererNotebookWriter(editor, activeDocumentId)
-        : null,
-    [activeDocumentId, editor]
-  );
+  const notebookWriter = useMemo(() => new NotebookWriteClient(), []);
   const notebookAddress = useMemo(() => {
-    if (!notebookWriter) return null;
-    return notebookWriter.captureAddress(
-      route.kind === "block" ? route.blockId : undefined
-    );
-  }, [notebookWriter, route]);
+    if (!activeDocumentId) return null;
+    if (route.kind === "block") {
+      return afterNotebookBlock(activeDocumentId, route.blockId);
+    }
+    try {
+      const cursorBlock = editor.getTextCursorPosition()?.block;
+      if (cursorBlock) {
+        return afterNotebookBlock(activeDocumentId, cursorBlock.id);
+      }
+    } catch {
+      // There may be no mounted editor while a page route is visible.
+    }
+    return notebookEnd(activeDocumentId);
+  }, [activeDocumentId, editor, route]);
 
   useBrowserSelection(notebookAddress, notebookWriter);
   useBrowserImageClips(notebookAddress, notebookWriter);
@@ -348,7 +355,7 @@ const RendererAppContent = () => {
           />
         )}
         <div style={{ position: "relative", minHeight: 0, overflow: "hidden" }}>
-      {route.kind === "block" && notebookWriter && notebookAddress && (
+      {route.kind === "block" && notebookAddress && (
         <BlockRouteView
           blockId={route.blockId}
           docId={
@@ -368,7 +375,7 @@ const RendererAppContent = () => {
           }
         />
       )}
-      {route.kind === "url" && notebookWriter && notebookAddress && (
+      {route.kind === "url" && notebookAddress && (
         <BlockRouteView
           blockId={undefined}
           docId={route.docId ?? activeDocumentId}
@@ -381,7 +388,7 @@ const RendererAppContent = () => {
           notebookWriter={notebookWriter}
         />
       )}
-      <div
+      {route.kind === "doc" && <div
         aria-hidden={route.kind !== "doc"}
         style={{
           position: "absolute",
@@ -440,7 +447,7 @@ const RendererAppContent = () => {
             />
           }
         />
-      </div>
+      </div>}
         </div>
       </div>
       </TitleBarContext.Provider>
