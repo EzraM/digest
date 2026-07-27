@@ -12,6 +12,8 @@ import { BrowserTitleBar } from "./BrowserTitleBar";
 import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
 import { useBrowserLoadState } from "../../hooks/useBrowserLoadState";
 import { useTitleBar } from "../../context/TitleBarContext";
+import { RendererNotebookWriter } from "../../domains/notebook-content/application/RendererNotebookWriter";
+import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
 
 type BlockRouteViewContentProps = {
   blockId: string | undefined; // undefined for ephemeral URL routes
@@ -21,6 +23,8 @@ type BlockRouteViewContentProps = {
   title: string;
   placementId: string;
   editor: CustomBlockNoteEditor;
+  notebookAddress: NotebookAddress;
+  notebookWriter: RendererNotebookWriter;
   onUrlChange?: (url: string) => void;
   onBack: () => void;
 };
@@ -32,6 +36,8 @@ export const BlockRouteViewContent = ({
   url,
   placementId,
   editor,
+  notebookAddress,
+  notebookWriter,
   onUrlChange,
   onBack,
 }: BlockRouteViewContentProps) => {
@@ -168,6 +174,8 @@ export const BlockRouteViewContent = ({
         {/* Left sidebar - minimize/expand toggle */}
         <LeftRail
           viewId={placementId}
+          notebookAddress={notebookAddress}
+          notebookWriter={notebookWriter}
           onBack={handleBack}
           canGoBrowserBack={canGoBack}
           isNavigatingBrowserBack={isNavigatingBack}

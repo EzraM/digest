@@ -8,7 +8,6 @@ import { withCollaboration } from "@blocknote/core/yjs";
 import * as Y from "yjs";
 import {
   CustomBlockNoteEditor,
-  CustomPartialBlock,
   schema,
 } from "../types/schema";
 import { useDocumentSync } from "./useDocumentSync";
@@ -23,101 +22,8 @@ import {
 import { createMiddleClickDeleteExtension } from "../domains/blocks/adapters/createMiddleClickDeleteExtension";
 import { createLiveLinkIndicatorExtension } from "../domains/blocks/adapters/createLiveLinkIndicatorExtension";
 import { useAppRoute } from "../context/AppRouteContext";
-import type { BlockOperation } from "../domains/blocks/core";
-
-let currentEditor: CustomBlockNoteEditor | null = null;
-
-type PendingInlineLink = {
-  url: string;
-  title: string;
-  sourceBlockId?: string;
-};
-
-export const getCurrentEditor = (): CustomBlockNoteEditor | null =>
-  currentEditor;
-
-export const getCurrentCursorBlockId = (): string | null => {
-  try {
-    const block = currentEditor?.getTextCursorPosition?.().block;
-    return block?.id ?? null;
-  } catch {
-    return null;
-  }
-};
-
-const createInlineLinkBlock = (data: PendingInlineLink): CustomPartialBlock =>
-  ({
-    type: "paragraph",
-    content: [
-      {
-        type: "link",
-        href: data.url,
-        content: [
-          {
-            type: "text",
-            text: data.title,
-            styles: {},
-          },
-        ],
-      },
-    ],
-  }) as unknown as CustomPartialBlock;
-
-const insertInlineLinkBlock = (
-  editor: CustomBlockNoteEditor,
-  data: PendingInlineLink
-): boolean => {
-  const anchorBlock = data.sourceBlockId
-    ? editor.getBlock(data.sourceBlockId)
-    : editor.getTextCursorPosition()?.block;
-
-  if (!anchorBlock) {
-    console.warn("[useRendererEditor] No anchor block available for link insertion");
-    return false;
-  }
-
-  editor.insertBlocks([createInlineLinkBlock(data)], anchorBlock, "after");
-
-  return true;
-};
-
-export const insertInlineLinkAtCurrentCursor = (
-  url: string,
-  title: string
-): boolean => {
-  if (!currentEditor) {
-    return false;
-  }
-
-  return insertInlineLinkBlock(currentEditor, {
-    url,
-    title: title.trim() || url,
-  });
-};
-
-export const applyBlockOperationsToCurrentEditor = (
-  operations: BlockOperation[]
-): boolean => {
-  const editor = currentEditor;
-  if (!editor) return false;
-
-  for (const operation of operations) {
-    if (operation.type !== "insert" || !operation.block) {
-      throw new Error(
-        `Collaborative renderer operation is not supported: ${operation.type}`
-      );
-    }
-    const anchor =
-      (operation.afterBlockId
-        ? editor.getBlock(operation.afterBlockId)
-        : undefined) ?? editor.document.at(-1);
-    if (!anchor) {
-      throw new Error("Cannot insert into an empty collaborative editor");
-    }
-    editor.insertBlocks([operation.block as any], anchor, "after");
-  }
-  return true;
-};
+import { createInlineLinkBlock } from "./inlineLinkInsertion";
+import { RendererNotebookWriter } from "../domains/notebook-content/application/RendererNotebookWriter";
 
 const isCurrentBlockRoute = (blockId: string): boolean => {
   const blockRouteMatch = window.location.hash.match(/^#\/block\/([^?/]*)/);
@@ -229,6 +135,11 @@ export const useRendererEditor = (
       return result.url;
     },
   }), [documentId]) as CustomBlockNoteEditor;
+  const notebookWriter = useMemo(
+    () =>
+      documentId ? new RendererNotebookWriter(editor, documentId) : null,
+    [documentId, editor]
+  );
 
   useEffect(() => {
     if (!pluginProfile) return;
@@ -274,13 +185,6 @@ export const useRendererEditor = (
     };
   }, [editor, pluginProfile?.profileId, pluginProfile?.documentId, pluginProfile?.settings]);
 
-  useEffect(() => {
-    currentEditor = editor;
-    return () => {
-      currentEditor = null;
-    };
-  }, [editor]);
-
   // Handle inline link insertion from cmd+click in page context
   useEffect(() => {
     if (!window.electronAPI?.onInsertLink) {
@@ -293,8 +197,8 @@ export const useRendererEditor = (
     const unsubscribe = window.electronAPI.onInsertLink((data) => {
       console.log("[useRendererEditor] onInsertLink event received:", data);
 
-      if (!currentEditor) {
-        console.warn("[useRendererEditor] No currentEditor available");
+      if (!notebookWriter) {
+        console.warn("[useRendererEditor] No notebook writer available");
         return;
       }
 
@@ -311,7 +215,16 @@ export const useRendererEditor = (
           return;
         }
 
-        if (!insertInlineLinkBlock(currentEditor, data)) {
+        const address = notebookWriter.captureAddress(data.sourceBlockId);
+        if (
+          !notebookWriter.insert(address, [
+            createInlineLinkBlock({
+              url: data.url,
+              title: data.title,
+              sourceBlockId: data.sourceBlockId,
+            }),
+          ])
+        ) {
           return;
         }
 
@@ -323,7 +236,7 @@ export const useRendererEditor = (
     });
 
     return unsubscribe;
-  }, []);
+  }, [notebookWriter]);
 
   // Handle file block insertion when a download completes
   useEffect(() => {
@@ -332,13 +245,12 @@ export const useRendererEditor = (
     }
 
     const unsubscribe = window.electronAPI.onDownloadInsertFileBlock((data) => {
-      if (!currentEditor) return;
+      if (!notebookWriter) return;
 
       try {
-        const cursorPosition = currentEditor.getTextCursorPosition();
-        if (!cursorPosition) return;
-
-        currentEditor.insertBlocks(
+        const address = notebookWriter.captureAddress();
+        notebookWriter.insert(
+          address,
           [
             {
               type: "file",
@@ -347,9 +259,7 @@ export const useRendererEditor = (
                 url: data.url,
               },
             } as any,
-          ],
-          cursorPosition.block,
-          "after"
+          ]
         );
       } catch (error) {
         console.error("[useRendererEditor] Failed to insert file block:", error);
@@ -357,7 +267,7 @@ export const useRendererEditor = (
     });
 
     return unsubscribe;
-  }, []);
+  }, [notebookWriter]);
 
   useDocumentSync(editor, documentId, yDoc);
 

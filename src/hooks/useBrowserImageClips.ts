@@ -2,16 +2,17 @@ import { useEffect } from "react";
 import { ClipService } from "../domains/clip/services/ClipService";
 import { ClipConverter } from "../domains/clip/services/ClipConverter";
 import { ClipCommitService } from "../domains/clip/services/ClipCommitService";
-import {
-  applyBlockOperationsToCurrentEditor,
-  getCurrentCursorBlockId,
-} from "./useRendererEditor";
 import { log } from "../utils/rendererLogger";
+import { NotebookAddress } from "../domains/notebook-content/core/NotebookAddress";
+import { RendererNotebookWriter } from "../domains/notebook-content/application/RendererNotebookWriter";
 
 /**
  * Listens for right-click image clips and inserts them into the notebook.
  */
-export const useBrowserImageClips = (documentId: string | null) => {
+export const useBrowserImageClips = (
+  notebookAddress: NotebookAddress | null,
+  notebookWriter: RendererNotebookWriter | null
+) => {
   const clipService = ClipService.getInstance();
   const clipConverter = ClipConverter.getInstance();
   const clipCommitService = ClipCommitService.getInstance();
@@ -23,7 +24,7 @@ export const useBrowserImageClips = (documentId: string | null) => {
         "useBrowserImageClips"
       );
 
-      const insertAfterBlockId = getCurrentCursorBlockId() ?? undefined;
+      const address = notebookAddress;
       const alt = data.altText ? ` alt="${escapeHtml(data.altText)}"` : "";
       const width = data.width ? ` width="${data.width}"` : "";
       const height = data.height ? ` height="${data.height}"` : "";
@@ -53,33 +54,30 @@ export const useBrowserImageClips = (documentId: string | null) => {
           throw new Error("Clipped image was no longer available");
         }
 
-        const { operations } = await clipCommitService.createClipOperations(
-          convertedDraft,
-          insertAfterBlockId
-        );
-        if (!documentId) throw new Error("No document selected");
-        if (!applyBlockOperationsToCurrentEditor(operations)) {
-          throw new Error("No notebook editor is available");
+        const { operations } =
+          await clipCommitService.createClipOperations(convertedDraft);
+        if (!address || !notebookWriter) {
+          throw new Error("No notebook address is available");
+        }
+        if (!notebookWriter.applyOperations(address, operations)) {
+          throw new Error("The notebook address has no insertion anchor");
         }
         inserted = true;
 
-        const activeDocument = await window.electronAPI.documents.getActive();
-        if (activeDocument) {
-          await window.electronAPI.image
-            .attachImageToDocument({
-              imageId: data.imageId,
-              documentId: activeDocument.id,
-            })
-            .catch((error) => {
-              log.debug(
-                `Inserted image but failed to attach it to document ${activeDocument.id}: ${error}`,
-                "useBrowserImageClips"
-              );
-            });
-        }
+        await window.electronAPI.image
+          .attachImageToDocument({
+            imageId: data.imageId,
+            documentId: address.documentId,
+          })
+          .catch((error) => {
+            log.debug(
+              `Inserted image but failed to attach it to document ${address.documentId}: ${error}`,
+              "useBrowserImageClips"
+            );
+          });
 
         log.debug(
-          `Inserted clipped image after ${insertAfterBlockId ?? "document end"}`,
+          `Inserted clipped image at ${JSON.stringify(address)}`,
           "useBrowserImageClips"
         );
       } catch (error) {
@@ -99,7 +97,13 @@ export const useBrowserImageClips = (documentId: string | null) => {
     });
 
     return unsubscribe;
-  }, [clipCommitService, clipConverter, clipService, documentId]);
+  }, [
+    clipCommitService,
+    clipConverter,
+    clipService,
+    notebookAddress,
+    notebookWriter,
+  ]);
 };
 
 const escapeHtml = (value: string): string =>

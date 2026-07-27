@@ -1,12 +1,20 @@
 import { useState } from "react";
 import { useClipCapture } from "../../hooks/useClipCapture";
-import { insertInlineLinkAtCurrentCursor } from "../../hooks/useRendererEditor";
+import { createInlineLinkBlock } from "../../hooks/inlineLinkInsertion";
+import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
+import { RendererNotebookWriter } from "../../domains/notebook-content/application/RendererNotebookWriter";
 
 type AddPageButtonProps = {
   viewId: string;
+  notebookAddress: NotebookAddress;
+  notebookWriter: RendererNotebookWriter;
 };
 
-export const AddPageButton = ({ viewId }: AddPageButtonProps) => {
+export const AddPageButton = ({
+  viewId,
+  notebookAddress,
+  notebookWriter,
+}: AddPageButtonProps) => {
   const { isCapturing, captureSelection } = useClipCapture();
   const [didAddPage, setDidAddPage] = useState(false);
 
@@ -14,6 +22,7 @@ export const AddPageButton = ({ viewId }: AddPageButtonProps) => {
     const result = await captureSelection(viewId);
 
     if (result.success) {
+      console.info("[AddPageButton] Added current selection to notebook");
       setDidAddPage(true);
       window.setTimeout(() => setDidAddPage(false), 1500);
       return;
@@ -23,18 +32,33 @@ export const AddPageButton = ({ viewId }: AddPageButtonProps) => {
       const pageInfo = await window.electronAPI.browser.getPageInfo(viewId);
       if (
         pageInfo.success &&
-        insertInlineLinkAtCurrentCursor(
-          pageInfo.url,
-          pageInfo.title || pageInfo.url
+        notebookWriter.insert(
+          notebookAddress,
+          [
+            createInlineLinkBlock({
+              url: pageInfo.url,
+              title: pageInfo.title || pageInfo.url,
+            }),
+          ]
         )
       ) {
+        console.info("[AddPageButton] Added current page link to notebook", {
+          url: pageInfo.url,
+          notebookAddress,
+        });
         setDidAddPage(true);
         window.setTimeout(() => setDidAddPage(false), 1500);
         return;
       }
+
+      console.error("[AddPageButton] Failed to add current page link", {
+        pageInfo,
+        notebookAddress,
+      });
+      return;
     }
 
-    console.error("Failed to add page:", result.error);
+    console.error("[AddPageButton] Failed to add page:", result.error);
   };
 
   return (

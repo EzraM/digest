@@ -22,8 +22,7 @@ export class ClipCommitService {
    * Convert a clip draft to block operations for insertion
    */
   async createClipOperations(
-    draft: ClipDraft,
-    insertAfterBlockId?: string
+    draft: ClipDraft
   ): Promise<{ operations: BlockOperation[]; origin: any }> {
     log.debug(
       `Creating operations for clip draft ${draft.id}`,
@@ -65,7 +64,6 @@ export class ClipCommitService {
     }
 
     const operations: BlockOperation[] = [];
-    let afterBlockId = insertAfterBlockId;
 
     for (const block of blocksToInsert) {
       const blockWithId = assignIds(block);
@@ -73,11 +71,9 @@ export class ClipCommitService {
         type: "insert",
         blockId: (blockWithId as any).id,
         block: blockWithId as any,
-        afterBlockId,
         source: "clip",
         timestamp: Date.now(),
       });
-      afterBlockId = (blockWithId as any).id;
     }
 
     // Create transaction origin

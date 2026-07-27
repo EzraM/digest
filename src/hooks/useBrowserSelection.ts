@@ -2,16 +2,17 @@ import { useEffect } from "react";
 import { ClipService } from "../domains/clip/services/ClipService";
 import { ClipConverter } from "../domains/clip/services/ClipConverter";
 import { ClipCommitService } from "../domains/clip/services/ClipCommitService";
-import {
-  applyBlockOperationsToCurrentEditor,
-  getCurrentCursorBlockId,
-} from "./useRendererEditor";
 import { log } from "../utils/rendererLogger";
+import { NotebookAddress } from "../domains/notebook-content/core/NotebookAddress";
+import { RendererNotebookWriter } from "../domains/notebook-content/application/RendererNotebookWriter";
 
 /**
  * Listen for browser selections and insert them directly into the notebook.
  */
-export const useBrowserSelection = (documentId: string | null) => {
+export const useBrowserSelection = (
+  notebookAddress: NotebookAddress | null,
+  notebookWriter: RendererNotebookWriter | null
+) => {
   const clipService = ClipService.getInstance();
   const clipConverter = ClipConverter.getInstance();
   const clipCommitService = ClipCommitService.getInstance();
@@ -23,8 +24,8 @@ export const useBrowserSelection = (documentId: string | null) => {
         "useBrowserSelection"
       );
 
-      // Capture the notebook anchor before conversion does any asynchronous work.
-      const insertAfterBlockId = getCurrentCursorBlockId() ?? undefined;
+      // Preserve the address before conversion does any asynchronous work.
+      const address = notebookAddress;
       const draft = clipService.createDraft({
         sourceUrl: data.sourceUrl,
         sourceTitle: data.sourceTitle,
@@ -46,18 +47,18 @@ export const useBrowserSelection = (documentId: string | null) => {
           throw new Error("Captured selection was no longer available");
         }
 
-        const { operations } = await clipCommitService.createClipOperations(
-          convertedDraft,
-          insertAfterBlockId
-        );
-        if (!documentId) throw new Error("No document selected");
-        if (!applyBlockOperationsToCurrentEditor(operations)) {
-          throw new Error("No notebook editor is available");
+        const { operations } =
+          await clipCommitService.createClipOperations(convertedDraft);
+        if (!address || !notebookWriter) {
+          throw new Error("No notebook address is available");
+        }
+        if (!notebookWriter.applyOperations(address, operations)) {
+          throw new Error("The notebook address has no insertion anchor");
         }
 
         clipService.deleteDraft(draft.id);
         log.debug(
-          `Inserted browser selection after ${insertAfterBlockId ?? "document end"}`,
+          `Inserted browser selection at ${JSON.stringify(address)}`,
           "useBrowserSelection"
         );
       } catch (error) {
@@ -71,5 +72,11 @@ export const useBrowserSelection = (documentId: string | null) => {
     });
 
     return unsubscribe;
-  }, [clipCommitService, clipConverter, clipService, documentId]);
+  }, [
+    clipCommitService,
+    clipConverter,
+    clipService,
+    notebookAddress,
+    notebookWriter,
+  ]);
 };

@@ -35,6 +35,7 @@ import { useDownloadNotification } from "./domains/downloads/ui/useDownloadNotif
 import { StatusBar } from "./components/renderer/StatusBar";
 import { useStatusBar } from "./hooks/useStatusBar";
 import { TitleBarContext } from "./context/TitleBarContext";
+import { RendererNotebookWriter } from "./domains/notebook-content/application/RendererNotebookWriter";
 
 const RendererAppContent = () => {
   const [contextualTitleBar, setContextualTitleBar] = useState<React.ReactNode>(null);
@@ -58,10 +59,6 @@ const RendererAppContent = () => {
       }
     : undefined;
   const editor = useRendererEditor(pluginProfile);
-
-  // Listen for browser selection events
-  useBrowserSelection(activeDocument?.id ?? null);
-  useBrowserImageClips(activeDocument?.id ?? null);
 
   // Listen for link capture events
   useLinkCaptureNotification();
@@ -94,6 +91,23 @@ const RendererAppContent = () => {
 
   // Get route from TanStack Router context
   const { route, navigateToDoc } = useAppRoute();
+  const notebookWriter = useMemo(
+    () =>
+      activeDocumentId
+        ? new RendererNotebookWriter(editor, activeDocumentId)
+        : null,
+    [activeDocumentId, editor]
+  );
+  const notebookAddress = useMemo(() => {
+    if (!notebookWriter) return null;
+    return notebookWriter.captureAddress(
+      route.kind === "block" ? route.blockId : undefined
+    );
+  }, [notebookWriter, route]);
+
+  useBrowserSelection(notebookAddress, notebookWriter);
+  useBrowserImageClips(notebookAddress, notebookWriter);
+
   const previousRenderedBranchRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -334,7 +348,7 @@ const RendererAppContent = () => {
           />
         )}
         <div style={{ position: "relative", minHeight: 0, overflow: "hidden" }}>
-      {route.kind === "block" && (
+      {route.kind === "block" && notebookWriter && notebookAddress && (
         <BlockRouteView
           blockId={route.blockId}
           docId={
@@ -347,12 +361,14 @@ const RendererAppContent = () => {
           title={blockRouteProps?.title ?? "Block"}
           placementId={PRIMARY_BROWSER_PLACEMENT_ID}
           editor={editor}
+          notebookAddress={notebookAddress}
+          notebookWriter={notebookWriter}
           onUrlChange={(nextUrl) =>
             updateCachedBlockUrl(route.blockId, nextUrl)
           }
         />
       )}
-      {route.kind === "url" && (
+      {route.kind === "url" && notebookWriter && notebookAddress && (
         <BlockRouteView
           blockId={undefined}
           docId={route.docId ?? activeDocumentId}
@@ -361,9 +377,19 @@ const RendererAppContent = () => {
           title={route.url}
           placementId={PRIMARY_BROWSER_PLACEMENT_ID}
           editor={editor}
+          notebookAddress={notebookAddress}
+          notebookWriter={notebookWriter}
         />
       )}
-      {route.kind === "doc" && (
+      <div
+        aria-hidden={route.kind !== "doc"}
+        style={{
+          position: "absolute",
+          inset: 0,
+          visibility: route.kind === "doc" ? "visible" : "hidden",
+          pointerEvents: route.kind === "doc" ? "auto" : "none",
+        }}
+      >
         <RendererLayout
           isNavbarOpened={isNavbarOpened}
           onNavbarToggle={toggleNavbar}
@@ -414,7 +440,7 @@ const RendererAppContent = () => {
             />
           }
         />
-      )}
+      </div>
         </div>
       </div>
       </TitleBarContext.Provider>

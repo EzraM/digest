@@ -1,5 +1,7 @@
 import React from "react";
 import { AddPageButton } from "../clip/AddPageButton";
+import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
+import { RendererNotebookWriter } from "../../domains/notebook-content/application/RendererNotebookWriter";
 import "./LeftRail.css";
 
 const BrowserBackIcon = () => (
@@ -48,6 +50,8 @@ const NotebookIcon = () => (
 
 type LeftRailProps = {
   viewId: string;
+  notebookAddress: NotebookAddress;
+  notebookWriter: RendererNotebookWriter;
   onBack: () => void;
   canGoBrowserBack: boolean;
   isNavigatingBrowserBack: boolean;
@@ -56,6 +60,8 @@ type LeftRailProps = {
 
 export const LeftRail = ({
   viewId,
+  notebookAddress,
+  notebookWriter,
   onBack,
   canGoBrowserBack,
   isNavigatingBrowserBack,
@@ -71,7 +77,11 @@ export const LeftRail = ({
         flexDirection: "column",
       }}
     >
-      <AddPageButton viewId={viewId} />
+      <AddPageButton
+        viewId={viewId}
+        notebookAddress={notebookAddress}
+        notebookWriter={notebookWriter}
+      />
       <button
         className="left-rail__browser-back"
         data-available={canGoBrowserBack}

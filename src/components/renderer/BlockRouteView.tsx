@@ -4,6 +4,8 @@ import { BlockRouteViewContent } from "./BlockRouteViewContent";
 import { MissingUrlView } from "./MissingUrlView";
 import { CustomBlockNoteEditor } from "../../types/schema";
 import { hasPreviousDigestRoute } from "./notebookReturnNavigation";
+import { RendererNotebookWriter } from "../../domains/notebook-content/application/RendererNotebookWriter";
+import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
 
 type BlockRouteViewProps = {
   blockId: string | undefined; // undefined for ephemeral URL routes
@@ -13,6 +15,8 @@ type BlockRouteViewProps = {
   title: string;
   placementId: string;
   editor: CustomBlockNoteEditor;
+  notebookAddress: NotebookAddress;
+  notebookWriter: RendererNotebookWriter;
   onUrlChange?: (url: string) => void;
 };
 
@@ -24,6 +28,8 @@ export const BlockRouteView = ({
   title,
   placementId,
   editor,
+  notebookAddress,
+  notebookWriter,
   onUrlChange,
 }: BlockRouteViewProps) => {
   const { route, goBack, navigateToDoc } = useAppRoute();
@@ -63,6 +69,8 @@ export const BlockRouteView = ({
       title={title}
       placementId={placementId}
       editor={editor}
+      notebookAddress={notebookAddress}
+      notebookWriter={notebookWriter}
       onUrlChange={onUrlChange}
       onBack={handleMinimize}
     />

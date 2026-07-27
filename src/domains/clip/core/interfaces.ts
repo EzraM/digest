@@ -5,6 +5,7 @@
  */
 
 import { ClipDraft, ClipCapturePayload, ClipCommitResult } from './types';
+import { NotebookAddress } from '../../notebook-content/core/NotebookAddress';
 
 /**
  * Manages clip draft lifecycle (in-memory storage)
@@ -60,8 +61,7 @@ export interface IClipCommitter {
    * Convert a clip draft to block operations for insertion
    */
   createCommitOperations(
-    draft: ClipDraft,
-    insertAfterBlockId?: string
+    draft: ClipDraft
   ): Promise<ClipCommitResult & { operations: unknown[]; origin: unknown }>;
 }
 
@@ -82,7 +82,7 @@ export interface IClipWorkflow {
   /**
    * Commit a draft to the document
    */
-  commit(draftId: string, insertAfterBlockId?: string): Promise<ClipCommitResult>;
+  commit(draftId: string, address: NotebookAddress): Promise<ClipCommitResult>;
 
   /**
    * Discard a draft

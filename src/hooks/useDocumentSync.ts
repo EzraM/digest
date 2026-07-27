@@ -16,11 +16,22 @@ export const useDocumentSync = (
 ) => {
   useEffect(() => {
     if (!editor || !documentId || !window.electronAPI?.collaboration) return;
+    const targetDocumentId = documentId;
 
     let disposed = false;
     let subscribed = false;
     let applyingBootstrap = true;
+    let connecting: Promise<void> | null = null;
     const pending = new Set<Promise<unknown>>();
+
+    const recoverSubscription = () => {
+      if (disposed || connecting) return;
+      subscribed = false;
+      applyingBootstrap = true;
+      connecting = connect().finally(() => {
+        connecting = null;
+      });
+    };
 
     const sendUpdate = (update: Uint8Array, origin: unknown) => {
       if (
@@ -34,12 +45,19 @@ export const useDocumentSync = (
 
       const updateId = crypto.randomUUID();
       const request = window.electronAPI.collaboration
-        .applyUpdate(documentId, updateId, update)
-        .catch((error) => {
+        .applyUpdate(targetDocumentId, updateId, update)
+        .then(() => {
           log.debug(
-            `Collaborative update ${updateId} was rejected: ${error}`,
+            `Collaborative update ${updateId} accepted for ${targetDocumentId}`,
             "useDocumentSync"
           );
+        })
+        .catch((error) => {
+          log.debug(
+            `Collaborative update ${updateId} was rejected; reconnecting: ${error}`,
+            "useDocumentSync"
+          );
+          recoverSubscription();
         })
         .finally(() => pending.delete(request));
       pending.add(request);
@@ -49,7 +67,7 @@ export const useDocumentSync = (
 
     const unsubscribeRemote = window.electronAPI.collaboration.onUpdate(
       (event) => {
-        if (disposed || event.documentId !== documentId) return;
+        if (disposed || event.documentId !== targetDocumentId) return;
         try {
           Y.applyUpdate(yDoc, new Uint8Array(event.update), REMOTE_ORIGIN);
         } catch (error) {
@@ -61,10 +79,10 @@ export const useDocumentSync = (
       }
     );
 
-    const connect = async () => {
+    async function connect() {
       try {
         const response = await window.electronAPI.collaboration.subscribe(
-          documentId,
+          targetDocumentId,
           Y.encodeStateVector(yDoc)
         );
         if (disposed) return;
@@ -86,15 +104,15 @@ export const useDocumentSync = (
         }
       } catch (error) {
         log.debug(
-          `Failed to subscribe to document ${documentId}: ${error}`,
+          `Failed to subscribe to document ${targetDocumentId}: ${error}`,
           "useDocumentSync"
         );
       } finally {
         applyingBootstrap = false;
       }
-    };
+    }
 
-    void connect();
+    recoverSubscription();
 
     return () => {
       disposed = true;
@@ -102,7 +120,7 @@ export const useDocumentSync = (
       unsubscribeRemote();
       if (subscribed) {
         void Promise.allSettled(Array.from(pending)).finally(() => {
-          void window.electronAPI.collaboration.unsubscribe(documentId);
+          void window.electronAPI.collaboration.unsubscribe(targetDocumentId);
         });
       }
     };
