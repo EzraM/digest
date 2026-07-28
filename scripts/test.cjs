@@ -1,6 +1,23 @@
 const assert = require("node:assert/strict");
+const childProcess = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+
+// Native dependencies are rebuilt for Electron during development. Run the
+// tests with that same ABI so a host Node upgrade cannot invalidate the binding.
+if (!process.versions.electron) {
+  const result = childProcess.spawnSync(
+    require("electron"),
+    [__filename, ...process.argv.slice(2)],
+    {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      stdio: "inherit",
+    },
+  );
+
+  if (result.error) throw result.error;
+  process.exit(result.status ?? 1);
+}
 
 require("ts-node/register/transpile-only");
 
