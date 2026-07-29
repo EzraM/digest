@@ -1,5 +1,13 @@
+import { Schema } from "@tiptap/pm/model";
 import * as Y from "yjs";
 import { CollaborationDocumentService } from "./CollaborationDocumentService";
+
+const prosemirrorSchema = new Schema({
+  nodes: {
+    doc: { content: "text*" },
+    text: {},
+  },
+});
 
 const createDatabase = () => {
   const rows: Array<{
@@ -53,10 +61,14 @@ const createDatabase = () => {
 describe("CollaborationDocumentService", () => {
   it("accepts concurrent renderer updates and converges replicas", async () => {
     const database = createDatabase();
-    const service = new CollaborationDocumentService(database as any);
+    const service = new CollaborationDocumentService(
+      database as any,
+      prosemirrorSchema
+    );
     const published: Array<{
       update: Uint8Array;
       producerRendererId: number;
+      includeProducer: boolean;
     }> = [];
     service.setPublisher((event) => published.push(event));
 
@@ -98,13 +110,17 @@ describe("CollaborationDocumentService", () => {
       canonical.getText("text").toString()
     );
     expect(canonical.getText("text").toString().length).toBe(2);
+    expect(published.every((event) => !event.includeProducer)).toBe(true);
     expect(database.rows.length).toBe(2);
     database.close();
   });
 
   it("returns only state missing from a subscribing replica", async () => {
     const database = createDatabase();
-    const service = new CollaborationDocumentService(database as any);
+    const service = new CollaborationDocumentService(
+      database as any,
+      prosemirrorSchema
+    );
     const source = new Y.Doc();
     service.subscribe("doc", 1, Y.encodeStateVector(source));
     source.getMap("values").set("answer", 42);
@@ -128,7 +144,10 @@ describe("CollaborationDocumentService", () => {
 
   it("rejects updates from renderers not subscribed to the document", async () => {
     const database = createDatabase();
-    const service = new CollaborationDocumentService(database as any);
+    const service = new CollaborationDocumentService(
+      database as any,
+      prosemirrorSchema
+    );
     let error: unknown;
     try {
       await service.applyUpdate({
@@ -146,7 +165,10 @@ describe("CollaborationDocumentService", () => {
 
   it("durably applies and broadcasts canonical mutations without a subscriber", async () => {
     const database = createDatabase();
-    const service = new CollaborationDocumentService(database as any);
+    const service = new CollaborationDocumentService(
+      database as any,
+      prosemirrorSchema
+    );
     const published: Array<{ updateId: string }> = [];
     service.setPublisher((event) => published.push(event));
 
@@ -168,6 +190,8 @@ describe("CollaborationDocumentService", () => {
     expect(database.rows.length).toBe(1);
     expect(published[0]).toMatchObject({
       updateId: "application-write-1",
+      producerRendererId: 44,
+      includeProducer: true,
     });
     const replica = new Y.Doc();
     Y.applyUpdate(replica, service.encodeState("closed-doc"));
@@ -176,7 +200,10 @@ describe("CollaborationDocumentService", () => {
 
   it("deduplicates canonical mutations before running them again", async () => {
     const database = createDatabase();
-    const service = new CollaborationDocumentService(database as any);
+    const service = new CollaborationDocumentService(
+      database as any,
+      prosemirrorSchema
+    );
     let mutationCount = 0;
     const input = {
       documentId: "doc",

@@ -1,6 +1,7 @@
+import type { Schema } from "@tiptap/pm/model";
 import Database from "better-sqlite3";
 import * as Y from "yjs";
-import { yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
+import { yXmlFragmentToProseMirrorRootNode } from "y-prosemirror";
 import type { ProseMirrorJsonNode } from "./analyzeCanonicalDocument";
 
 export type CollaborationSubscription = {
@@ -12,7 +13,13 @@ export type AcceptedCollaborationUpdate = {
   updateId: string;
   update: Uint8Array;
   producerRendererId: number;
+  includeProducer: boolean;
 };
+
+type RendererCollaborationUpdate = Omit<
+  AcceptedCollaborationUpdate,
+  "includeProducer"
+>;
 
 export type CanonicalMutation<T> = {
   documentId: string;
@@ -45,7 +52,10 @@ export class CollaborationDocumentService {
   >();
   private publish: (event: AcceptedCollaborationUpdate) => void = () => undefined;
 
-  constructor(private readonly database: Database.Database) {}
+  constructor(
+    private readonly database: Database.Database,
+    private readonly prosemirrorSchema: Schema
+  ) {}
 
   setPublisher(
     publish: (event: AcceptedCollaborationUpdate) => void
@@ -102,7 +112,7 @@ export class CollaborationDocumentService {
     return Array.from(this.rendererIdsByDocumentId.get(documentId) ?? []);
   }
 
-  async applyUpdate(input: AcceptedCollaborationUpdate): Promise<{
+  async applyUpdate(input: RendererCollaborationUpdate): Promise<{
     accepted: boolean;
     duplicate: boolean;
   }> {
@@ -151,7 +161,7 @@ export class CollaborationDocumentService {
         updateId: input.updateId,
       });
       outcome = { accepted: true, duplicate: false };
-      this.publish(input);
+      this.publish({ ...input, includeProducer: false });
       const snapshot = this.readCanonicalDocument(input.documentId);
       for (const listener of this.canonicalChangeListeners) {
         listener(snapshot);
@@ -226,6 +236,9 @@ export class CollaborationDocumentService {
         updateId: input.updateId,
         update,
         producerRendererId: input.producerRendererId,
+        // Application writes originate in main, so the initiating renderer
+        // does not already have this update in its local Y.Doc.
+        includeProducer: true,
       };
       this.publish(event);
       const snapshot = this.readCanonicalDocument(input.documentId);
@@ -251,7 +264,10 @@ export class CollaborationDocumentService {
     const fragment = this.getState(documentId).doc.getXmlFragment("document");
     return {
       documentId,
-      prosemirrorJson: yXmlFragmentToProsemirrorJSON(fragment),
+      prosemirrorJson: yXmlFragmentToProseMirrorRootNode(
+        fragment,
+        this.prosemirrorSchema
+      ).toJSON(),
     };
   }
 

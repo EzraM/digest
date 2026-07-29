@@ -43,6 +43,7 @@ import { HandleRegistry } from "./domains/browser-views/adapter/HandleRegistry";
 import { CollaborationDocumentService } from "./application/CollaborationDocumentService";
 import { createCollaborationHandlers } from "./ipc/handlers/collaborationHandlers";
 import { CanonicalDerivedDataCoordinator } from "./application/CanonicalDerivedDataCoordinator";
+import { blockNoteEditor } from "./domains/notebook-content/application/BlockNoteRuntime";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -126,7 +127,8 @@ const initializeApplication = () => {
     await initializeAllServices(serviceContainer);
     applicationServices = getServices(serviceContainer);
     collaborationDocuments = new CollaborationDocumentService(
-      applicationServices.database as Database.Database
+      applicationServices.database as Database.Database,
+      blockNoteEditor.pmSchema
     );
     derivedDataCoordinator = new CanonicalDerivedDataCoordinator({
       reindexDocument: (documentId, blocks) =>
@@ -607,7 +609,12 @@ const setupIpcHandlers = (
     for (const rendererId of collaborationDocuments!.subscribers(
       event.documentId
     )) {
-      if (rendererId === event.producerRendererId) continue;
+      if (
+        rendererId === event.producerRendererId &&
+        !event.includeProducer
+      ) {
+        continue;
+      }
       sendToRenderer(
         "documents:collaboration-update",
         event,

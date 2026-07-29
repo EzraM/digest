@@ -1,4 +1,3 @@
-import { BlockNoteEditor } from "@blocknote/core";
 // TypeScript's legacy "node" resolution does not follow this package export,
 // while Vite and Electron resolve it correctly at runtime.
 // @ts-expect-error BlockNote publishes types through the package export map.
@@ -7,19 +6,17 @@ import { _blocksToProsemirrorNode, blocksToYXmlFragment } from "@blocknote/core/
 import { EditorState } from "@tiptap/pm/state";
 import { initProseMirrorDoc, updateYFragment } from "y-prosemirror";
 import * as Y from "yjs";
-import { schema } from "../../../types/schema";
 import type {
   NotebookBlockInput,
   NotebookPosition,
 } from "../core/NotebookAddress";
+import { blockNoteEditor as editor } from "./BlockNoteRuntime";
 
 export type HeadlessInsertion = {
   insertedBlockIds: string[];
   resolvedPosition: NotebookPosition;
   reanchored: boolean;
 };
-
-const editor = BlockNoteEditor.create({ schema });
 
 export const insertBlocksHeadlessly = (
   doc: Y.Doc,
