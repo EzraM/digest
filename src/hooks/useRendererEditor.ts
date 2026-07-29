@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
 // TypeScript's legacy "node" resolution does not follow this package export,
 // while Vite and Electron resolve it correctly at runtime.
@@ -22,19 +22,6 @@ import {
 import { createMiddleClickDeleteExtension } from "../domains/blocks/adapters/createMiddleClickDeleteExtension";
 import { createLiveLinkIndicatorExtension } from "../domains/blocks/adapters/createLiveLinkIndicatorExtension";
 import { useAppRoute } from "../context/AppRouteContext";
-import { createInlineLinkBlock } from "./inlineLinkInsertion";
-import { NotebookWriteClient } from "../domains/notebook-content/application/NotebookWriteClient";
-import {
-  afterNotebookBlock,
-  notebookEnd,
-} from "../domains/notebook-content/core/NotebookAddress";
-
-const isCurrentBlockRoute = (blockId: string): boolean => {
-  const blockRouteMatch = window.location.hash.match(/^#\/block\/([^?/]*)/);
-  return blockRouteMatch
-    ? decodeURIComponent(blockRouteMatch[1]) === blockId
-    : false;
-};
 
 export const useRendererEditor = (
   pluginProfile?: {
@@ -139,27 +126,6 @@ export const useRendererEditor = (
       return result.url;
     },
   }), [documentId]) as CustomBlockNoteEditor;
-  const notebookWriter = useMemo(
-    () => new NotebookWriteClient(),
-    []
-  );
-  const downloadAddresses = useRef(
-    new Map<string, ReturnType<typeof notebookEnd>>()
-  );
-  const captureAddress = (preferredBlockId?: string) => {
-    if (!documentId) return null;
-    if (preferredBlockId) {
-      return afterNotebookBlock(documentId, preferredBlockId);
-    }
-    try {
-      const block = editor.getTextCursorPosition()?.block;
-      if (block) return afterNotebookBlock(documentId, block.id);
-    } catch {
-      // No mounted editor is required for the write itself.
-    }
-    return notebookEnd(documentId);
-  };
-
   useEffect(() => {
     if (!pluginProfile) return;
 
@@ -203,112 +169,6 @@ export const useRendererEditor = (
       host.dispose();
     };
   }, [editor, pluginProfile?.profileId, pluginProfile?.documentId, pluginProfile?.settings]);
-
-  // Handle inline link insertion from cmd+click in page context
-  useEffect(() => {
-    if (!window.electronAPI?.onInsertLink) {
-      console.warn("[useRendererEditor] onInsertLink API not available");
-      return;
-    }
-
-    console.log("[useRendererEditor] Registering onInsertLink handler");
-
-    const unsubscribe = window.electronAPI.onInsertLink(async (data) => {
-      console.log("[useRendererEditor] onInsertLink event received:", data);
-
-      if (!notebookWriter) {
-        console.warn("[useRendererEditor] No notebook writer available");
-        return;
-      }
-
-      if (!data?.url || !data?.title) {
-        console.warn("[useRendererEditor] Invalid data - missing url or title:", data);
-        return;
-      }
-
-      try {
-        if (data.sourceBlockId && isCurrentBlockRoute(data.sourceBlockId)) {
-          console.log(
-            `[useRendererEditor] Ignoring route inline link; back bar will insert the current page URL: "${data.title}" → ${data.url}`
-          );
-          return;
-        }
-
-        const address = captureAddress(data.sourceBlockId);
-        if (!address) return;
-        const result = await notebookWriter.insert(address, [
-            createInlineLinkBlock({
-              url: data.url,
-              title: data.title,
-              sourceBlockId: data.sourceBlockId,
-            }),
-          ], {
-            source: "page-link",
-            sourceUrl: data.url,
-            capturedAt: Date.now(),
-          });
-        if (result.status === "rejected") {
-          return;
-        }
-
-        console.log("[useRendererEditor] Link block inserted successfully");
-        console.log(`[useRendererEditor] ✓ Link captured: "${data.title}" → ${data.url}`);
-      } catch (error) {
-        console.error("[useRendererEditor] Failed to insert inline link:", error);
-      }
-    });
-
-    return unsubscribe;
-  }, [notebookWriter]);
-
-  // Handle file block insertion when a download completes
-  useEffect(() => {
-    if (
-      !window.electronAPI?.onDownloadStarted ||
-      !window.electronAPI?.onDownloadInsertFileBlock
-    ) {
-      return;
-    }
-
-    const unsubscribeStarted = window.electronAPI.onDownloadStarted((data) => {
-      const address = captureAddress();
-      if (address) downloadAddresses.current.set(data.id, address);
-    });
-    const unsubscribeCompleted = window.electronAPI.onDownloadInsertFileBlock(async (data) => {
-      if (!notebookWriter) return;
-
-      try {
-        const address =
-          downloadAddresses.current.get(data.id) ?? captureAddress();
-        downloadAddresses.current.delete(data.id);
-        if (!address) return;
-        await notebookWriter.insert(
-          address,
-          [
-            {
-              type: "file",
-              props: {
-                name: data.fileName,
-                url: data.url,
-              },
-            } as any,
-          ],
-          {
-            source: "download",
-            sourceUrl: data.url,
-            capturedAt: Date.now(),
-          }
-        );
-      } catch (error) {
-        console.error("[useRendererEditor] Failed to insert file block:", error);
-      }
-    });
-
-    return () => {
-      unsubscribeStarted();
-      unsubscribeCompleted();
-    };
-  }, [notebookWriter]);
 
   useDocumentSync(editor, documentId, yDoc);
 

@@ -40,6 +40,8 @@ import {
   afterNotebookBlock,
   notebookEnd,
 } from "./domains/notebook-content/core/NotebookAddress";
+import { useInterceptedLinkInsertion } from "./hooks/useInterceptedLinkInsertion";
+import { useDownloadNotebookInsertion } from "./hooks/useDownloadNotebookInsertion";
 
 const RendererAppContent = () => {
   const [contextualTitleBar, setContextualTitleBar] = useState<React.ReactNode>(null);
@@ -114,6 +116,8 @@ const RendererAppContent = () => {
 
   useBrowserSelection(notebookAddress, notebookWriter);
   useBrowserImageClips(notebookAddress, notebookWriter);
+  useInterceptedLinkInsertion(notebookAddress, notebookWriter);
+  useDownloadNotebookInsertion(notebookAddress, notebookWriter);
 
   const previousRenderedBranchRef = useRef<string | null>(null);
 
