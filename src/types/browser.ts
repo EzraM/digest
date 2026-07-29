@@ -15,7 +15,7 @@ export type BrowserPresentationIdentity = {
   transitionGeneration: number;
 };
 
-/** Renderer-to-main request. Main converts this IPC naming at the boundary. */
+/** Renderer-to-main request carrying the canonical placement assigned by main. */
 export type OpenReferenceIPCRequest = {
   placementId: string;
   routeId: string;
@@ -58,6 +58,7 @@ export type BrowserPageInfo =
       url: string;
       title: string;
       loadStatus: BrowserLoadStatus;
+      canGoBack: boolean;
     }
   | {
       success: false;

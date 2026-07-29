@@ -14,6 +14,25 @@ const coordinatorStub = (
   }) as BrowserPresentationCoordinator;
 
 describe("browser handlers", () => {
+  it("exposes the canonical placement owned by the renderer", () => {
+    const store = {} as WindowPresentationStore;
+    const event = { sender: { id: 22 } } as any;
+    const handlers = createBrowserHandlers(
+      store,
+      (candidate) => {
+        expect(candidate).toBe(event);
+        return "placement-window-b";
+      },
+      coordinatorStub()
+    );
+    const handler = handlers["browser:get-placement-id"];
+    if (handler.type !== "invoke") throw new Error("expected invoke handler");
+
+    expect(handler.fn(event)).toEqual({
+      placementId: "placement-window-b",
+    });
+  });
+
   it("routes presentation through sender ownership and canonical placement", () => {
     let received: any;
     const store = {} as WindowPresentationStore;
@@ -92,7 +111,10 @@ describe("browser handlers", () => {
 
     const handler = createBrowserHandlers(
       viewStore,
-      (_event, placementId) => placementId,
+      (_event, placementId) => {
+        if (!placementId) throw new Error("expected placement");
+        return placementId;
+      },
       coordinatorStub()
     )[
       "browser:capture-selection"

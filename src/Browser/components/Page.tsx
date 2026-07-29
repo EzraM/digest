@@ -5,7 +5,6 @@ import { useBrowserInitialization } from "../hooks/useBrowserInitialization";
 import { useSize } from "../hooks/useSize";
 import { useScrollContainer } from "../../context/ScrollContainerContext";
 import { SiteLoadingState } from "./SiteLoadingState";
-import { PRIMARY_BROWSER_PLACEMENT_ID } from "../presentationIds";
 import { useAppRoute } from "../../context/AppRouteContext";
 
 const NORMAL_HEIGHT = 800;
@@ -14,24 +13,15 @@ export function Page({
   blockId: providedBlockId,
   url,
   layout = "inline",
-  placementId: explicitPlacementId,
+  placementId,
 }: PageProps & {
   layout?: "inline" | "full";
-  placementId?: string;
+  placementId: string;
 }) {
   // For ephemeral URL pages (no blockId), generate a synthetic ID based on URL
   const blockId = providedBlockId ?? `ephemeral-${btoa(url).replace(/[^a-zA-Z0-9]/g, '')}`;
   const { transitionGeneration } = useAppRoute();
 
-  const generatedPlacementIdRef = useRef<string | null>(null);
-  if (generatedPlacementIdRef.current === null) {
-    generatedPlacementIdRef.current =
-      layout === "full"
-        ? PRIMARY_BROWSER_PLACEMENT_ID
-        : `inline-placement-${globalThis.crypto.randomUUID()}`;
-  }
-  const placementId =
-    explicitPlacementId ?? generatedPlacementIdRef.current;
   const routeId =
     layout === "inline"
       ? `inline:${blockId}`

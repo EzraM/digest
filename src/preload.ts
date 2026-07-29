@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.send("remove-view", request);
   },
   browser: {
+    getPlacementId: (): Promise<{ placementId: string }> =>
+      ipcRenderer.invoke("browser:get-placement-id"),
     getDevToolsState: (blockId: string) =>
       ipcRenderer.invoke("browser:get-devtools-state", blockId),
     toggleDevTools: (blockId: string) =>

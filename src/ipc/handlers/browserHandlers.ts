@@ -20,18 +20,29 @@ export function createBrowserHandlers(
   viewStoreOrResolver: WindowPresentationStore | ((event: BrowserSenderEvent) => WindowPresentationStore),
   resolvePlacementId: (
     event: BrowserSenderEvent,
-    rendererPlacementId: string
-  ) => string = (_event, placementId) => placementId,
+    rendererPlacementId?: string
+  ) => string = (_event, placementId) => {
+    if (!placementId) {
+      throw new Error("No placement resolver configured");
+    }
+    return placementId;
+  },
   coordinator: BrowserPresentationCoordinator
 ): IPCHandlerMap {
   const storeFor = (event: BrowserSenderEvent) =>
     typeof viewStoreOrResolver === "function"
       ? viewStoreOrResolver(event)
       : viewStoreOrResolver;
-  const placementFor = (event: BrowserSenderEvent, placementId: string) =>
+  const placementFor = (event: BrowserSenderEvent, placementId?: string) =>
     resolvePlacementId(event, placementId);
   const selectionCaptureService = new SelectionCaptureService();
   return {
+    "browser:get-placement-id": {
+      type: "invoke",
+      fn: (event) => ({
+        placementId: placementFor(event),
+      }),
+    },
     "update-browser": {
       type: "on",
       fn: (_event, _browserLayout) => {
@@ -125,6 +136,7 @@ export function createBrowserHandlers(
           url: view.webContents.getURL(),
           title: view.webContents.getTitle(),
           loadStatus,
+          canGoBack: view.webContents.navigationHistory.canGoBack(),
         };
       },
     },

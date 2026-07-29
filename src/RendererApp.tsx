@@ -30,7 +30,6 @@ import { LinkCaptureNotification } from "./domains/link-capture/ui/LinkCaptureNo
 import { useLinkCaptureNotification } from "./domains/link-capture/ui/useLinkCaptureNotification";
 import { DownloadProvider } from "./domains/downloads/ui/DownloadContext";
 import { DownloadNotification } from "./domains/downloads/ui/DownloadNotification";
-import { PRIMARY_BROWSER_PLACEMENT_ID } from "./Browser/presentationIds";
 import { useDownloadNotification } from "./domains/downloads/ui/useDownloadNotification";
 import { StatusBar } from "./components/renderer/StatusBar";
 import { useStatusBar } from "./hooks/useStatusBar";
@@ -44,6 +43,9 @@ import { useInterceptedLinkInsertion } from "./hooks/useInterceptedLinkInsertion
 import { useDownloadNotebookInsertion } from "./hooks/useDownloadNotebookInsertion";
 
 const RendererAppContent = () => {
+  const [browserPlacementId, setBrowserPlacementId] = useState<string | null>(
+    null
+  );
   const [contextualTitleBar, setContextualTitleBar] = useState<React.ReactNode>(null);
   const [isNavbarOpened, { toggle: toggleNavbar, close: closeNavbar }] =
     useDisclosure(true);
@@ -65,6 +67,16 @@ const RendererAppContent = () => {
       }
     : undefined;
   const editor = useRendererEditor(pluginProfile);
+
+  useEffect(() => {
+    let isMounted = true;
+    void window.electronAPI.browser.getPlacementId().then(({ placementId }) => {
+      if (isMounted) setBrowserPlacementId(placementId);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Listen for link capture events
   useLinkCaptureNotification();
@@ -359,7 +371,7 @@ const RendererAppContent = () => {
           />
         )}
         <div style={{ position: "relative", minHeight: 0, overflow: "hidden" }}>
-      {route.kind === "block" && notebookAddress && (
+      {route.kind === "block" && notebookAddress && browserPlacementId && (
         <BlockRouteView
           blockId={route.blockId}
           docId={
@@ -370,7 +382,7 @@ const RendererAppContent = () => {
           profileId={activeDocument?.profileId ?? null}
           url={blockRouteProps?.url ?? null}
           title={blockRouteProps?.title ?? "Block"}
-          placementId={PRIMARY_BROWSER_PLACEMENT_ID}
+          placementId={browserPlacementId}
           editor={editor}
           notebookAddress={notebookAddress}
           notebookWriter={notebookWriter}
@@ -379,14 +391,14 @@ const RendererAppContent = () => {
           }
         />
       )}
-      {route.kind === "url" && notebookAddress && (
+      {route.kind === "url" && notebookAddress && browserPlacementId && (
         <BlockRouteView
           blockId={undefined}
           docId={route.docId ?? activeDocumentId}
           profileId={activeDocument?.profileId ?? null}
           url={route.url}
           title={route.url}
-          placementId={PRIMARY_BROWSER_PLACEMENT_ID}
+          placementId={browserPlacementId}
           editor={editor}
           notebookAddress={notebookAddress}
           notebookWriter={notebookWriter}

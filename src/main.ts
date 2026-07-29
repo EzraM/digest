@@ -721,10 +721,15 @@ const setupIpcHandlers = (
         }
         return store;
       },
-      (event) => {
+      (event, rendererPlacementId) => {
         const placementId = placementIdByRendererId.get(event.sender.id);
         if (!placementId) {
           throw new Error(`No active placement for renderer: ${event.sender.id}`);
+        }
+        if (rendererPlacementId && rendererPlacementId !== placementId) {
+          throw new Error(
+            `Renderer ${event.sender.id} does not own placement ${rendererPlacementId}`
+          );
         }
         placementRegistry.requireOwnedActive(placementId, event.sender.id);
         return placementId;

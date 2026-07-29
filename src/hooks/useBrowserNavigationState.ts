@@ -43,6 +43,31 @@ export function useBrowserNavigationState(
     }
 
     let isMounted = true;
+    let receivedNavigationEvent = false;
+
+    const applyNavigationState = (url: string, nextCanGoBack?: boolean) => {
+      if (!isMounted) return;
+
+      if (nextCanGoBack !== undefined) {
+        setCanGoBack(nextCanGoBack);
+      }
+      setIsNavigatingBack(false);
+
+      if (onUrlChange && url) {
+        onUrlChange(url);
+      }
+    };
+
+    const hydrateFromPage = async () => {
+      const pageInfo = await window.electronAPI.browser.getPageInfo(viewId);
+      if (
+        isMounted &&
+        !receivedNavigationEvent &&
+        pageInfo.success
+      ) {
+        applyNavigationState(pageInfo.url, pageInfo.canGoBack);
+      }
+    };
 
     const unsubscribe = window.electronAPI.onBrowserNavigation(
       (event: NavigationUpdateEvent) => {
@@ -54,14 +79,8 @@ export function useBrowserNavigationState(
           return;
         }
 
-        if (event.canGoBack !== undefined) {
-          setCanGoBack(event.canGoBack);
-        }
-        setIsNavigatingBack(false);
-
-        if (options?.onUrlChange && event.url) {
-          options.onUrlChange(event.url);
-        }
+        receivedNavigationEvent = true;
+        applyNavigationState(event.url, event.canGoBack);
 
         if (!editor) {
           return;
@@ -86,11 +105,26 @@ export function useBrowserNavigationState(
       }
     );
 
+    // Retained browser journeys may already be loaded before this listener is
+    // mounted, so seed the URL and history capability from WebContents.
+    void hydrateFromPage();
+
+    // The first query can race placement attachment. A lifecycle notification
+    // means the placement is now addressable, so hydrate again at that point.
+    const unsubscribeInitialized = window.electronAPI.onBrowserInitialized(
+      (event) => {
+        if (event.blockId === viewId) {
+          void hydrateFromPage();
+        }
+      }
+    );
+
     return () => {
       isMounted = false;
       if (unsubscribe) {
         unsubscribe();
       }
+      unsubscribeInitialized();
     };
   }, [blockIdForEditorSync, editor, onUrlChange, viewId]);
 

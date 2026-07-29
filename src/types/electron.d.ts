@@ -25,6 +25,7 @@ interface ElectronAPI {
   removeBrowser: (blockId: string) => void;
   removeView: (request: DetachPlacementIPCRequest) => void;
   browser: {
+    getPlacementId: () => Promise<{ placementId: string }>;
     getDevToolsState: (
       viewId: string
     ) => Promise<{ success: boolean; isOpen: boolean; error?: string }>;
