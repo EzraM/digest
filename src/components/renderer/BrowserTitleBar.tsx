@@ -32,13 +32,6 @@ const BackIcon = () => (
   </svg>
 );
 
-const NotebookIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <rect x="3" y="2.5" width="10" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.35" />
-    <path d="M6 2.5v11M8.5 6h2M8.5 8.5h2" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" />
-  </svg>
-);
-
 const PageStatusIcon = ({
   url,
   loadStatus,
@@ -138,22 +131,9 @@ export const BrowserTitleBar = ({
         color: "var(--digest-chrome-text)",
       }}
     >
-      <div className="browser-title-actions app-title-bar__control">
-        <div className="browser-title-actions__secondary">
-          <button
-            className="browser-title-action"
-            type="button"
-            onClick={onReturn}
-            onMouseEnter={showActionHint("Open notebook")}
-            onMouseLeave={resetActionHint}
-            onFocus={showActionHint("Open notebook")}
-            onBlur={resetActionHint}
-            title="Back to notebook"
-            aria-label="Back to notebook"
-          >
-            <NotebookIcon />
-          </button>
-          {canGoBrowserBack && (
+      {canGoBrowserBack && (
+        <div className="browser-title-actions app-title-bar__control">
+          <div className="browser-title-actions__secondary">
             <button
               className="browser-title-action"
               type="button"
@@ -168,9 +148,9 @@ export const BrowserTitleBar = ({
             >
               {isNavigatingBrowserBack ? "…" : <BackIcon />}
             </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
       <div
         className={`browser-location-zone browser-location-zone--${loadStatus} app-title-bar__control`}
       >

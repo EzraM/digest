@@ -77,7 +77,7 @@
 
 .browser-title-bar:hover .browser-title-actions__secondary,
 .browser-title-bar:focus-within .browser-title-actions__secondary {
-  width: 50px;
+  width: 24px;
   opacity: 1;
   transform: translateX(0);
 }
