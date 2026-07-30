@@ -24,7 +24,7 @@ describe("CanonicalDerivedDataCoordinator", () => {
       reindexDocument: async (documentId, blocks) => {
         reindexed.push({ documentId, blocks });
       },
-      deleteImage: (imageId) => {
+      releaseAsset: (imageId) => {
         deleted.push(imageId);
         return true;
       },

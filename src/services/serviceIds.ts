@@ -10,7 +10,7 @@ export const SERVICE_IDS = {
   PROFILE_MANAGER: "profileManager",
   DOCUMENT_MANAGER: "documentManager",
   DEBUG_EVENT_SERVICE: "debugEventService",
-  IMAGE_SERVICE: "imageService",
+  ASSET_SERVICE: "assetService",
   SEARCH_INDEX_MANAGER: "searchIndexManager",
   BRAVE_SEARCH_SERVICE: "braveSearchService",
 } as const;
@@ -29,7 +29,7 @@ export const CORE_SERVICE_BOOT_ORDER: readonly ServiceId[] = [
   SERVICE_IDS.PROFILE_MANAGER,
   SERVICE_IDS.DOCUMENT_MANAGER,
   SERVICE_IDS.DEBUG_EVENT_SERVICE,
-  SERVICE_IDS.IMAGE_SERVICE,
+  SERVICE_IDS.ASSET_SERVICE,
   SERVICE_IDS.SEARCH_INDEX_MANAGER,
   SERVICE_IDS.BRAVE_SEARCH_SERVICE,
 ] as const;

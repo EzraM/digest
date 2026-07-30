@@ -1,4 +1,5 @@
 import type { Block } from "../domains/blocks/core";
+import { assetAddress } from "../domains/assets/core/AssetAddress";
 
 export type ProseMirrorJsonNode = {
   type?: string;
@@ -10,7 +11,7 @@ export type ProseMirrorJsonNode = {
 
 export type CanonicalDocumentAnalysis = {
   searchBlocks: Block[];
-  imageIds: Set<string>;
+  assetIds: Set<string>;
 };
 
 const collectText = (node: ProseMirrorJsonNode): string => {
@@ -19,26 +20,26 @@ const collectText = (node: ProseMirrorJsonNode): string => {
   return (node.content ?? []).map(collectText).join("");
 };
 
-const collectImageIds = (value: unknown, imageIds: Set<string>): void => {
+const collectAssetIds = (value: unknown, assetIds: Set<string>): void => {
   if (typeof value === "string") {
-    const match = /^digest-image:\/\/([^/?#]+)/.exec(value);
-    if (match) imageIds.add(match[1]);
+    const id = assetAddress.parse(value);
+    if (id) assetIds.add(id);
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) collectImageIds(item, imageIds);
+    for (const item of value) collectAssetIds(item, assetIds);
     return;
   }
   if (value && typeof value === "object") {
     for (const item of Object.values(value)) {
-      collectImageIds(item, imageIds);
+      collectAssetIds(item, assetIds);
     }
   }
 };
 
 const analyzeBlockContainer = (
   container: ProseMirrorJsonNode,
-  imageIds: Set<string>
+  assetIds: Set<string>
 ): Block | null => {
   if (container.type !== "blockContainer") return null;
   const blockContent = container.content?.find(
@@ -51,10 +52,10 @@ const analyzeBlockContainer = (
     (node) => node.type === "blockGroup"
   );
   const children = (childGroup?.content ?? [])
-    .map((child) => analyzeBlockContainer(child, imageIds))
+    .map((child) => analyzeBlockContainer(child, assetIds))
     .filter((block): block is Block => block !== null);
   const props = blockContent.attrs ?? {};
-  collectImageIds(props, imageIds);
+  collectAssetIds(props, assetIds);
 
   return {
     id: container.attrs.id,
@@ -70,12 +71,12 @@ const analyzeBlockContainer = (
 export const analyzeCanonicalDocument = (
   prosemirrorJson: ProseMirrorJsonNode
 ): CanonicalDocumentAnalysis => {
-  const imageIds = new Set<string>();
+  const assetIds = new Set<string>();
   const rootGroup = prosemirrorJson.content?.find(
     (node) => node.type === "blockGroup"
   );
   const searchBlocks = (rootGroup?.content ?? [])
-    .map((container) => analyzeBlockContainer(container, imageIds))
+    .map((container) => analyzeBlockContainer(container, assetIds))
     .filter((block): block is Block => block !== null);
-  return { searchBlocks, imageIds };
+  return { searchBlocks, assetIds };
 };

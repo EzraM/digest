@@ -375,28 +375,47 @@ contextBridge.exposeInMainWorld("electronAPI", {
       };
     },
   },
-  image: {
-    saveImage: (params: {
+  asset: {
+    save: (params: {
       arrayBuffer: ArrayBuffer;
       mimeType: string;
       fileName: string;
       width?: number;
       height?: number;
       documentId?: string;
-    }) => ipcRenderer.invoke("image:saveImage", params),
-    getImageInfo: (id: string) => ipcRenderer.invoke("image:getImageInfo", id),
-    downloadAndSaveImage: (params: {
+    }) =>
+      ipcRenderer.invoke("asset:save", {
+        bytes: params.arrayBuffer,
+        mediaType: params.mimeType,
+        name: params.fileName,
+        width: params.width,
+        height: params.height,
+        owner: params.documentId
+          ? { kind: "document", id: params.documentId }
+          : undefined,
+      }),
+    info: (id: string) => ipcRenderer.invoke("asset:info", id),
+    importUrl: (params: {
       url: string;
       documentId?: string;
       width?: number;
       height?: number;
       fileName?: string;
-    }) =>
-      ipcRenderer.invoke("image:downloadAndSaveImage", params),
-    deleteImage: (imageId: string) =>
-      ipcRenderer.invoke("image:deleteImage", imageId),
-    attachImageToDocument: (params: { imageId: string; documentId: string }) =>
-      ipcRenderer.invoke("image:attachImageToDocument", params),
+    }) => ipcRenderer.invoke("asset:importUrl", {
+      url: params.url,
+      name: params.fileName,
+      width: params.width,
+      height: params.height,
+      owner: params.documentId
+        ? { kind: "document", id: params.documentId }
+        : undefined,
+    }),
+    release: (assetId: string) => ipcRenderer.invoke("asset:release", assetId),
+    attach: (params: { assetId: string; documentId: string }) =>
+      ipcRenderer.invoke("asset:attach", {
+        assetId: params.assetId,
+        owner: { kind: "document", id: params.documentId },
+      }),
   },
   search: {
     execute: (

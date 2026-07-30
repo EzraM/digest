@@ -6,7 +6,8 @@ import { getDebugEventService, DebugEventService } from "./DebugEventService";
 import { log } from "../utils/mainLogger";
 import { ProfileManager } from "./ProfileManager";
 import { DocumentManager } from "./DocumentManager";
-import { ImageService } from "./ImageService";
+import { AssetService } from "../domains/assets/application/AssetService";
+import { SqliteAssetStore } from "../domains/assets/adapter/SqliteAssetStore";
 import { SearchIndexManager } from "../domains/search/services/SearchIndexManager";
 import { BraveSearchService } from "../domains/search/services/BraveSearchService";
 import type Database from "better-sqlite3";
@@ -80,16 +81,15 @@ export function registerServices(container: Container): void {
     },
   });
 
-  // ImageService - depends on database
-  container.register(SERVICE_IDS.IMAGE_SERVICE, {
+  container.register(SERVICE_IDS.ASSET_SERVICE, {
     version: "1.0.0",
     dependencies: [SERVICE_IDS.DATABASE],
     factory: async (c) => {
-      log.debug("Initializing ImageService", "ServiceRegistry");
+      log.debug("Initializing asset capability", "ServiceRegistry");
       const database = await c.resolve<Database.Database>(
         SERVICE_IDS.DATABASE
       );
-      return ImageService.getInstance(database);
+      return new AssetService(new SqliteAssetStore(database));
     },
   });
 
@@ -149,7 +149,7 @@ export function getServices(container: Container) {
     debugEventService: container.get(SERVICE_IDS.DEBUG_EVENT_SERVICE) as DebugEventService,
     profileManager: container.get(SERVICE_IDS.PROFILE_MANAGER) as ProfileManager,
     documentManager: container.get(SERVICE_IDS.DOCUMENT_MANAGER) as DocumentManager,
-    imageService: container.get(SERVICE_IDS.IMAGE_SERVICE) as ImageService,
+    assetService: container.get(SERVICE_IDS.ASSET_SERVICE) as AssetService,
     searchIndexManager: container.get(
       SERVICE_IDS.SEARCH_INDEX_MANAGER
     ) as SearchIndexManager,

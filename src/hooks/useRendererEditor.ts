@@ -125,11 +125,11 @@ export const useRendererEditor = (
       }
 
       // Save image via IPC
-      if (!window.electronAPI?.image?.saveImage) {
-        throw new Error("Image API not available");
+      if (!window.electronAPI?.asset?.save) {
+        throw new Error("Asset API not available");
       }
 
-      const result = await window.electronAPI.image.saveImage({
+      const result = await window.electronAPI.asset.save({
         arrayBuffer,
         mimeType: file.type,
         fileName: file.name,

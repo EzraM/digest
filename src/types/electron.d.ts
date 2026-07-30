@@ -202,8 +202,8 @@ interface ElectronAPI {
       callback: (data: { document: DocumentRecord | null }) => void
     ) => () => void;
   };
-  image: {
-    saveImage: (params: {
+  asset: {
+    save: (params: {
       arrayBuffer: ArrayBuffer;
       mimeType: string;
       fileName: string;
@@ -216,17 +216,17 @@ interface ElectronAPI {
       width: number | null;
       height: number | null;
     }>;
-    getImageInfo: (id: string) => Promise<{
+    info: (id: string) => Promise<{
       id: string;
-      file_name: string;
-      mime_type: string;
-      byte_length: number;
+      name: string;
+      mediaType: string;
+      byteLength: number;
       width: number | null;
       height: number | null;
-      created_at: number;
-      document_id: string | null;
+      createdAt: number;
+      documentId: string | null;
     } | null>;
-    downloadAndSaveImage: (params: {
+    importUrl: (params: {
       url: string;
       documentId?: string;
       width?: number;
@@ -238,9 +238,9 @@ interface ElectronAPI {
       width: number | null;
       height: number | null;
     } | null>;
-    deleteImage: (imageId: string) => Promise<boolean>;
-    attachImageToDocument: (params: {
-      imageId: string;
+    release: (assetId: string) => Promise<boolean>;
+    attach: (params: {
+      assetId: string;
       documentId: string;
     }) => Promise<boolean>;
   };

@@ -74,9 +74,9 @@ export const useBrowserImageClips = (
         }
         inserted = true;
 
-        await window.electronAPI.image
-          .attachImageToDocument({
-            imageId: data.imageId,
+        await window.electronAPI.asset
+          .attach({
+            assetId: data.imageId,
             documentId: address.documentId,
           })
           .catch((error) => {
@@ -92,8 +92,8 @@ export const useBrowserImageClips = (
         );
       } catch (error) {
         if (!inserted) {
-          await window.electronAPI.image
-            .deleteImage(data.imageId)
+          await window.electronAPI.asset
+            .release(data.imageId)
             .catch(() => false);
         }
         log.debug(

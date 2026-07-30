@@ -272,8 +272,8 @@ export class ClipConverter implements IClipConverter {
         const url = block.props.url as string;
         if (/^https?:\/\//i.test(url)) {
           imagePromises.push(
-            window.electronAPI.image
-              .downloadAndSaveImage({ url })
+            window.electronAPI.asset
+              .importUrl({ url })
               .then((result) => {
                 if (result) {
                   block.props.url = result.url;

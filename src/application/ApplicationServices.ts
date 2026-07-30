@@ -40,7 +40,7 @@ export const createApplicationServices = (): ApplicationServices => {
       derivedDataCoordinator = new CanonicalDerivedDataCoordinator({
         reindexDocument: (documentId, blocks) =>
           services.searchIndexManager.reindexDocument(documentId, blocks),
-        deleteImage: (imageId) => services.imageService.deleteImage(imageId),
+        releaseAsset: (assetId) => services.assetService.release(assetId),
         onError: (documentId, error) =>
           log.debug(
             `Canonical derived-data update failed for ${documentId}: ${error}`,

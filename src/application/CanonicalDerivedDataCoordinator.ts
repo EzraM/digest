@@ -11,7 +11,7 @@ export type CanonicalDocumentSnapshot = {
 
 type Dependencies = {
   reindexDocument: (documentId: string, blocks: Block[]) => Promise<void>;
-  deleteImage: (imageId: string) => boolean;
+  releaseAsset: (assetId: string) => boolean;
   onError?: (documentId: string, error: unknown) => void;
   debounceMs?: number;
 };
@@ -22,7 +22,7 @@ type Dependencies = {
  */
 export class CanonicalDerivedDataCoordinator {
   private readonly latestByDocumentId = new Map<string, CanonicalDocumentSnapshot>();
-  private readonly imageIdsByDocumentId = new Map<string, Set<string>>();
+  private readonly assetIdsByDocumentId = new Map<string, Set<string>>();
   private readonly timerByDocumentId = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -32,9 +32,9 @@ export class CanonicalDerivedDataCoordinator {
 
   seed(projection: CanonicalDocumentSnapshot): void {
     const analysis = analyzeCanonicalDocument(projection.prosemirrorJson);
-    this.imageIdsByDocumentId.set(
+    this.assetIdsByDocumentId.set(
       projection.documentId,
-      analysis.imageIds
+      analysis.assetIds
     );
     this.schedule(projection);
   }
@@ -60,15 +60,15 @@ export class CanonicalDerivedDataCoordinator {
 
     try {
       const analysis = analyzeCanonicalDocument(projection.prosemirrorJson);
-      const nextImageIds = analysis.imageIds;
-      const previousImageIds =
-        this.imageIdsByDocumentId.get(documentId) ?? new Set<string>();
-      for (const imageId of previousImageIds) {
-        if (!nextImageIds.has(imageId)) {
-          this.dependencies.deleteImage(imageId);
+      const nextAssetIds = analysis.assetIds;
+      const previousAssetIds =
+        this.assetIdsByDocumentId.get(documentId) ?? new Set<string>();
+      for (const assetId of previousAssetIds) {
+        if (!nextAssetIds.has(assetId)) {
+          this.dependencies.releaseAsset(assetId);
         }
       }
-      this.imageIdsByDocumentId.set(documentId, nextImageIds);
+      this.assetIdsByDocumentId.set(documentId, nextAssetIds);
       await this.dependencies.reindexDocument(
         documentId,
         analysis.searchBlocks

@@ -1,27 +1,17 @@
-import { WebContentsView, session } from "electron";
+import { WebContentsView } from "electron";
 import { WindowPresentationStore } from "../services/WindowPresentationStore";
 import { LinkInterceptionService } from "../services/LinkInterceptionService";
 import { log } from "../utils/mainLogger";
 import { ViewLayerManager, ViewLayer } from "../services/ViewLayerManager";
-import { IPCRouter } from "../ipc/IPCRouter";
-import { IPCServiceBridge } from "../services/IPCServiceBridge";
-import { ImageProtocolService } from "../services/ImageProtocolService";
 import { fetchPageTitle } from "../domains/link-capture/adapter/fetchPageTitle";
 import { DownloadManager } from "../services/DownloadManager";
 import Database from "better-sqlite3";
 import { LivePageCacheTelemetry } from "../services/LivePageCacheTelemetry";
 import { randomUUID } from "node:crypto";
-import { WindowRegistry } from "./WindowRegistry";
-import { PlacementRegistry } from "./PlacementRegistry";
-import { BrowsingJourneyStore } from "../services/BrowsingJourneyStore";
-import { ApplicationJourneyAllocator } from "../services/ApplicationJourneyAllocator";
-import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry";
-import { CollaborationDocumentService } from "./CollaborationDocumentService";
-import { registerIpcHandlers } from "../ipc/registerIpcHandlers";
-import { createApplicationServices } from "./ApplicationServices";
 import { setupRendererLogging } from "../electron/setupRendererLogging";
 import { createRendererWindow } from "../electron/createRendererWindow";
 import { configureDownloads } from "./configureDownloads";
+import { DigestProcess } from "./DigestProcess";
 
 const EVENTS = {
   BLOCK_MENU: {
@@ -40,55 +30,35 @@ const EVENTS = {
 
 // Global references to keep objects from being garbage collected
 let globalAppView: WebContentsView | null = null;
-const applicationServices = createApplicationServices();
-const windowRegistry = new WindowRegistry();
-const placementRegistry = new PlacementRegistry();
-const viewStoreByRendererId = new Map<number, WindowPresentationStore>();
-const placementIdByRendererId = new Map<number, string>();
-const sharedJourneys = new BrowsingJourneyStore(10);
-const sharedHandles = new HandleRegistry();
-const journeyAllocator = new ApplicationJourneyAllocator({
-  journeys: sharedJourneys,
-  handles: sharedHandles,
-});
-let collaborationDocuments: CollaborationDocumentService | undefined;
-const ipcRouter = new IPCRouter();
-let ipcInitialized = false;
-let sharedIpcServicesExposed = false;
-let imageProtocolInitialized = false;
+const digestProcess = new DigestProcess();
 
 export const openWindow = async (
   initialHash?: string,
   initialDocumentId: string | null = null
 ) => {
-  const initialized = await applicationServices.initialize();
+  const initialized = await digestProcess.initialize();
   const { services } = initialized;
-  collaborationDocuments = initialized.collaborationDocuments;
   const { documentManager } = services;
   const selectedDocumentId = initialDocumentId
     ? documentManager.getDocument(initialDocumentId).id
     : null;
-  const ipcServiceBridge = new IPCServiceBridge(
-    ipcRouter,
-    applicationServices.container
-  );
   const windowId = `window-${randomUUID()}`;
   const {
     browserWindow: baseWindow,
     rendererView: appViewInstance,
     updateBounds: updateViewBounds,
   } = createRendererWindow({ initialHash });
-  windowRegistry.register({
+  digestProcess.windowRegistry.register({
     windowId,
     browserWindow: baseWindow,
     rendererView: appViewInstance,
     selectedDocumentId,
   });
-  const placement = placementRegistry.register(
+  const placement = digestProcess.placementRegistry.register(
     windowId,
     appViewInstance.webContents.id
   );
-  placementIdByRendererId.set(
+  digestProcess.placementIdByRendererId.set(
     appViewInstance.webContents.id,
     placement.placementId
   );
@@ -111,26 +81,34 @@ export const openWindow = async (
     appViewInstance.webContents,
     new LivePageCacheTelemetry(services.database as Database.Database),
     {
-      handles: journeyAllocator.getHandleRegistry(),
+      handles: digestProcess.journeyAllocator.getHandleRegistry(),
       resolvePresentationIdentity: (handleId) =>
-        journeyAllocator.getActiveMappingForHandle(handleId),
+        digestProcess.journeyAllocator.getActiveMappingForHandle(handleId),
       resolveHandleIdForPlacement: (placementId) =>
-        journeyAllocator.getHandleIdForPlacement(placementId),
+        digestProcess.journeyAllocator.getHandleIdForPlacement(placementId),
       onRendererGone: (handleId) => {
-        const placementId = journeyAllocator.getActivePlacementId(handleId);
-        journeyAllocator.removeJourney(handleId);
+        const placementId =
+          digestProcess.journeyAllocator.getActivePlacementId(handleId);
+        digestProcess.journeyAllocator.removeJourney(handleId);
         return placementId;
       },
       onNavigation: (handleId, url, historyIndex) =>
-        journeyAllocator.recordNavigation(handleId, url, historyIndex),
+        digestProcess.journeyAllocator.recordNavigation(
+          handleId,
+          url,
+          historyIndex
+        ),
       publishLivePages: () => {
-        journeyAllocator.syncLivePages();
+        digestProcess.journeyAllocator.syncLivePages();
       },
       subscribeLivePages: (listener) =>
-        journeyAllocator.subscribeLivePages(listener),
+        digestProcess.journeyAllocator.subscribeLivePages(listener),
     }
   );
-  viewStoreByRendererId.set(appViewInstance.webContents.id, viewStore);
+  digestProcess.viewStoreByRendererId.set(
+    appViewInstance.webContents.id,
+    viewStore
+  );
   // A renderer `_blank` request means another Digest window. Preserve the
   // originating document as explicit return context on the URL route.
   const openUrlInDigestWindow = async (url: string) => {
@@ -186,6 +164,7 @@ export const openWindow = async (
   // Set up download manager for browser block file downloads
   const downloadManager = new DownloadManager();
   configureDownloads(downloadManager, () => globalAppView);
+  await digestProcess.bindElectron(downloadManager, openWindow);
 
   // Pass download manager to view store so it can attach to browser block sessions
   viewStore.setDownloadManager(downloadManager);
@@ -204,7 +183,7 @@ export const openWindow = async (
     const sourceUrl = webContents.getURL();
     const sourceTitle = webContents.getTitle() || sourceUrl;
 
-    const saved = await services.imageService.downloadAndSaveImage({
+    const saved = await services.assetService.importUrl({
       url: imageUrl,
       width,
       height,
@@ -244,73 +223,24 @@ export const openWindow = async (
 
   services.debugEventService.setMainRendererWebContents(appViewInstance);
 
-  if (!sharedIpcServicesExposed) {
-    ipcServiceBridge.exposeService(
-      "profileManager",
-      [{ method: "listProfiles", alias: "list" }],
-      "profiles"
-    );
-
-    ipcServiceBridge.exposeService(
-      "imageService",
-      [
-        { method: "saveImage", alias: "saveImage" },
-        { method: "getImageInfo", alias: "getImageInfo" },
-        { method: "downloadAndSaveImage", alias: "downloadAndSaveImage" },
-        { method: "deleteImage", alias: "deleteImage" },
-        { method: "attachImageToDocument", alias: "attachImageToDocument" },
-      ],
-      "image"
-    );
-    sharedIpcServicesExposed = true;
-  }
-
-  // Initialize and register the image protocol handler
-  // Register on the session used by the renderer (not the default protocol)
-  const rendererSession = session.fromPartition("persist:main-app");
-  const imageProtocolService = ImageProtocolService.getInstance();
-  if (!imageProtocolInitialized) {
-    imageProtocolService.initialize(
-      services.imageService,
-      rendererSession.protocol
-    );
-    imageProtocolInitialized = true;
-  }
-
-  // Set up process-wide IPC handlers.
-  if (!ipcInitialized) {
-    registerIpcHandlers({
-      router: ipcRouter,
-      services,
-      downloadManager,
-      collaborationDocuments: initialized.collaborationDocuments,
-      journeyAllocator,
-      placementRegistry,
-      windowRegistry,
-      viewStoreByRendererId,
-      placementIdByRendererId,
-      openWindow,
-    });
-    ipcInitialized = true;
-  }
-
   // Update view bounds when window is resized
   baseWindow.on("resize", updateViewBounds);
 
   baseWindow.on("closed", () => {
     const rendererId = appViewInstance.webContents.id;
     viewStore.dispose();
-    viewStoreByRendererId.delete(rendererId);
-    collaborationDocuments?.unsubscribe(rendererId);
-    placementIdByRendererId.delete(rendererId);
-    placementRegistry.retireWindow(windowId);
-    windowRegistry.retire(windowId);
+    digestProcess.viewStoreByRendererId.delete(rendererId);
+    initialized.collaborationDocuments.unsubscribe(rendererId);
+    digestProcess.placementIdByRendererId.delete(rendererId);
+    digestProcess.placementRegistry.retireWindow(windowId);
+    digestProcess.windowRegistry.retire(windowId);
     if (globalAppView === appViewInstance) {
-      globalAppView = windowRegistry.list()[0]?.rendererView ?? null;
+      globalAppView =
+        digestProcess.windowRegistry.list()[0]?.rendererView ?? null;
     }
   });
 };
 
 export const dispose = () => {
-  applicationServices.dispose();
+  digestProcess.dispose();
 };

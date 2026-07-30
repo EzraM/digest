@@ -63,6 +63,6 @@ describe("analyzeCanonicalDocument", () => {
         ],
       },
     ]);
-    expect(Array.from(analysis.imageIds)).toEqual(["image-1"]);
+    expect(Array.from(analysis.assetIds)).toEqual(["image-1"]);
   });
 });
