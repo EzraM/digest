@@ -455,7 +455,6 @@ const RendererAppContent = () => {
       >
         <RendererLayout
           isNavbarOpened={isNavbarOpened}
-          onNavbarToggle={toggleNavbar}
           isDebugSidebarVisible={isDebugSidebarVisible}
           navbar={
             <FileTreePane

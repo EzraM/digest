@@ -37,6 +37,7 @@ export const EditorPane = ({
     <div className="App">
       <EditorErrorBoundary>
         <BlockNoteView
+          className="notebook-editor"
           editor={editor}
           slashMenu={false}
           formattingToolbar={false}

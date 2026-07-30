@@ -29,16 +29,9 @@ export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
         <span className="notebook-title-bar__breadcrumb">
           {breadcrumbText}
         </span>
-        <svg
-          className="notebook-title-bar__reveal"
-          width="14"
-          height="14"
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path d="m6 4 4 4-4 4" />
-        </svg>
+        <span className="app-title-bar__hint notebook-title-bar__hint">
+          Toggle sidebar
+        </span>
       </button>
     </header>
   );

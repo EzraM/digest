@@ -8,6 +8,21 @@
   -webkit-app-region: no-drag;
 }
 
+.app-title-bar__hint {
+  box-sizing: border-box;
+  border: 1px solid var(--digest-chrome-menu-edge);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--digest-chrome-surface) 55%, transparent);
+  padding: 2px 7px;
+  color: inherit;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  opacity: 0.62;
+  white-space: nowrap;
+}
+
 .notebook-title-bar {
   position: relative;
   display: flex;
@@ -67,29 +82,19 @@
 }
 
 .notebook-title-bar__breadcrumb {
+  position: absolute;
+  left: 50%;
+  width: calc(100% - 190px);
   min-width: 0;
-  flex: 1;
   overflow: hidden;
   text-align: center;
   text-overflow: ellipsis;
+  transform: translateX(-50%);
   white-space: nowrap;
 }
 
-.notebook-title-bar__reveal {
-  flex: 0 0 auto;
-  stroke: currentColor;
-  stroke-width: 1.35;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0;
-  transform: translateX(-3px);
-  transition: opacity 120ms ease, transform 150ms ease;
-}
-
-.notebook-title-bar__location:hover .notebook-title-bar__reveal,
-.notebook-title-bar__location:focus-visible .notebook-title-bar__reveal {
-  opacity: 0.72;
-  transform: translateX(0);
+.notebook-title-bar__hint {
+  margin-left: auto;
 }
 
 @media (max-width: 520px) {
@@ -102,8 +107,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .notebook-title-bar__location,
-  .notebook-title-bar__reveal {
+  .notebook-title-bar__location {
     transition: none;
   }
 }

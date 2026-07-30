@@ -7,7 +7,6 @@ import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { DocumentProvider } from "../../context/DocumentContext";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
 import { BlockRoutePageToolSlot } from "./BlockRoutePageToolSlot";
-import { LeftRail } from "./LeftRail";
 import { BrowserTitleBar } from "./BrowserTitleBar";
 import { CustomBlockNoteEditor, CustomPartialBlock } from "../../types/schema";
 import { useBrowserLoadState } from "../../hooks/useBrowserLoadState";
@@ -155,7 +154,13 @@ export const BlockRouteViewContent = ({
         isTogglingDevTools={isTogglingDevTools}
         onToggleDevTools={toggleDevTools}
         breadcrumb={breadcrumb}
-        onReturn={onBack}
+        onReturn={handleBack}
+        viewId={placementId}
+        notebookAddress={notebookAddress}
+        notebookWriter={notebookWriter}
+        canGoBrowserBack={canGoBack}
+        isNavigatingBrowserBack={isNavigatingBack}
+        onBrowserBack={goBack}
       />
     ),
     [
@@ -168,7 +173,13 @@ export const BlockRouteViewContent = ({
       isTogglingDevTools,
       loadStatus,
       breadcrumb,
-      onBack,
+      canGoBack,
+      goBack,
+      handleBack,
+      isNavigatingBack,
+      notebookAddress,
+      notebookWriter,
+      placementId,
       toggleDevTools,
     ]
   );
@@ -190,24 +201,13 @@ export const BlockRouteViewContent = ({
           height: "100%",
           backgroundColor: "#f5f6f8",
           display: "grid",
-          gridTemplateColumns: `2rem minmax(0, 1fr)`,
+          gridTemplateColumns: "minmax(0, 1fr)",
           gridTemplateRows: "1fr",
           gap: 0,
           padding: 0,
           overflow: "hidden",
         }}
       >
-        {/* Left sidebar - minimize/expand toggle */}
-        <LeftRail
-          viewId={placementId}
-          notebookAddress={notebookAddress}
-          notebookWriter={notebookWriter}
-          onBack={handleBack}
-          canGoBrowserBack={canGoBack}
-          isNavigatingBrowserBack={isNavigatingBack}
-          onBrowserBack={goBack}
-        />
-
         {/* Main content area */}
         <div
           style={{

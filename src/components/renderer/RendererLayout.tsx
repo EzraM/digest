@@ -1,13 +1,11 @@
 import { ReactNode, useMemo, useContext, useRef, useEffect } from "react";
 import { Box, Transition } from "@mantine/core";
 import { useElementScrollRestoration } from "@tanstack/react-router";
-import { SidebarToggleButton } from "./SidebarToggleButton";
 import { PageToolSlotContext } from "../../context/PageToolSlotContext";
 import { ScrollContainerProvider } from "../../context/ScrollContainerContext";
 
 const NAVBAR_WIDTH = 320;
 const ASIDE_WIDTH = 400;
-const TOGGLE_BAR_WIDTH = 32; // 2rem in pixels
 const NAVBAR_TRANSITION_MS = 180;
 
 type RendererLayoutProps = {
@@ -15,7 +13,6 @@ type RendererLayoutProps = {
   main: ReactNode;
   aside: ReactNode;
   isNavbarOpened: boolean;
-  onNavbarToggle: () => void;
   isDebugSidebarVisible: boolean;
 };
 
@@ -24,7 +21,6 @@ export const RendererLayout = ({
   main,
   aside,
   isNavbarOpened,
-  onNavbarToggle,
   isDebugSidebarVisible,
 }: RendererLayoutProps) => {
   // Get page tool slot content
@@ -70,9 +66,9 @@ export const RendererLayout = ({
     <Box
       style={{
         display: "grid",
-        gridTemplateColumns: `${TOGGLE_BAR_WIDTH}px ${navWidth}px 1fr ${asideWidth}px`,
+        gridTemplateColumns: `${navWidth}px 1fr ${asideWidth}px`,
         gridTemplateRows,
-        gridTemplateAreas: `"toggle nav main aside"${hasPageTool ? ' "toggle tool tool tool"' : ""}`,
+        gridTemplateAreas: `"nav main aside"${hasPageTool ? ' "tool tool tool"' : ""}`,
         height: "100%",
         width: "100%",
         minWidth: 0,
@@ -160,15 +156,6 @@ export const RendererLayout = ({
           {pageToolContent}
         </Box>
       )}
-
-      <Box
-        style={{
-          gridArea: "toggle",
-          position: "relative",
-        }}
-      >
-        <SidebarToggleButton isOpen={isNavbarOpened} onToggle={onNavbarToggle} />
-      </Box>
     </Box>
   );
 };

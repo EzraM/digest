@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { BrowserLoadStatus } from "../../types/browser";
 import "./BrowserTitleBar.css";
 import { ResolvedPageBreadcrumb } from "../../domains/page-context/resolvePageBreadcrumb";
+import { AddPageButton } from "../clip/AddPageButton";
+import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
+import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
 
 type BrowserTitleBarProps = {
   url: string;
@@ -15,7 +18,26 @@ type BrowserTitleBarProps = {
   onToggleDevTools: () => void;
   breadcrumb: ResolvedPageBreadcrumb | null;
   onReturn: () => void;
+  viewId: string;
+  notebookAddress: NotebookAddress;
+  notebookWriter: NotebookWriteClient;
+  canGoBrowserBack: boolean;
+  isNavigatingBrowserBack: boolean;
+  onBrowserBack: () => void;
 };
+
+const BackIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M13 8H3M7 4 3 8l4 4" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const NotebookIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <rect x="3" y="2.5" width="10" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.35" />
+    <path d="M6 2.5v11M8.5 6h2M8.5 8.5h2" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" />
+  </svg>
+);
 
 const PageStatusIcon = ({
   url,
@@ -86,7 +108,16 @@ export const BrowserTitleBar = ({
   onToggleDevTools,
   breadcrumb,
   onReturn,
+  viewId,
+  notebookAddress,
+  notebookWriter,
+  canGoBrowserBack,
+  isNavigatingBrowserBack,
+  onBrowserBack,
 }: BrowserTitleBarProps) => {
+  const [actionHint, setActionHint] = useState("Open notebook");
+  const showActionHint = (label: string) => () => setActionHint(label);
+  const resetActionHint = () => setActionHint("Open notebook");
   const nearestHeading = breadcrumb?.headingPath.at(-1);
   const returnDescription = breadcrumb
     ? `Return to ${[breadcrumb.notebookTitle, nearestHeading?.text].filter(Boolean).join(", ")}`
@@ -107,6 +138,39 @@ export const BrowserTitleBar = ({
         color: "var(--digest-chrome-text)",
       }}
     >
+      <div className="browser-title-actions app-title-bar__control">
+        <div className="browser-title-actions__secondary">
+          <button
+            className="browser-title-action"
+            type="button"
+            onClick={onReturn}
+            onMouseEnter={showActionHint("Open notebook")}
+            onMouseLeave={resetActionHint}
+            onFocus={showActionHint("Open notebook")}
+            onBlur={resetActionHint}
+            title="Back to notebook"
+            aria-label="Back to notebook"
+          >
+            <NotebookIcon />
+          </button>
+          {canGoBrowserBack && (
+            <button
+              className="browser-title-action"
+              type="button"
+              onClick={onBrowserBack}
+              onMouseEnter={showActionHint("Go back")}
+              onMouseLeave={resetActionHint}
+              onFocus={showActionHint("Go back")}
+              onBlur={resetActionHint}
+              disabled={isNavigatingBrowserBack}
+              title="Go back in browser"
+              aria-label="Go back in browser"
+            >
+              {isNavigatingBrowserBack ? "…" : <BackIcon />}
+            </button>
+          )}
+        </div>
+      </div>
       <div
         className={`browser-location-zone browser-location-zone--${loadStatus} app-title-bar__control`}
       >
@@ -135,6 +199,10 @@ export const BrowserTitleBar = ({
           className="browser-load-control__refresh app-title-bar__control"
           type="button"
           onClick={onReload}
+          onMouseEnter={showActionHint("Refresh page")}
+          onMouseLeave={resetActionHint}
+          onFocus={showActionHint("Refresh page")}
+          onBlur={resetActionHint}
           title="Refresh page"
           aria-label="Refresh page"
         >
@@ -170,51 +238,83 @@ export const BrowserTitleBar = ({
                 </span>
               </>
             )}
+            <span className="app-title-bar__hint browser-authored-breadcrumb__hint">
+              {actionHint}
+            </span>
           </button>
         ) : (
-          <span className="browser-url-label" title={url}>{url}</span>
-        )}
-        <button
-          className="browser-copy-button app-title-bar__control"
-          type="button"
-          onClick={onCopy}
-          title={copied ? "Copied" : `Copy ${url}`}
-          aria-label={copied ? "Copied link" : "Copy link"}
-        >
-          {copied ? "Copied" : (
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="5.25" y="5.25" width="7.5" height="7.5" rx="1.25" stroke="currentColor" />
-              <path d="M10.5 5.25V3.5A1.25 1.25 0 0 0 9.25 2.25H3.5A1.25 1.25 0 0 0 2.25 3.5v5.75A1.25 1.25 0 0 0 3.5 10.5h1.75" stroke="currentColor" />
-            </svg>
-          )}
-        </button>
-        {devToolsAvailable && (
           <button
-            className="browser-devtools-button app-title-bar__control"
             type="button"
-            onClick={onToggleDevTools}
-            disabled={isTogglingDevTools}
-            aria-pressed={devToolsOpen}
-            title={devToolsOpen ? "Close developer tools" : "Open developer tools"}
-            style={{
-              border: 0,
-              background: "transparent",
-              height: "24px",
-              padding: 0,
-              color: devToolsOpen ? "#1c7ed6" : "inherit",
-              font: "inherit",
-              cursor: isTogglingDevTools ? "wait" : "pointer",
-            }}
+            className="browser-authored-breadcrumb"
+            onClick={onReturn}
+            title={`Open notebook. Current URL: ${url}`}
+            aria-label="Open notebook"
           >
-            {isTogglingDevTools ? (
-              "…"
-            ) : (
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="m5 4-3 4 3 4M11 4l3 4-3 4M9.5 2.5l-3 11" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+            <span className="browser-url-label" title={url}>{url}</span>
+            <span className="app-title-bar__hint browser-authored-breadcrumb__hint">
+              {actionHint}
+            </span>
+          </button>
+        )}
+        <span className="browser-location-actions">
+          {devToolsAvailable && (
+            <button
+              className="browser-devtools-button app-title-bar__control"
+              type="button"
+              onClick={onToggleDevTools}
+              onMouseEnter={showActionHint(devToolsOpen ? "Close devtools" : "Open devtools")}
+              onMouseLeave={resetActionHint}
+              onFocus={showActionHint(devToolsOpen ? "Close devtools" : "Open devtools")}
+              onBlur={resetActionHint}
+              disabled={isTogglingDevTools}
+              aria-pressed={devToolsOpen}
+              title={devToolsOpen ? "Close developer tools" : "Open developer tools"}
+              style={{
+                border: 0,
+                background: "transparent",
+                height: "24px",
+                padding: 0,
+                color: devToolsOpen ? "#1c7ed6" : "inherit",
+                font: "inherit",
+                cursor: isTogglingDevTools ? "wait" : "pointer",
+              }}
+            >
+              {isTogglingDevTools ? (
+                "…"
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="m5 4-3 4 3 4M11 4l3 4-3 4M9.5 2.5l-3 11" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          )}
+          <button
+            className="browser-copy-button app-title-bar__control"
+            type="button"
+            onClick={onCopy}
+            onMouseEnter={showActionHint(copied ? "Copied" : "Copy link")}
+            onMouseLeave={resetActionHint}
+            onFocus={showActionHint(copied ? "Copied" : "Copy link")}
+            onBlur={resetActionHint}
+            title={copied ? "Copied" : `Copy ${url}`}
+            aria-label={copied ? "Copied link" : "Copy link"}
+          >
+            {copied ? "Copied" : (
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="5.25" y="5.25" width="7.5" height="7.5" rx="1.25" stroke="currentColor" strokeWidth="1.35" />
+                <path d="M10.5 5.25V3.5A1.25 1.25 0 0 0 9.25 2.25H3.5A1.25 1.25 0 0 0 2.25 3.5v5.75A1.25 1.25 0 0 0 3.5 10.5h1.75" stroke="currentColor" strokeWidth="1.35" />
               </svg>
             )}
           </button>
-        )}
+          <AddPageButton
+            viewId={viewId}
+            notebookAddress={notebookAddress}
+            notebookWriter={notebookWriter}
+            className="browser-add-button app-title-bar__control"
+            onInteractionStart={showActionHint("Add to notebook")}
+            onInteractionEnd={resetActionHint}
+          />
+        </span>
       </div>
     </div>
   );

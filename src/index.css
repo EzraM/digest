@@ -63,6 +63,11 @@ body {
   padding-right: 5px;
 }
 
+.notebook-editor {
+  padding-top: 3rem;
+  background-color: var(--bn-colors-editor-background);
+}
+
 .bn-editor .bn-block-content {
   box-sizing: border-box;
   padding-left: 0;

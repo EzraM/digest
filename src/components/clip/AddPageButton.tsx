@@ -4,16 +4,34 @@ import { createInlineLinkBlock } from "../../hooks/inlineLinkInsertion";
 import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
 import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
 
+const BookmarkIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M4.25 2.25h7.5v11.5L8 11.15l-3.75 2.6V2.25Z"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.35"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 type AddPageButtonProps = {
   viewId: string;
   notebookAddress: NotebookAddress;
   notebookWriter: NotebookWriteClient;
+  className?: string;
+  onInteractionStart?: () => void;
+  onInteractionEnd?: () => void;
 };
 
 export const AddPageButton = ({
   viewId,
   notebookAddress,
   notebookWriter,
+  className,
+  onInteractionStart,
+  onInteractionEnd,
 }: AddPageButtonProps) => {
   const { isCapturing, captureSelection } = useClipCapture();
   const [didAddPage, setDidAddPage] = useState(false);
@@ -68,16 +86,18 @@ export const AddPageButton = ({
 
   return (
     <button
-      className="left-rail__add"
+      className={className}
       type="button"
       onClick={handleAdd}
+      onMouseEnter={onInteractionStart}
+      onMouseLeave={onInteractionEnd}
+      onFocus={onInteractionStart}
+      onBlur={onInteractionEnd}
       disabled={isCapturing}
       title="Add current page to notebook"
       aria-label="Add current page to notebook"
     >
-      <span aria-hidden="true">
-        {isCapturing ? "…" : didAddPage ? "✓" : "+"}
-      </span>
+      {isCapturing ? <span aria-hidden="true">…</span> : <BookmarkIcon filled={didAddPage} />}
     </button>
   );
 };
