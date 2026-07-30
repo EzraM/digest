@@ -42,6 +42,7 @@ import {
 import { useInterceptedLinkInsertion } from "./hooks/useInterceptedLinkInsertion";
 import { useDownloadNotebookInsertion } from "./hooks/useDownloadNotebookInsertion";
 import { DocumentTreeNode } from "./types/documents";
+import { useProfileSelection } from "./hooks/useProfileSelection";
 
 const findDocumentTitle = (
   trees: Record<string, DocumentTreeNode[]>,
@@ -320,12 +321,11 @@ const RendererAppContent = () => {
     };
   }, [showDebug]);
 
-  const handleProfileSelect = useCallback(
-    (profileId: string) => {
-      setActiveProfileId(profileId);
-    },
-    [setActiveProfileId]
-  );
+  const handleProfileSelect = useProfileSelection({
+    documentTrees,
+    setActiveProfileId,
+    openDocument: handleDocumentSelect,
+  });
 
   const handleOpenCreateProfileModal = useCallback(() => {
     openProfileModal();
