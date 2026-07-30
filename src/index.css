@@ -63,14 +63,17 @@ body {
   padding-right: 5px;
 }
 
-.notebook-pane,
-.notebook-editor {
-  min-height: 100%;
+.notebook-pane {
+  box-sizing: border-box;
+  height: 100%;
   background-color: var(--bn-colors-editor-background);
 }
 
 .notebook-editor {
+  box-sizing: border-box;
+  min-height: 100%;
   padding-top: 3rem;
+  background-color: var(--bn-colors-editor-background);
 }
 
 .bn-editor .bn-block-content {
