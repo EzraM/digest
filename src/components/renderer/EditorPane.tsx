@@ -34,7 +34,7 @@ export const EditorPane = ({
   useEffect(() => setLiveIndicatorProfileId(profileId), [profileId]);
 
   return (
-    <div className="App">
+    <div className="notebook-pane">
       <EditorErrorBoundary>
         <BlockNoteView
           className="notebook-editor"
@@ -54,7 +54,6 @@ export const EditorPane = ({
             onItemClick={onSlashMenuItemClick}
           />
         </BlockNoteView>
-        <div style={{ height: "2000px", width: "100%", color: "gray" }} />
       </EditorErrorBoundary>
     </div>
   );
