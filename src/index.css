@@ -63,6 +63,22 @@ body {
   padding-right: 5px;
 }
 
+.bn-editor .bn-block-content {
+  box-sizing: border-box;
+  padding-left: 0;
+  background-color: transparent;
+  transition:
+    font-size 200ms ease,
+    padding-left 150ms ease,
+    background-color 150ms ease;
+}
+
+.bn-editor .digest-focused-block > .bn-block > .bn-block-content {
+  padding-left: 8px;
+  border-radius: 6px;
+  background-color: var(--digest-chrome-violet-tint);
+}
+
 /* Keep italic semantics and shortcuts, but present them as highlighted text. */
 .bn-editor .bn-inline-content em {
   padding-inline: 0.08em;
@@ -82,4 +98,10 @@ body {
   background-color: #2f9e44;
   box-shadow: 0 0 0 1px rgba(47, 158, 68, 0.18);
   vertical-align: 0.08em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bn-editor .bn-block-content {
+    transition: none;
+  }
 }

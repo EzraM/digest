@@ -21,6 +21,7 @@ import {
 } from "../domains/notebook-plugins/core/types";
 import { createMiddleClickDeleteExtension } from "../domains/blocks/adapters/createMiddleClickDeleteExtension";
 import { createLiveLinkIndicatorExtension } from "../domains/blocks/adapters/createLiveLinkIndicatorExtension";
+import { createFocusedBlockExtension } from "../domains/blocks/adapters/createFocusedBlockExtension";
 import { useAppRoute } from "../context/AppRouteContext";
 import { boundedFallbackLinkLabel } from "../domains/page-context/NotebookPageSource";
 
@@ -83,6 +84,7 @@ export const useRendererEditor = (
     extensions: [
       createMiddleClickDeleteExtension,
       createLiveLinkIndicatorExtension,
+      createFocusedBlockExtension,
     ],
     pasteHandler: (context: Parameters<typeof handleElectronPaste>[0]) =>
       handleElectronPaste(context),
