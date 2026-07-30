@@ -20,13 +20,7 @@ import {
   initializeAllServices,
   getServices,
 } from "./services/ServiceRegistry";
-import { IPCRouter, IPCHandlerMap } from "./ipc/IPCRouter";
-import { createProfileHandlers } from "./ipc/handlers/profileHandlers";
-import { createDocumentHandlers } from "./ipc/handlers/documentHandlers";
-import { createRendererHandlers } from "./ipc/handlers/rendererHandlers";
-import { createBrowserHandlers } from "./ipc/handlers/browserHandlers";
-import { createSearchHandlers } from "./ipc/handlers/searchHandlers";
-import { createDownloadHandlers } from "./ipc/handlers/downloadHandlers";
+import { IPCRouter } from "./ipc/IPCRouter";
 import { IPCServiceBridge } from "./services/IPCServiceBridge";
 import { ImageProtocolService } from "./services/ImageProtocolService";
 import { fetchPageTitle } from "./domains/link-capture/adapter/fetchPageTitle";
@@ -38,12 +32,11 @@ import { WindowRegistry } from "./application/WindowRegistry";
 import { PlacementRegistry } from "./application/PlacementRegistry";
 import { BrowsingJourneyStore } from "./services/BrowsingJourneyStore";
 import { ApplicationJourneyAllocator } from "./services/ApplicationJourneyAllocator";
-import { BrowserPresentationCoordinator } from "./services/BrowserPresentationCoordinator";
 import { HandleRegistry } from "./domains/browser-views/adapter/HandleRegistry";
 import { CollaborationDocumentService } from "./application/CollaborationDocumentService";
-import { createCollaborationHandlers } from "./ipc/handlers/collaborationHandlers";
 import { CanonicalDerivedDataCoordinator } from "./application/CanonicalDerivedDataCoordinator";
 import { blockNoteEditor } from "./domains/notebook-content/application/BlockNoteRuntime";
+import { registerIpcHandlers } from "./ipc/registerIpcHandlers";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
@@ -494,12 +487,18 @@ const createWindow = async (
 
   // Set up process-wide IPC handlers.
   if (!ipcInitialized) {
-    setupIpcHandlers(
-      ipcRouter,
-      viewStore,
+    registerIpcHandlers({
+      router: ipcRouter,
       services,
-      downloadManager
-    );
+      downloadManager,
+      collaborationDocuments: collaborationDocuments!,
+      journeyAllocator,
+      placementRegistry,
+      windowRegistry,
+      viewStoreByRendererId,
+      placementIdByRendererId,
+      openWindow: createWindow,
+    });
     ipcInitialized = true;
   }
 
@@ -563,218 +562,6 @@ const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
       "renderer-responsive"
     );
   });
-};
-
-const setupIpcHandlers = (
-  router: IPCRouter,
-  viewStore: WindowPresentationStore,
-  services: ReturnType<typeof getServices>,
-  downloadManager: DownloadManager
-) => {
-  const { documentManager, profileManager } = services;
-  const presentationCoordinator = new BrowserPresentationCoordinator(
-    journeyAllocator,
-    (placementId) => {
-      const placement = placementRegistry.get(placementId);
-      if (!placement || placement.state !== "active") {
-        throw new Error(`Unknown or retired placement: ${placementId}`);
-      }
-      const store = viewStoreByRendererId.get(placement.ownerRendererId);
-      if (!store) {
-        throw new Error(`No presentation store for placement: ${placementId}`);
-      }
-      return store;
-    },
-    new LivePageCacheTelemetry(services.database as Database.Database)
-  );
-
-  const sendToRenderer = (
-    channel: string,
-    payload: any,
-    rendererId?: number
-  ) => {
-    const targets = rendererId
-      ? windowRegistry
-          .list()
-          .filter((session) => session.rendererView.webContents.id === rendererId)
-      : windowRegistry.list();
-    for (const target of targets) {
-      if (!target.rendererView.webContents.isDestroyed()) {
-        target.rendererView.webContents.send(channel, payload);
-      }
-    }
-  };
-
-  if (!collaborationDocuments) {
-    throw new Error("Collaboration document service is not initialized");
-  }
-  collaborationDocuments.setPublisher((event) => {
-    for (const rendererId of collaborationDocuments!.subscribers(
-      event.documentId
-    )) {
-      if (
-        rendererId === event.producerRendererId &&
-        !event.includeProducer
-      ) {
-        continue;
-      }
-      sendToRenderer(
-        "documents:collaboration-update",
-        event,
-        rendererId
-      );
-    }
-  });
-
-  const broadcastDocumentTree = (
-    profileId: string | null,
-    rendererId?: number
-  ) => {
-    if (!profileId) return;
-    const tree = documentManager.getDocumentTree(profileId);
-    sendToRenderer("document-tree:updated", { profileId, tree }, rendererId);
-  };
-
-  const broadcastProfiles = (rendererId?: number) => {
-    const profiles = profileManager.listProfiles();
-    sendToRenderer("profiles:updated", { profiles }, rendererId);
-  };
-
-  const broadcastActiveDocument = (rendererId?: number) => {
-    const targets = rendererId
-      ? windowRegistry
-          .list()
-          .filter(
-            (session) => session.rendererView.webContents.id === rendererId
-          )
-      : windowRegistry.list();
-    for (const target of targets) {
-      const document = target.selectedDocumentId
-        ? documentManager.getDocument(target.selectedDocumentId)
-        : documentManager.activeDocument;
-      if (!target.rendererView.webContents.isDestroyed()) {
-        target.rendererView.webContents.send("document:switched", {
-          document,
-        });
-      }
-    }
-  };
-
-  const resolveProfileId = () => profileManager.listProfiles()[0]?.id ?? null;
-
-  const registerMap = (handlers: IPCHandlerMap) => {
-    Object.entries(handlers).forEach(([channel, handler]) =>
-      router.register(channel, handler)
-    );
-  };
-
-  registerMap({
-    "windows:open-route": {
-      type: "invoke",
-      fn: async (event, input: unknown) => {
-        if (!windowRegistry.resolve(event.sender)) {
-          throw new Error("Unknown Digest renderer");
-        }
-        if (!input || typeof input !== "object") {
-          throw new Error("Invalid Digest window route");
-        }
-        const route = input as {
-          kind?: unknown;
-          url?: unknown;
-          documentId?: unknown;
-          sourceBlockId?: unknown;
-          fallbackLinkLabel?: unknown;
-        };
-        let hash: string;
-        if (route.kind === "url" && typeof route.url === "string") {
-          const query = new URLSearchParams();
-          if (typeof route.documentId === "string") query.set("doc", route.documentId);
-          if (typeof route.sourceBlockId === "string") query.set("source", route.sourceBlockId);
-          if (typeof route.fallbackLinkLabel === "string") {
-            query.set("label", route.fallbackLinkLabel.slice(0, 240));
-          }
-          const documentQuery = query.size ? `?${query.toString()}` : "";
-          hash = `#/url/${encodeURIComponent(route.url)}${documentQuery}`;
-        } else if (
-          route.kind === "doc" &&
-          typeof route.documentId === "string"
-        ) {
-          hash = `#/doc/${encodeURIComponent(route.documentId)}`;
-        } else {
-          throw new Error("Invalid Digest window route");
-        }
-        const before = new Set(
-          windowRegistry.list().map((session) => session.windowId)
-        );
-        await createWindow(
-          hash,
-          typeof route.documentId === "string" ? route.documentId : null
-        );
-        const created = windowRegistry
-          .list()
-          .find((session) => !before.has(session.windowId));
-        return { windowId: created?.windowId ?? "" };
-      },
-    },
-  });
-
-  registerMap(createRendererHandlers());
-
-  registerMap(
-    createBrowserHandlers(
-      (event) => {
-        const store = viewStoreByRendererId.get(event.sender.id);
-        if (!store) {
-          throw new Error(`Unknown Digest renderer: ${event.sender.id}`);
-        }
-        return store;
-      },
-      (event, rendererPlacementId) => {
-        const placementId = placementIdByRendererId.get(event.sender.id);
-        if (!placementId) {
-          throw new Error(`No active placement for renderer: ${event.sender.id}`);
-        }
-        if (rendererPlacementId && rendererPlacementId !== placementId) {
-          throw new Error(
-            `Renderer ${event.sender.id} does not own placement ${rendererPlacementId}`
-          );
-        }
-        placementRegistry.requireOwnedActive(placementId, event.sender.id);
-        return placementId;
-      },
-      presentationCoordinator
-    )
-  );
-  registerMap(
-    createCollaborationHandlers(
-      collaborationDocuments,
-      documentManager,
-      windowRegistry
-    )
-  );
-  registerMap(
-    createProfileHandlers(
-      profileManager,
-      broadcastProfiles,
-      broadcastDocumentTree
-    )
-  );
-  registerMap(
-    createDocumentHandlers(
-      documentManager,
-      windowRegistry,
-      resolveProfileId,
-      broadcastDocumentTree,
-      broadcastActiveDocument
-    )
-  );
-  registerMap(
-    createSearchHandlers(
-      services.searchIndexManager,
-      services.braveSearchService
-    )
-  );
-  registerMap(createDownloadHandlers(downloadManager));
 };
 
 app.on("ready", async () => {
