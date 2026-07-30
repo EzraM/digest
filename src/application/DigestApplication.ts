@@ -1,14 +1,7 @@
-import {
-  BrowserWindow,
-  WebContentsView,
-  session,
-} from "electron";
-import path from "path";
+import { WebContentsView, session } from "electron";
 import { WindowPresentationStore } from "../services/WindowPresentationStore";
-import { viteConfig } from "../config/vite";
 import { LinkInterceptionService } from "../services/LinkInterceptionService";
 import { log } from "../utils/mainLogger";
-import { shouldOpenDevTools } from "../config/development";
 import { ViewLayerManager, ViewLayer } from "../services/ViewLayerManager";
 import { IPCRouter } from "../ipc/IPCRouter";
 import { IPCServiceBridge } from "../services/IPCServiceBridge";
@@ -27,6 +20,8 @@ import { CollaborationDocumentService } from "./CollaborationDocumentService";
 import { registerIpcHandlers } from "../ipc/registerIpcHandlers";
 import { createApplicationServices } from "./ApplicationServices";
 import { setupRendererLogging } from "../electron/setupRendererLogging";
+import { createRendererWindow } from "../electron/createRendererWindow";
+import { configureDownloads } from "./configureDownloads";
 
 const EVENTS = {
   BLOCK_MENU: {
@@ -40,12 +35,6 @@ const EVENTS = {
     LINK_CAPTURED: "browser:link-captured",
     IMAGE_CLIPPED: "browser:image-clipped",
     NAVIGATION: "browser:navigation-state",
-  },
-  DOWNLOAD: {
-    STARTED: "download:started",
-    PROGRESS: "download:progress",
-    COMPLETED: "download:completed",
-    FAILED: "download:failed",
   },
 } as const;
 
@@ -84,29 +73,11 @@ export const openWindow = async (
     applicationServices.container
   );
   const windowId = `window-${randomUUID()}`;
-  const baseWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    // Let the renderer use the title-bar area on macOS while retaining the
-    // native traffic-light controls in their standard inset position.
-    ...(process.platform === "darwin"
-      ? { titleBarStyle: "hiddenInset" as const }
-      : {}),
-  });
-
-  const appViewInstance = new WebContentsView({
-    webPreferences: {
-      preload: path.join(__dirname, `preload.js`),
-      // Security best practices for Electron
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: false, // Need to disable sandbox to use contextBridge
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-      // Use a separate session for the main app UI (not shared with browser blocks)
-      partition: "persist:main-app",
-    },
-  });
+  const {
+    browserWindow: baseWindow,
+    rendererView: appViewInstance,
+    updateBounds: updateViewBounds,
+  } = createRendererWindow({ initialHash });
   windowRegistry.register({
     windowId,
     browserWindow: baseWindow,
@@ -121,60 +92,6 @@ export const openWindow = async (
     appViewInstance.webContents.id,
     placement.placementId
   );
-
-  // Helper function to update view bounds to match the window's content area (not the frame)
-  const updateViewBounds = () => {
-    const { width, height } = baseWindow.getContentBounds();
-    appViewInstance.setBounds({ x: 0, y: 0, width, height });
-  };
-
-  // Set initial bounds to match window size
-  updateViewBounds();
-
-  // Set Content-Security-Policy for the main app
-  // Since the main app uses a separate session, this won't affect browser blocks
-  appViewInstance.webContents.session.webRequest.onHeadersReceived(
-    (
-      details: { responseHeaders?: Record<string, string[]> },
-      callback: (response: {
-        responseHeaders: Record<string, string[]>;
-      }) => void
-    ) => {
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          "Content-Security-Policy": [
-            "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline'; " + // Allow inline scripts for development
-              "style-src 'self' 'unsafe-inline'; " + // Allow inline styles
-              "connect-src 'self' https://example.com; " + // Allow connections to example.com
-              "img-src 'self' data: https: digest-image: blob:; " + // Allow images from https, data URLs, custom protocol, and blob URLs
-              "font-src 'self' data:;", // Allow fonts from data URLs
-          ],
-        },
-      });
-    }
-  );
-
-  baseWindow.contentView.addChildView(appViewInstance);
-
-  if (viteConfig.mainWindow.devServerUrl) {
-    appViewInstance.webContents.loadURL(
-      `${viteConfig.mainWindow.devServerUrl}${initialHash ?? ""}`
-    );
-  } else {
-    appViewInstance.webContents.loadFile(
-      path.join(__dirname, `../renderer/${viteConfig.mainWindow.name}/index.html`),
-      initialHash ? { hash: initialHash.replace(/^#/, "") } : undefined
-    );
-  }
-
-  // Open devtools for main window if configured
-  if (shouldOpenDevTools("openMainWindow")) {
-    const devTools = new BrowserWindow();
-    appViewInstance.webContents.setDevToolsWebContents(devTools.webContents);
-    appViewInstance.webContents.openDevTools({ mode: "detach" });
-  }
 
   // Store global references
   globalAppView = appViewInstance;
@@ -268,54 +185,7 @@ export const openWindow = async (
 
   // Set up download manager for browser block file downloads
   const downloadManager = new DownloadManager();
-  downloadManager.recoverFromCrash();
-
-  const sendToApp = (channel: string, payload: any) => {
-    if (globalAppView && !globalAppView.webContents.isDestroyed()) {
-      globalAppView.webContents.send(channel, payload);
-    }
-  };
-
-  downloadManager.setOnStarted((info) => {
-    sendToApp(EVENTS.DOWNLOAD.STARTED, {
-      id: info.id,
-      fileName: info.fileName,
-      url: info.url,
-      totalBytes: info.totalBytes,
-      savePath: info.savePath,
-    });
-  });
-
-  downloadManager.setOnProgress((info) => {
-    sendToApp(EVENTS.DOWNLOAD.PROGRESS, {
-      id: info.id,
-      receivedBytes: info.receivedBytes,
-      totalBytes: info.totalBytes,
-    });
-  });
-
-  downloadManager.setOnCompleted((info) => {
-    sendToApp(EVENTS.DOWNLOAD.COMPLETED, {
-      id: info.id,
-      savePath: info.savePath,
-      fileName: info.fileName,
-    });
-
-    // Also send a file block insertion event so the renderer can add a file block at cursor
-    sendToApp("download:insert-file-block", {
-      id: info.id,
-      fileName: info.fileName,
-      savePath: info.savePath,
-      url: info.url,
-    });
-  });
-
-  downloadManager.setOnFailed((info) => {
-    sendToApp(EVENTS.DOWNLOAD.FAILED, {
-      id: info.id,
-      status: info.status,
-    });
-  });
+  configureDownloads(downloadManager, () => globalAppView);
 
   // Pass download manager to view store so it can attach to browser block sessions
   viewStore.setDownloadManager(downloadManager);
@@ -413,7 +283,7 @@ export const openWindow = async (
       router: ipcRouter,
       services,
       downloadManager,
-      collaborationDocuments: collaborationDocuments!,
+      collaborationDocuments: initialized.collaborationDocuments,
       journeyAllocator,
       placementRegistry,
       windowRegistry,
