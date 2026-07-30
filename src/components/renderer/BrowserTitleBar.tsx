@@ -175,41 +175,29 @@ export const BrowserTitleBar = ({
         className={`browser-location-zone browser-location-zone--${loadStatus} app-title-bar__control`}
       >
         <span className="browser-load-control">
-        <span
-          className="browser-load-indicator"
-          role="img"
-          aria-label={
-            loadStatus === "loading"
-              ? "Page loading"
-              : loadStatus === "error"
-                ? "Page failed to load"
-                : "Page loaded"
-          }
-          title={
-            loadStatus === "loading"
-              ? "Loading page"
-              : loadStatus === "error"
-                ? "Page failed to load"
-                : "Page loaded"
-          }
-        >
-          <PageStatusIcon url={url} loadStatus={loadStatus} />
-        </span>
-        <button
-          className="browser-load-control__refresh app-title-bar__control"
-          type="button"
-          onClick={onReload}
-          onMouseEnter={showActionHint("Refresh page")}
-          onMouseLeave={resetActionHint}
-          onFocus={showActionHint("Refresh page")}
-          onBlur={resetActionHint}
-          title="Refresh page"
-          aria-label="Refresh page"
-        >
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M13 4.5V1.75M13 4.5h-2.75M13 4.5A5.5 5.5 0 1 0 13.2 11" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
+          <AddPageButton
+            viewId={viewId}
+            notebookAddress={notebookAddress}
+            notebookWriter={notebookWriter}
+            className="browser-add-button app-title-bar__control"
+            onInteractionStart={showActionHint("Add to notebook")}
+            onInteractionEnd={resetActionHint}
+          />
+          <button
+            className="browser-load-control__refresh app-title-bar__control"
+            type="button"
+            onClick={onReload}
+            onMouseEnter={showActionHint("Refresh page")}
+            onMouseLeave={resetActionHint}
+            onFocus={showActionHint("Refresh page")}
+            onBlur={resetActionHint}
+            title="Refresh page"
+            aria-label="Refresh page"
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M13 4.5V1.75M13 4.5h-2.75M13 4.5A5.5 5.5 0 1 0 13.2 11" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </span>
         {breadcrumb ? (
           <button
@@ -233,8 +221,23 @@ export const BrowserTitleBar = ({
             {breadcrumb.linkLabel && (
               <>
                 <span className="browser-authored-breadcrumb__separator">/</span>
-                <span className="browser-authored-breadcrumb__label">
-                  {breadcrumb.linkLabel}
+                <span className="browser-authored-breadcrumb__page">
+                  <span
+                    className="browser-load-indicator"
+                    role="img"
+                    aria-label={
+                      loadStatus === "loading"
+                        ? "Page loading"
+                        : loadStatus === "error"
+                          ? "Page failed to load"
+                          : "Page loaded"
+                    }
+                  >
+                    <PageStatusIcon url={url} loadStatus={loadStatus} />
+                  </span>
+                  <span className="browser-authored-breadcrumb__label">
+                    {breadcrumb.linkLabel}
+                  </span>
                 </span>
               </>
             )}
@@ -250,6 +253,19 @@ export const BrowserTitleBar = ({
             title={`Open notebook. Current URL: ${url}`}
             aria-label="Open notebook"
           >
+            <span
+              className="browser-load-indicator"
+              role="img"
+              aria-label={
+                loadStatus === "loading"
+                  ? "Page loading"
+                  : loadStatus === "error"
+                    ? "Page failed to load"
+                    : "Page loaded"
+              }
+            >
+              <PageStatusIcon url={url} loadStatus={loadStatus} />
+            </span>
             <span className="browser-url-label" title={url}>{url}</span>
             <span className="app-title-bar__hint browser-authored-breadcrumb__hint">
               {actionHint}
@@ -306,14 +322,6 @@ export const BrowserTitleBar = ({
               </svg>
             )}
           </button>
-          <AddPageButton
-            viewId={viewId}
-            notebookAddress={notebookAddress}
-            notebookWriter={notebookWriter}
-            className="browser-add-button app-title-bar__control"
-            onInteractionStart={showActionHint("Add to notebook")}
-            onInteractionEnd={resetActionHint}
-          />
         </span>
       </div>
     </div>
