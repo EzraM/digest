@@ -1,0 +1,17 @@
+.profile-modal {
+  border: 1px solid var(--digest-chrome-menu-edge);
+  border-radius: 12px;
+  background: var(--digest-chrome-surface);
+  box-shadow: 0 18px 50px var(--digest-chrome-menu-shadow);
+}
+
+.profile-modal__header {
+  background: transparent;
+}
+
+.profile-modal__description {
+  max-width: 44ch;
+  color: var(--digest-chrome-text);
+  font-size: 13px;
+  line-height: 1.55;
+}

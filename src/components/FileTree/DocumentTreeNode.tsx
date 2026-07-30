@@ -3,8 +3,6 @@ import {
   Group,
   Text,
   TextInput,
-  useComputedColorScheme,
-  useMantineTheme,
 } from "@mantine/core";
 import { useCallback } from "react";
 import type {
@@ -67,9 +65,6 @@ export const DocumentTreeNode = ({
   onDragLeave,
   onDrop,
 }: DocumentTreeNodeProps) => {
-  const theme = useMantineTheme();
-  const colorScheme = useComputedColorScheme("light");
-
   const handleInputKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
       // Stop propagation for all keys to prevent Tree component from intercepting
@@ -90,37 +85,25 @@ export const DocumentTreeNode = ({
   );
 
   const title = document.title?.trim() ? document.title : "Untitled Document";
-  const dropIndicatorColor =
-    colorScheme === "dark" ? theme.colors.blue[4] : theme.colors.blue[5];
-  const baseBackground = isActive
-    ? colorScheme === "dark"
-      ? theme.colors.blue[8]
-      : theme.colors.blue[0]
-    : undefined;
-  let backgroundColor = baseBackground;
   let boxShadow: string | undefined;
 
   if (dropPosition === "before") {
-    boxShadow = `inset 0 2px 0 ${dropIndicatorColor}`;
+    boxShadow = "inset 0 2px 0 var(--digest-chrome-indigo)";
   } else if (dropPosition === "after") {
-    boxShadow = `inset 0 -2px 0 ${dropIndicatorColor}`;
-  } else if (dropPosition === "inside") {
-    backgroundColor =
-      colorScheme === "dark" ? theme.colors.blue[9] : theme.colors.blue[1];
+    boxShadow = "inset 0 -2px 0 var(--digest-chrome-indigo)";
   }
 
   return (
     <Box
       {...elementProps}
+      className="document-tree__node"
       style={{
         ...elementProps.style,
-        borderRadius: theme.radius.sm,
-        padding: "4px 8px",
-        backgroundColor,
         opacity: isDragging ? 0.6 : 1,
         ...(boxShadow ? { boxShadow } : {}),
       }}
       data-active={isActive || undefined}
+      data-drop-inside={dropPosition === "inside" || undefined}
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
       onDragEnd={onDragEnd}
@@ -150,15 +133,9 @@ export const DocumentTreeNode = ({
             />
           ) : (
             <Text
+              className="document-tree__title"
               size="sm"
               fw={isActive ? 600 : 500}
-              c={
-                isActive
-                  ? colorScheme === "dark"
-                    ? theme.white
-                    : theme.colors.blue[7]
-                  : undefined
-              }
               style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
             >
               {title}

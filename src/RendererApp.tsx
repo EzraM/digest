@@ -328,8 +328,8 @@ const RendererAppContent = () => {
   );
 
   const handleOpenCreateProfileModal = useCallback(() => {
-    openProfileModal(`Profile ${profiles.length + 1}`);
-  }, [openProfileModal, profiles.length]);
+    openProfileModal();
+  }, [openProfileModal]);
 
   const handleCloseCreateProfileModal = useCallback(() => {
     closeProfileModal();
@@ -508,6 +508,8 @@ const RendererAppContent = () => {
       </TitleBarContext.Provider>
       <ProfileModal
         opened={isCreateProfileModalOpen}
+        title="Create a profile"
+        description="A profile is a boundary around one realm of your life. Its pages, site logins, and browsing context stay together—and separate from your other profiles."
         profileName={profileModalName}
         error={profileModalError}
         isCreating={isCreatingProfile}

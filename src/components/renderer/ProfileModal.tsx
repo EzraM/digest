@@ -1,9 +1,11 @@
-import { Button, Group, Modal, Stack, TextInput } from "@mantine/core";
+import { Button, Group, Modal, Stack, Text, TextInput } from "@mantine/core";
 import type { KeyboardEvent } from "react";
+import "./ProfileModal.css";
 
 type ProfileModalProps = {
   opened: boolean;
   title?: string;
+  description?: string;
   profileName: string;
   error?: string | null;
   isCreating: boolean;
@@ -15,6 +17,7 @@ type ProfileModalProps = {
 export const ProfileModal = ({
   opened,
   title = "Create profile",
+  description,
   profileName,
   error,
   isCreating,
@@ -37,26 +40,37 @@ export const ProfileModal = ({
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title={title} centered>
-      <Stack gap="sm">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={title}
+      centered
+      classNames={{ content: "profile-modal", header: "profile-modal__header" }}
+    >
+      <Stack gap="md">
+        {description && (
+          <Text className="profile-modal__description">
+            {description}
+          </Text>
+        )}
         <TextInput
-          label="Profile name"
-          placeholder="Work"
+          label={description ? "What part of your life is this for?" : "Profile name"}
+          placeholder={description ? "Work, school, personal…" : "Work"}
           value={profileName}
           onChange={(event) => onNameChange(event.currentTarget.value)}
           onKeyDown={handleKeyDown}
           error={error}
           data-autofocus
         />
-      <Group justify="flex-end">
-        <Button variant="default" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={onConfirm} loading={isCreating}>
-          Create
-        </Button>
-      </Group>
-    </Stack>
-  </Modal>
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={onConfirm} loading={isCreating}>
+            {description ? "Create profile" : "Save"}
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   );
 };

@@ -31,6 +31,7 @@ export const DocumentActions = ({
           variant="subtle"
           size="sm"
           radius="md"
+          className="document-tree__actions"
           aria-label="Document actions"
         >
           <Text fw={600} size="xs">

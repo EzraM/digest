@@ -92,7 +92,9 @@ export const RendererLayout = ({
           transition: `min-width ${NAVBAR_TRANSITION_MS}ms ease, max-width ${NAVBAR_TRANSITION_MS}ms ease, border-color 120ms ease`,
           pointerEvents: isNavbarOpened ? "auto" : "none",
         }}
-        p="md"
+        px="sm"
+        pt="md"
+        pb="sm"
       >
         <Transition
           mounted={isNavbarOpened}

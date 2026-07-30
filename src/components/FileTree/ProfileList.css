@@ -1,7 +1,11 @@
+.profile-list {
+  position: relative;
+}
+
 .profile-actions-trigger {
   color: var(--digest-chrome-text);
-  border-radius: 8px;
-  background: var(--digest-chrome-indigo-tint);
+  border-radius: 7px;
+  background: transparent;
 }
 
 .profile-actions-trigger:hover {
@@ -16,9 +20,10 @@
 
 .profile-switcher {
   display: flex;
-  gap: 3px;
+  gap: 2px;
   padding: 3px;
-  border-radius: 9px;
+  border: 1px solid var(--digest-chrome-menu-edge);
+  border-radius: 10px;
   background: var(--digest-chrome-violet-tint);
 }
 
@@ -34,13 +39,15 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 5px 7px;
+  min-height: 30px;
+  padding: 5px 9px;
   border: 0;
   border-radius: 7px;
   color: var(--digest-chrome-text);
   background: transparent;
   font: inherit;
   font-size: 11px;
+  font-weight: 550;
   cursor: grab;
 }
 
@@ -50,7 +57,8 @@
 
 .profile-switcher__control[aria-selected="true"] {
   background: var(--digest-chrome-surface);
-  box-shadow: 0 1px 4px rgba(52, 57, 80, 0.12);
+  color: var(--digest-chrome-indigo);
+  box-shadow: 0 1px 4px var(--digest-chrome-menu-shadow);
 }
 
 .profile-switcher__control:focus-visible {
@@ -82,7 +90,7 @@
 
 .profile-switcher__control:hover {
   color: var(--digest-chrome-indigo);
-  background: rgba(116, 96, 184, 0.06);
+  background: var(--digest-chrome-indigo-tint);
 }
 
 .profile-actions-menu {

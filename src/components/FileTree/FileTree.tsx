@@ -1,11 +1,12 @@
-import { Button, Divider, ScrollArea, Stack, Text } from "@mantine/core";
+import { ScrollArea, Stack, Text } from "@mantine/core";
 import {
   DocumentRecord,
   DocumentTreeNode,
   ProfileRecord,
 } from "../../types/documents";
-import { ProfileList } from "./ProfileList";
+import { ProfileActionsMenu, ProfileList } from "./ProfileList";
 import { DocumentTree } from "./DocumentTree";
+import "./FileTree.css";
 
 type FileTreeProps = {
   profiles: ProfileRecord[];
@@ -69,38 +70,25 @@ export const FileTree = ({
   };
 
   return (
-    <Stack gap="md" h="100%">
+    <Stack className="file-tree" gap={0} h="100%">
       <ProfileList
         profiles={profiles}
         activeProfileId={activeProfileId}
         onSelectProfile={onSelectProfile}
-        onCreateProfile={onCreateProfile}
         onRenameProfile={onRenameProfile}
         onDeleteProfile={onDeleteProfile}
         onToggleJiraLinks={onToggleJiraLinks}
         onReorderProfiles={onReorderProfiles}
       />
 
-      <Divider />
-
-      <Button
-        size="xs"
-        variant="light"
-        radius="sm"
-        onClick={handleCreateRootDocument}
-        disabled={!activeProfileId}
-      >
-        New page
-      </Button>
-
       {profiles.length === 0 ? (
-        <Stack gap="xs">
+        <Stack className="file-tree__empty" gap="xs">
           <Text size="sm" c="dimmed">
             Create a profile to start organizing documents.
           </Text>
         </Stack>
       ) : (
-        <ScrollArea style={{ flex: 1 }}>
+        <ScrollArea className="file-tree__scroll">
           <DocumentTree
             profiles={profiles}
             tree={documentTree}
@@ -117,6 +105,37 @@ export const FileTree = ({
           />
         </ScrollArea>
       )}
+
+      <div className="file-tree__footer">
+        <button
+          type="button"
+          className="file-tree__footer-action"
+          onClick={handleCreateRootDocument}
+          disabled={!activeProfileId}
+        >
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3.25v9.5M3.25 8h9.5" />
+          </svg>
+          <span>New page</span>
+        </button>
+        <button
+          type="button"
+          className="file-tree__footer-action"
+          onClick={onCreateProfile}
+        >
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3.25v9.5M3.25 8h9.5" />
+          </svg>
+          <span>New profile</span>
+        </button>
+        <ProfileActionsMenu
+          profiles={profiles}
+          activeProfileId={activeProfileId}
+          onRenameProfile={onRenameProfile}
+          onDeleteProfile={onDeleteProfile}
+          onToggleJiraLinks={onToggleJiraLinks}
+        />
+      </div>
     </Stack>
   );
 };

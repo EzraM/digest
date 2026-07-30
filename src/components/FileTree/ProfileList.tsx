@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActionIcon, Group, Menu, Stack, Text } from "@mantine/core";
+import { Menu, Stack, Text } from "@mantine/core";
 import { ProfileRecord } from "../../types/documents";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
 import "./ProfileList.css";
@@ -16,7 +16,6 @@ type ProfileListProps = {
   profiles: ProfileRecord[];
   activeProfileId: string | null;
   onSelectProfile: (profileId: string) => void;
-  onCreateProfile?: () => void;
   onRenameProfile?: (profileId: string) => void;
   onDeleteProfile?: (profileId: string) => void;
   onToggleJiraLinks?: (profileId: string, enabled: boolean) => void;
@@ -27,10 +26,6 @@ export const ProfileList = ({
   profiles,
   activeProfileId,
   onSelectProfile,
-  onCreateProfile,
-  onRenameProfile,
-  onDeleteProfile,
-  onToggleJiraLinks,
   onReorderProfiles,
 }: ProfileListProps) => {
   const [draggedProfileId, setDraggedProfileId] = useState<string | null>(null);
@@ -40,9 +35,6 @@ export const ProfileList = ({
     activeProfileId && profiles.some((p) => p.id === activeProfileId);
   const value = isActiveProfileValid ? activeProfileId : profiles[0]?.id ?? null;
 
-  const activeProfile = profiles.find((p) => p.id === activeProfileId);
-  const canDelete = activeProfile && activeProfile.id !== DEFAULT_PROFILE_ID;
-  const canRename = activeProfile !== undefined;
   const isStacked = profiles.length > 3;
 
   const moveProfile = (
@@ -67,70 +59,7 @@ export const ProfileList = ({
   };
 
   return (
-    <Stack className="profile-list" gap="xs">
-      <Group justify="space-between">
-        <Text fw={600} size="sm">
-          Profiles
-        </Text>
-        <Menu withinPortal position="bottom-end">
-          <Menu.Target>
-            <ActionIcon
-              variant="subtle"
-              size="sm"
-              radius="md"
-              className="profile-actions-trigger"
-              aria-label="Profile actions"
-            >
-              <MoreIcon />
-            </ActionIcon>
-          </Menu.Target>
-          <Menu.Dropdown className="profile-actions-menu">
-            {onCreateProfile && (
-              <Menu.Item className="profile-actions-menu__item" onClick={onCreateProfile}>New profile</Menu.Item>
-            )}
-            {activeProfile && (canRename || canDelete) && (
-              <>
-                <Menu.Divider className="profile-actions-menu__divider" />
-                <Menu.Label className="profile-actions-menu__label">Profile</Menu.Label>
-                {canRename && onRenameProfile && (
-                  <Menu.Item
-                    className="profile-actions-menu__item"
-                    onClick={() => onRenameProfile(activeProfile.id)}
-                  >
-                    Rename
-                  </Menu.Item>
-                )}
-                {canDelete && onDeleteProfile && (
-                  <Menu.Item
-                    className="profile-actions-menu__item profile-actions-menu__item--danger"
-                    color="red"
-                    onClick={() => onDeleteProfile(activeProfile.id)}
-                  >
-                    Delete
-                  </Menu.Item>
-                )}
-                {onToggleJiraLinks && (
-                  <Menu.Item
-                    className="profile-actions-menu__item"
-                    onClick={() =>
-                      onToggleJiraLinks(
-                        activeProfile.id,
-                        !activeProfile.settings?.plugins?.["builtin.jira-links"]
-                          ?.enabled
-                      )
-                    }
-                  >
-                    {activeProfile.settings?.plugins?.["builtin.jira-links"]
-                      ?.enabled
-                      ? "Disable Jira links"
-                      : "Enable Jira links"}
-                  </Menu.Item>
-                )}
-              </>
-            )}
-          </Menu.Dropdown>
-        </Menu>
-      </Group>
+    <Stack className="profile-list" gap={0}>
       {profiles.length === 0 ? (
         <Text size="sm" c="dimmed">
           No profiles available yet.
@@ -189,5 +118,75 @@ export const ProfileList = ({
         </div>
       )}
     </Stack>
+  );
+};
+
+export const ProfileActionsMenu = ({
+  profiles,
+  activeProfileId,
+  onRenameProfile,
+  onDeleteProfile,
+  onToggleJiraLinks,
+}: Pick<
+  ProfileListProps,
+  | "profiles"
+  | "activeProfileId"
+  | "onRenameProfile"
+  | "onDeleteProfile"
+  | "onToggleJiraLinks"
+>) => {
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId);
+  const canDelete = activeProfile && activeProfile.id !== DEFAULT_PROFILE_ID;
+
+  return (
+    <Menu withinPortal position="top-end">
+      <Menu.Target>
+        <button
+          type="button"
+          className="file-tree__footer-action"
+          aria-label="Profile settings"
+          disabled={!activeProfile}
+        >
+          <MoreIcon />
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown className="profile-actions-menu">
+        <Menu.Label className="profile-actions-menu__label">
+          {activeProfile?.name ?? "Profile"}
+        </Menu.Label>
+        {activeProfile && onRenameProfile && (
+          <Menu.Item
+            className="profile-actions-menu__item"
+            onClick={() => onRenameProfile(activeProfile.id)}
+          >
+            Rename
+          </Menu.Item>
+        )}
+        {activeProfile && canDelete && onDeleteProfile && (
+          <Menu.Item
+            className="profile-actions-menu__item profile-actions-menu__item--danger"
+            color="red"
+            onClick={() => onDeleteProfile(activeProfile.id)}
+          >
+            Delete
+          </Menu.Item>
+        )}
+        {activeProfile && onToggleJiraLinks && (
+          <Menu.Item
+            className="profile-actions-menu__item"
+            onClick={() =>
+              onToggleJiraLinks(
+                activeProfile.id,
+                !activeProfile.settings?.plugins?.["builtin.jira-links"]?.enabled
+              )
+            }
+          >
+            {activeProfile.settings?.plugins?.["builtin.jira-links"]?.enabled
+              ? "Disable Jira links"
+              : "Enable Jira links"}
+          </Menu.Item>
+        )}
+      </Menu.Dropdown>
+    </Menu>
   );
 };

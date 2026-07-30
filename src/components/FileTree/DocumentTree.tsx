@@ -14,6 +14,7 @@ import {
 } from "../../types/documents";
 import { DocumentTreeNode } from "./DocumentTreeNode";
 import { MAX_DOCUMENT_DEPTH } from "../../config/documents";
+import "./DocumentTree.css";
 
 type DocumentTreeProps = {
   tree: DocumentTreeNodeType[];
