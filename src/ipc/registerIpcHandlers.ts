@@ -66,7 +66,7 @@ export const registerIpcHandlers = ({
 
   const sendToRenderer = (
     channel: string,
-    payload: any,
+    payload: unknown,
     rendererId?: number
   ) => {
     const targets = rendererId
