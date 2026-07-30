@@ -3,7 +3,6 @@ import {
   BrowserWindow,
   WebContentsView,
   globalShortcut,
-  protocol,
   session,
 } from "electron";
 import path from "path";
@@ -14,12 +13,6 @@ import { log } from "./utils/mainLogger";
 import { shouldOpenDevTools } from "./config/development";
 import { ViewLayerManager, ViewLayer } from "./services/ViewLayerManager";
 import { DatabaseManager } from "./database/DatabaseManager";
-import { Container } from "./services/Container";
-import {
-  registerServices,
-  initializeAllServices,
-  getServices,
-} from "./services/ServiceRegistry";
 import { IPCRouter } from "./ipc/IPCRouter";
 import { IPCServiceBridge } from "./services/IPCServiceBridge";
 import { ImageProtocolService } from "./services/ImageProtocolService";
@@ -34,40 +27,16 @@ import { BrowsingJourneyStore } from "./services/BrowsingJourneyStore";
 import { ApplicationJourneyAllocator } from "./services/ApplicationJourneyAllocator";
 import { HandleRegistry } from "./domains/browser-views/adapter/HandleRegistry";
 import { CollaborationDocumentService } from "./application/CollaborationDocumentService";
-import { CanonicalDerivedDataCoordinator } from "./application/CanonicalDerivedDataCoordinator";
-import { blockNoteEditor } from "./domains/notebook-content/application/BlockNoteRuntime";
 import { registerIpcHandlers } from "./ipc/registerIpcHandlers";
+import { createApplicationServices } from "./application/ApplicationServices";
+import { configureElectron } from "./electron/configureElectron";
+import { setupRendererLogging } from "./electron/setupRendererLogging";
 
 if (require("electron-squirrel-startup")) {
   app.quit();
 }
 
-// Opt-in Chrome DevTools Protocol access for local performance diagnostics.
-// Keep this disabled during normal runs because the endpoint can control the app.
-const remoteDebuggingPort = process.env.DIGEST_REMOTE_DEBUGGING_PORT;
-if (remoteDebuggingPort) {
-  if (!/^\d+$/.test(remoteDebuggingPort)) {
-    throw new Error("DIGEST_REMOTE_DEBUGGING_PORT must be a numeric port");
-  }
-  app.commandLine.appendSwitch(
-    "remote-debugging-address",
-    "127.0.0.1"
-  );
-  app.commandLine.appendSwitch("remote-debugging-port", remoteDebuggingPort);
-}
-
-// Register custom protocol scheme before app is ready
-// This must be called before app.on("ready")
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: "digest-image",
-    privileges: {
-      bypassCSP: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
-    },
-  },
-]);
+configureElectron();
 
 const EVENTS = {
   BLOCK_MENU: {
@@ -92,8 +61,7 @@ const EVENTS = {
 
 // Global references to keep objects from being garbage collected
 let globalAppView: WebContentsView | null = null;
-// Global service container
-const serviceContainer = new Container();
+const applicationServices = createApplicationServices();
 const windowRegistry = new WindowRegistry();
 const placementRegistry = new PlacementRegistry();
 const viewStoreByRendererId = new Map<number, WindowPresentationStore>();
@@ -105,62 +73,26 @@ const journeyAllocator = new ApplicationJourneyAllocator({
   handles: sharedHandles,
 });
 let collaborationDocuments: CollaborationDocumentService | undefined;
-let derivedDataCoordinator: CanonicalDerivedDataCoordinator | undefined;
 const ipcRouter = new IPCRouter();
-let applicationServices: ReturnType<typeof getServices> | undefined;
-let applicationInitialization: Promise<ReturnType<typeof getServices>> | undefined;
 let ipcInitialized = false;
 let sharedIpcServicesExposed = false;
 let imageProtocolInitialized = false;
-
-const initializeApplication = () => {
-  if (applicationInitialization) return applicationInitialization;
-  applicationInitialization = (async () => {
-    registerServices(serviceContainer);
-    await initializeAllServices(serviceContainer);
-    applicationServices = getServices(serviceContainer);
-    collaborationDocuments = new CollaborationDocumentService(
-      applicationServices.database as Database.Database,
-      blockNoteEditor.pmSchema
-    );
-    derivedDataCoordinator = new CanonicalDerivedDataCoordinator({
-      reindexDocument: (documentId, blocks) =>
-        applicationServices!.searchIndexManager.reindexDocument(
-          documentId,
-          blocks
-        ),
-      deleteImage: (imageId) =>
-        applicationServices!.imageService.deleteImage(imageId),
-      onError: (documentId, error) =>
-        log.debug(
-          `Canonical derived-data update failed for ${documentId}: ${error}`,
-          "main"
-        ),
-    });
-    collaborationDocuments.subscribeCanonicalChanges((snapshot) =>
-      derivedDataCoordinator!.schedule(snapshot)
-    );
-    for (const document of applicationServices.documentManager.listDocuments()) {
-      derivedDataCoordinator.seed(
-        collaborationDocuments.readCanonicalDocument(document.id)
-      );
-    }
-    log.debug("Application services initialized", "main");
-    return applicationServices;
-  })();
-  return applicationInitialization;
-};
 
 const createWindow = async (
   initialHash?: string,
   initialDocumentId: string | null = null
 ) => {
-  const services = await initializeApplication();
+  const initialized = await applicationServices.initialize();
+  const { services } = initialized;
+  collaborationDocuments = initialized.collaborationDocuments;
   const { documentManager } = services;
   const selectedDocumentId = initialDocumentId
     ? documentManager.getDocument(initialDocumentId).id
     : null;
-  const ipcServiceBridge = new IPCServiceBridge(ipcRouter, serviceContainer);
+  const ipcServiceBridge = new IPCServiceBridge(
+    ipcRouter,
+    applicationServices.container
+  );
   const windowId = `window-${randomUUID()}`;
   const baseWindow = new BrowserWindow({
     width: 1400,
@@ -448,7 +380,7 @@ const createWindow = async (
   // Store global references (baseWindow and viewManager are kept alive by their usage)
 
   // Set up console log forwarding from renderer
-  setupConsoleLogForwarding(appViewInstance);
+  setupRendererLogging(appViewInstance);
 
   services.debugEventService.setMainRendererWebContents(appViewInstance);
 
@@ -519,51 +451,6 @@ const createWindow = async (
   });
 };
 
-const setupConsoleLogForwarding = (webContentsView: WebContentsView) => {
-  // Forward renderer console logs to main process
-  webContentsView.webContents.on(
-    "console-message",
-    ({ level, message, lineNumber, sourceId }) => {
-      const logLevel =
-        level === "info"
-          ? "info"
-          : level === "warning"
-            ? "warn"
-            : level === "error"
-              ? "error"
-              : "debug";
-      const source = sourceId ? path.basename(sourceId) : "renderer";
-
-      log.debug(
-        `[RENDERER-${logLevel.toUpperCase()}] ${source}:${lineNumber} - ${message}`,
-        "renderer-console"
-      );
-    }
-  );
-
-  // Also capture renderer errors
-  webContentsView.webContents.on(
-    "render-process-gone",
-    (_event: unknown, details: { reason: string; exitCode: number }) => {
-      log.debug(
-        `Renderer process gone. Reason: ${details.reason}, Exit code: ${details.exitCode}`,
-        "renderer-crash"
-      );
-    }
-  );
-
-  webContentsView.webContents.on("unresponsive", () => {
-    log.debug("Renderer process became unresponsive", "renderer-unresponsive");
-  });
-
-  webContentsView.webContents.on("responsive", () => {
-    log.debug(
-      "Renderer process became responsive again",
-      "renderer-responsive"
-    );
-  });
-};
-
 app.on("ready", async () => {
   log.debug("App ready, creating window and setting up services", "main");
   try {
@@ -598,7 +485,7 @@ app.on("activate", async () => {
 // Clean up global shortcuts when quitting
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
-  derivedDataCoordinator?.dispose();
+  applicationServices.dispose();
 
   // Close database connection
   try {
