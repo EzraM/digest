@@ -2,7 +2,10 @@ import { WebContentsView } from 'electron';
 import { Command } from '../core/commands';
 import { log } from '../../../utils/mainLogger';
 import { toBlockId } from '../../../utils/viewId';
-import type { ViewContextMenus } from '../../../services/BrowserPresentationContracts';
+import type {
+  ViewContextMenus,
+  ViewWindowOpenEvents,
+} from '../../../services/BrowserPresentationContracts';
 import {
   httpResponseMonitor,
   type HttpResponseMonitor,
@@ -11,6 +14,12 @@ import {
 type CommandDispatcher = (cmd: Command) => void;
 type BackgroundLinkCallback = (url: string, sourceId: string, title: string, profileId: string) => void;
 
+type EventTranslatorDependencies = {
+  contextMenus: ViewContextMenus;
+  httpResponses?: HttpResponseMonitor;
+  windowOpenEvents: ViewWindowOpenEvents;
+};
+
 /**
  * Translates Electron WebContents events into commands.
  *
@@ -18,11 +27,15 @@ type BackgroundLinkCallback = (url: string, sourceId: string, title: string, pro
  */
 export class EventTranslator {
   private onBackgroundLinkClick?: BackgroundLinkCallback;
+  private readonly contextMenus: ViewContextMenus;
+  private readonly httpResponses: HttpResponseMonitor;
+  private readonly windowOpenEvents: ViewWindowOpenEvents;
 
-  constructor(
-    private contextMenus: ViewContextMenus,
-    private httpResponses: HttpResponseMonitor = httpResponseMonitor
-  ) {}
+  constructor(dependencies: EventTranslatorDependencies) {
+    this.contextMenus = dependencies.contextMenus;
+    this.httpResponses = dependencies.httpResponses ?? httpResponseMonitor;
+    this.windowOpenEvents = dependencies.windowOpenEvents;
+  }
 
   setBackgroundLinkClickCallback(callback: BackgroundLinkCallback): void {
     this.onBackgroundLinkClick = callback;
@@ -211,7 +224,8 @@ export class EventTranslator {
     });
 
     // Handle new window requests (link clicks that should open new blocks or insert links)
-    webContents.setWindowOpenHandler(({ url, disposition }) => {
+    webContents.setWindowOpenHandler((details) => {
+      const { url, disposition } = details;
       log.debug(
         `[${id}] Window open request: ${url}, disposition: ${disposition}`,
         'EventTranslator'
@@ -244,8 +258,15 @@ export class EventTranslator {
         return { action: 'deny' };
       }
 
-      // Foreground-tab or new-window - navigate current page
-      if (disposition === 'foreground-tab' || disposition === 'new-window') {
+      // A genuine popup must retain Chromium's opener relationship. In
+      // particular, OAuth providers use it to post credentials back before
+      // closing the child window.
+      if (disposition === 'new-window') {
+        return this.windowOpenEvents.decide(details);
+      }
+
+      // Foreground tabs continue the current browsing journey.
+      if (disposition === 'foreground-tab') {
         log.debug(
           `[${id}] Foreground link click, navigating current page`,
           'EventTranslator'
@@ -267,6 +288,10 @@ export class EventTranslator {
         'EventTranslator'
       );
       return { action: 'deny' };
+    });
+
+    listen('did-create-window', (window, details) => {
+      this.windowOpenEvents.created(id, window, details);
     });
 
     log.debug(`[${id}] Event listeners attached`, 'EventTranslator');

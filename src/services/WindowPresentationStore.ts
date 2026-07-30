@@ -15,6 +15,7 @@ import { DownloadManager } from "./DownloadManager";
 import type { LivePageCacheTelemetry } from "./LivePageCacheTelemetry";
 import type { BrowserPresentationIdentity } from "../types/browser";
 import { PlacementGenerationStore } from "./PlacementGenerationStore";
+import { BrowserPopupController } from "./BrowserPopupController";
 import type {
   DetachPlacementCommand,
   OpenReferenceCommand,
@@ -23,6 +24,7 @@ import type {
   ViewEvents,
   ViewHandleOperations,
   ViewNotifications,
+  ViewPopupLifetime,
   WindowPresentationStoreDependencies,
 } from "./BrowserPresentationContracts";
 
@@ -50,6 +52,7 @@ export class WindowPresentationStore {
   private events: ViewEvents;
   private contextMenus: ViewContextMenus;
   private operations: ViewHandleOperations;
+  private popupLifetime: ViewPopupLifetime;
   private eventDisposers = new Map<string, () => void>();
 
   private downloadManager?: DownloadManager;
@@ -83,9 +86,15 @@ export class WindowPresentationStore {
       ) ?? (() => undefined);
     this.contextMenus =
       dependencies.contextMenus ?? new ContextMenuController();
+    const popups =
+      dependencies.popups ?? new BrowserPopupController(baseWindow);
+    this.popupLifetime = popups;
     this.events =
       dependencies.events ??
-      new EventTranslator(this.contextMenus);
+      new EventTranslator({
+        contextMenus: this.contextMenus,
+        windowOpenEvents: popups,
+      });
     this.operations =
       dependencies.operations ?? new HandleOperations(this.handles);
     const onViewCreated = (
@@ -154,6 +163,7 @@ export class WindowPresentationStore {
 
       // Execute side effects
       if (cmd.type === "remove" || cmd.type === "rendererGone") {
+        this.popupLifetime.closeForOpener(cmd.id);
         this.eventDisposers.get(cmd.id)?.();
         this.eventDisposers.delete(cmd.id);
       }
@@ -197,6 +207,7 @@ export class WindowPresentationStore {
   }
 
   detachHandle(handleId: string): void {
+    this.popupLifetime.closeForOpener(handleId);
     this.interpreter.detachView(handleId);
   }
 
@@ -259,6 +270,7 @@ export class WindowPresentationStore {
   }
 
   removeHandle(handleId: string): void {
+    this.popupLifetime.closeForOpener(handleId);
     this.eventDisposers.get(handleId)?.();
     this.eventDisposers.delete(handleId);
     this.dispatch({ type: "remove", id: handleId });
@@ -266,6 +278,7 @@ export class WindowPresentationStore {
 
   /** Relinquish local presentation state without destroying a shared handle. */
   forgetHandle(handleId: string): void {
+    this.popupLifetime.closeForOpener(handleId);
     this.eventDisposers.get(handleId)?.();
     this.eventDisposers.delete(handleId);
     if (!this.world.has(handleId)) return;
@@ -305,6 +318,7 @@ export class WindowPresentationStore {
   }
 
   dispose(): void {
+    this.popupLifetime.closeAll();
     this.disposeLivePageSubscription();
     for (const dispose of this.eventDisposers.values()) dispose();
     this.eventDisposers.clear();

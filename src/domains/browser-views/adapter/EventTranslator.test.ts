@@ -1,5 +1,9 @@
 import { EventEmitter } from "node:events";
-import type { WebContentsView } from "electron";
+import type {
+  HandlerDetails,
+  WebContentsView,
+  WindowOpenHandlerResponse,
+} from "electron";
 import { ContextMenuController } from "./ContextMenuController";
 import { EventTranslator } from "./EventTranslator";
 import type {
@@ -11,7 +15,10 @@ class FakeWebContents extends EventEmitter {
   id = 42;
   session = {};
   navigationHistory = { canGoBack: () => false };
-  private windowOpenHandler?: () => { action: "deny" };
+  private windowOpenHandler?: (
+    details: HandlerDetails
+  ) => WindowOpenHandlerResponse;
+  loadedUrls: string[] = [];
 
   getURL(): string {
     return "https://example.test/";
@@ -22,8 +29,28 @@ class FakeWebContents extends EventEmitter {
   isDestroyed(): boolean {
     return false;
   }
-  setWindowOpenHandler(handler: () => { action: "deny" }): void {
+  setWindowOpenHandler(
+    handler: (details: HandlerDetails) => WindowOpenHandlerResponse
+  ): void {
     this.windowOpenHandler = handler;
+  }
+  loadURL(url: string): Promise<void> {
+    this.loadedUrls.push(url);
+    return Promise.resolve();
+  }
+  requestWindow(
+    disposition: HandlerDetails["disposition"],
+    url = "https://target.example/"
+  ): WindowOpenHandlerResponse {
+    if (!this.windowOpenHandler) throw new Error("No window open handler");
+    return this.windowOpenHandler({
+      url,
+      disposition,
+      frameName: "",
+      features: "",
+      referrer: { url: "", policy: "default" },
+      postBody: undefined,
+    });
   }
 }
 
@@ -58,11 +85,24 @@ class FakeHttpResponseMonitor implements HttpResponseMonitor {
   }
 }
 
+function createTranslator(
+  httpResponses: HttpResponseMonitor = new FakeHttpResponseMonitor()
+): EventTranslator {
+  return new EventTranslator({
+    contextMenus: new ContextMenuController(),
+    httpResponses,
+    windowOpenEvents: {
+      decide: () => ({ action: "deny" }),
+      created: () => undefined,
+    },
+  });
+}
+
 describe("EventTranslator listener ownership", () => {
   it("disposes every listener installed for a view", () => {
     const webContents = new FakeWebContents();
     const monitor = new FakeHttpResponseMonitor();
-    const translator = new EventTranslator(new ContextMenuController(), monitor);
+    const translator = createTranslator(monitor);
     const dispose = translator.attach(
       "view",
       { webContents } as unknown as WebContentsView,
@@ -79,10 +119,7 @@ describe("EventTranslator listener ownership", () => {
   it("translates renderer loss into an explicit lifecycle command", () => {
     const webContents = new FakeWebContents();
     const commands: Array<{ type: string; id?: string }> = [];
-    const translator = new EventTranslator(
-      new ContextMenuController(),
-      new FakeHttpResponseMonitor()
-    );
+    const translator = createTranslator();
     translator.attach(
       "view",
       { webContents } as unknown as WebContentsView,
@@ -101,7 +138,7 @@ describe("EventTranslator listener ownership", () => {
     const webContents = new FakeWebContents();
     const monitor = new FakeHttpResponseMonitor();
     const commands: Array<Record<string, unknown>> = [];
-    const translator = new EventTranslator(new ContextMenuController(), monitor);
+    const translator = createTranslator(monitor);
     translator.attach(
       "view",
       { webContents } as unknown as WebContentsView,
@@ -129,7 +166,7 @@ describe("EventTranslator listener ownership", () => {
     const webContents = new FakeWebContents();
     const monitor = new FakeHttpResponseMonitor();
     const commands: Array<Record<string, unknown>> = [];
-    const translator = new EventTranslator(new ContextMenuController(), monitor);
+    const translator = createTranslator(monitor);
     translator.attach(
       "view",
       { webContents } as unknown as WebContentsView,
@@ -144,5 +181,49 @@ describe("EventTranslator listener ownership", () => {
     });
 
     expect(commands).toEqual([]);
+  });
+
+  it("delegates genuine new-window requests to popup policy", () => {
+    const webContents = new FakeWebContents();
+    const requests: HandlerDetails[] = [];
+    const translator = new EventTranslator({
+      contextMenus: new ContextMenuController(),
+      httpResponses: new FakeHttpResponseMonitor(),
+      windowOpenEvents: {
+        decide: (details) => {
+          requests.push(details);
+          return { action: "allow" };
+        },
+        created: () => undefined,
+      },
+    });
+    translator.attach(
+      "view",
+      { webContents } as unknown as WebContentsView,
+      () => undefined,
+      "profile"
+    );
+
+    expect(webContents.requestWindow("new-window")).toEqual({
+      action: "allow",
+    });
+    expect(requests.length).toBe(1);
+    expect(webContents.loadedUrls).toEqual([]);
+  });
+
+  it("keeps foreground-tab requests in the current browsing journey", () => {
+    const webContents = new FakeWebContents();
+    const translator = createTranslator();
+    translator.attach(
+      "view",
+      { webContents } as unknown as WebContentsView,
+      () => undefined,
+      "profile"
+    );
+
+    expect(webContents.requestWindow("foreground-tab")).toEqual({
+      action: "deny",
+    });
+    expect(webContents.loadedUrls).toEqual(["https://target.example/"]);
   });
 });

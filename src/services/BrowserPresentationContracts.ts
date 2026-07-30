@@ -1,7 +1,11 @@
 import type {
+  BrowserWindow,
   ContextMenuParams,
+  DidCreateWindowDetails,
+  HandlerDetails,
   WebContents,
   WebContentsView,
+  WindowOpenHandlerResponse,
 } from "electron";
 import type { Command } from "../domains/browser-views/core/commands";
 import type { ViewWorld } from "../domains/browser-views/core/types";
@@ -78,6 +82,20 @@ export interface ViewEvents {
   ): void;
 }
 
+export interface ViewWindowOpenEvents {
+  decide(details: HandlerDetails): WindowOpenHandlerResponse;
+  created(
+    openerHandleId: string,
+    window: BrowserWindow,
+    details: DidCreateWindowDetails
+  ): void;
+}
+
+export interface ViewPopupLifetime {
+  closeForOpener(openerHandleId: string): void;
+  closeAll(): void;
+}
+
 export interface ViewContextMenus {
   setImageContextCallback(callback: ImageContextCallback): void;
   open(
@@ -124,6 +142,7 @@ export type WindowPresentationStoreDependencies = {
   notifications?: ViewNotifications;
   events?: ViewEvents;
   contextMenus?: ViewContextMenus;
+  popups?: ViewWindowOpenEvents & ViewPopupLifetime;
   operations?: ViewHandleOperations;
   createEffects?: (
     onViewCreated: (
