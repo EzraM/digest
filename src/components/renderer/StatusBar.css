@@ -25,13 +25,18 @@
 
 .notebook-title-bar {
   position: relative;
+  z-index: 2;
   display: flex;
   height: 100%;
   align-items: center;
-  background: var(--digest-chrome-surface);
+  background: var(--digest-chrome-panel);
   color: var(--digest-chrome-text);
   font-family: var(--mantine-font-family-monospace);
   font-size: 11px;
+  /* Horizontal half of the page's inner seam: crisp hairline + soft lift. */
+  box-shadow:
+    0 1px 0 var(--digest-chrome-seam),
+    0 4px 10px -6px var(--digest-chrome-lift);
 }
 
 .notebook-title-bar__location {

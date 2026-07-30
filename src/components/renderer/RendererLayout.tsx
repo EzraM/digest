@@ -83,13 +83,17 @@ export const RendererLayout = ({
         style={{
           gridArea: "nav",
           display: "block",
+          position: "relative",
+          zIndex: 1,
           minWidth: navWidth,
           maxWidth: navWidth,
-          borderRight: navWidth
-            ? "1px solid var(--mantine-color-default-border)"
+          backgroundColor: "var(--digest-chrome-panel)",
+          // Vertical half of the page's inner seam: crisp hairline + soft lift.
+          boxShadow: navWidth
+            ? "1px 0 0 var(--digest-chrome-seam), 4px 0 10px -6px var(--digest-chrome-lift)"
             : "none",
           overflow: "hidden",
-          transition: `min-width ${NAVBAR_TRANSITION_MS}ms ease, max-width ${NAVBAR_TRANSITION_MS}ms ease, border-color 120ms ease`,
+          transition: `min-width ${NAVBAR_TRANSITION_MS}ms ease, max-width ${NAVBAR_TRANSITION_MS}ms ease, box-shadow 120ms ease`,
           pointerEvents: isNavbarOpened ? "auto" : "none",
         }}
         px="sm"
@@ -137,7 +141,7 @@ export const RendererLayout = ({
           minWidth: asideWidth,
           maxWidth: asideWidth,
           borderLeft: asideWidth
-            ? "1px solid var(--mantine-color-default-border)"
+            ? "1px solid var(--digest-chrome-seam)"
             : "none",
           overflow: "hidden",
         }}

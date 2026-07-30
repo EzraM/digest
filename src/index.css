@@ -10,6 +10,10 @@ body {
   --digest-chrome-focus: rgba(82, 100, 186, 0.45);
   --digest-chrome-menu-edge: rgba(84, 91, 119, 0.1);
   --digest-chrome-menu-shadow: rgba(41, 46, 67, 0.12);
+  /* Recessed chrome (sidebar + title bar) vs. the bright, floating page. */
+  --digest-chrome-panel: color-mix(in srgb, var(--mantine-color-body) 94%, #5b6086 6%);
+  --digest-chrome-seam: rgba(84, 91, 119, 0.16);
+  --digest-chrome-lift: rgba(41, 46, 67, 0.1);
   background-color: var(--mantine-color-body);
   color: var(--mantine-color-text);
   transition: background-color 0.2s ease, color 0.2s ease;
@@ -27,6 +31,9 @@ body {
   --digest-chrome-focus: rgba(150, 166, 239, 0.65);
   --digest-chrome-menu-edge: rgba(205, 211, 232, 0.12);
   --digest-chrome-menu-shadow: rgba(0, 0, 0, 0.34);
+  --digest-chrome-panel: color-mix(in srgb, var(--mantine-color-body) 92%, #aeb8ed 8%);
+  --digest-chrome-seam: rgba(205, 211, 232, 0.14);
+  --digest-chrome-lift: rgba(0, 0, 0, 0.4);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,6 +47,9 @@ body {
     --digest-chrome-focus: rgba(150, 166, 239, 0.65);
     --digest-chrome-menu-edge: rgba(205, 211, 232, 0.12);
     --digest-chrome-menu-shadow: rgba(0, 0, 0, 0.34);
+    --digest-chrome-panel: color-mix(in srgb, var(--mantine-color-body) 92%, #aeb8ed 8%);
+    --digest-chrome-seam: rgba(205, 211, 232, 0.14);
+    --digest-chrome-lift: rgba(0, 0, 0, 0.4);
   }
 }
 
