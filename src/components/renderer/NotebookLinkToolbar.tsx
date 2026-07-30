@@ -3,9 +3,12 @@ import {
   EditLinkButton,
   LinkToolbar,
   LinkToolbarProps,
+  useBlockNoteEditor,
   useComponentsContext,
 } from "@blocknote/react";
 import { useDocumentContext } from "../../context/DocumentContext";
+import { boundedFallbackLinkLabel } from "../../domains/page-context/NotebookPageSource";
+import { getBlockInfoAtNearest } from "@blocknote/core";
 
 export const NotebookLinkToolbar = (props: LinkToolbarProps) => (
   <LinkToolbar {...props}>
@@ -16,7 +19,7 @@ export const NotebookLinkToolbar = (props: LinkToolbarProps) => (
       setToolbarOpen={props.setToolbarOpen}
       setToolbarPositionFrozen={props.setToolbarPositionFrozen}
     />
-    <OpenLinkInNewDigestWindowButton url={props.url} />
+    <OpenLinkInNewDigestWindowButton url={props.url} label={props.text} range={props.range} />
     <DeleteLinkButton
       range={props.range}
       setToolbarOpen={props.setToolbarOpen}
@@ -24,9 +27,18 @@ export const NotebookLinkToolbar = (props: LinkToolbarProps) => (
   </LinkToolbar>
 );
 
-const OpenLinkInNewDigestWindowButton = ({ url }: { url: string }) => {
+const OpenLinkInNewDigestWindowButton = ({
+  url,
+  label,
+  range,
+}: {
+  url: string;
+  label: string;
+  range: { from: number };
+}) => {
   const components = useComponentsContext();
   const { documentId } = useDocumentContext();
+  const editor = useBlockNoteEditor();
 
   if (!components) return null;
 
@@ -37,10 +49,15 @@ const OpenLinkInNewDigestWindowButton = ({ url }: { url: string }) => {
       label="Open in new Digest window"
       isSelected={false}
       onClick={() => {
+        const blockId = editor.transact((transaction) =>
+          String(getBlockInfoAtNearest(transaction, range.from).bnBlock.node.attrs.id)
+        );
         void window.electronAPI.windows.openRoute({
           kind: "url",
           url,
           documentId: documentId ?? undefined,
+          sourceBlockId: blockId,
+          fallbackLinkLabel: boundedFallbackLinkLabel(label),
         });
       }}
       icon={<OpenInNewWindowIcon />}

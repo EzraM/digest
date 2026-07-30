@@ -305,16 +305,19 @@ const createWindow = async (
     const currentHash = await appViewInstance.webContents
       .executeJavaScript("window.location.hash")
       .catch(() => "");
-    const documentMatch = String(currentHash).match(
-      /#\/(?:doc\/([^?]+)|(?:block|url)\/[^?]+\?[^#]*\bdoc=([^&#]+))/
-    );
-    const encodedDocumentId = documentMatch?.[1] ?? documentMatch?.[2];
-    const documentId = encodedDocumentId
-      ? decodeURIComponent(encodedDocumentId)
-      : null;
-    const query = documentId
-      ? `?doc=${encodeURIComponent(documentId)}`
-      : "";
+    const currentRoute = String(currentHash);
+    const documentMatch = currentRoute.match(/#\/doc\/([^?]+)/);
+    const routeSearch = new URLSearchParams(currentRoute.split("?")[1] ?? "");
+    const documentId = documentMatch?.[1]
+      ? decodeURIComponent(documentMatch[1])
+      : routeSearch.get("doc");
+    const queryParams = new URLSearchParams();
+    if (documentId) queryParams.set("doc", documentId);
+    const sourceBlockId = routeSearch.get("source");
+    const fallbackLinkLabel = routeSearch.get("label");
+    if (sourceBlockId) queryParams.set("source", sourceBlockId);
+    if (fallbackLinkLabel) queryParams.set("label", fallbackLinkLabel.slice(0, 240));
+    const query = queryParams.size ? `?${queryParams.toString()}` : "";
     await createWindow(
       `#/url/${encodeURIComponent(url)}${query}`,
       documentId
@@ -679,13 +682,18 @@ const setupIpcHandlers = (
           kind?: unknown;
           url?: unknown;
           documentId?: unknown;
+          sourceBlockId?: unknown;
+          fallbackLinkLabel?: unknown;
         };
         let hash: string;
         if (route.kind === "url" && typeof route.url === "string") {
-          const documentQuery =
-            typeof route.documentId === "string"
-              ? `?doc=${encodeURIComponent(route.documentId)}`
-              : "";
+          const query = new URLSearchParams();
+          if (typeof route.documentId === "string") query.set("doc", route.documentId);
+          if (typeof route.sourceBlockId === "string") query.set("source", route.sourceBlockId);
+          if (typeof route.fallbackLinkLabel === "string") {
+            query.set("label", route.fallbackLinkLabel.slice(0, 240));
+          }
+          const documentQuery = query.size ? `?${query.toString()}` : "";
           hash = `#/url/${encodeURIComponent(route.url)}${documentQuery}`;
         } else if (
           route.kind === "doc" &&

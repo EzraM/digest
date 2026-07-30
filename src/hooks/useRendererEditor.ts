@@ -22,6 +22,7 @@ import {
 import { createMiddleClickDeleteExtension } from "../domains/blocks/adapters/createMiddleClickDeleteExtension";
 import { createLiveLinkIndicatorExtension } from "../domains/blocks/adapters/createLiveLinkIndicatorExtension";
 import { useAppRoute } from "../context/AppRouteContext";
+import { boundedFallbackLinkLabel } from "../domains/page-context/NotebookPageSource";
 
 export const useRendererEditor = (
   pluginProfile?: {
@@ -63,7 +64,19 @@ export const useRendererEditor = (
         );
         if (!link) return false;
 
-        navigateToUrl(link.href);
+        const sourceBlockId = link
+          .closest<HTMLElement>('[data-node-type="blockOuter"][data-id]')
+          ?.getAttribute("data-id");
+        navigateToUrl(
+          link.href,
+          documentId && sourceBlockId
+            ? {
+                documentId,
+                blockId: sourceBlockId,
+                fallbackLinkLabel: boundedFallbackLinkLabel(link.textContent ?? ""),
+              }
+            : undefined
+        );
         return true;
       },
     },

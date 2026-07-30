@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       kind: "url" | "doc";
       url?: string;
       documentId?: string;
+      sourceBlockId?: string;
+      fallbackLinkLabel?: string;
     }) => ipcRenderer.invoke("windows:open-route", route),
   },
   clipboard: {

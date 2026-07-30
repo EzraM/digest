@@ -41,6 +41,27 @@ import {
 } from "./domains/notebook-content/core/NotebookAddress";
 import { useInterceptedLinkInsertion } from "./hooks/useInterceptedLinkInsertion";
 import { useDownloadNotebookInsertion } from "./hooks/useDownloadNotebookInsertion";
+import { DocumentTreeNode } from "./types/documents";
+
+const findDocumentTitle = (
+  trees: Record<string, DocumentTreeNode[]>,
+  documentId: string | null
+): string | null => {
+  if (!documentId) return null;
+  const visit = (nodes: DocumentTreeNode[]): string | null => {
+    for (const node of nodes) {
+      if (node.document.id === documentId) return node.document.title;
+      const nested = visit(node.children);
+      if (nested !== null) return nested;
+    }
+    return null;
+  };
+  for (const nodes of Object.values(trees)) {
+    const title = visit(nodes);
+    if (title !== null) return title;
+  }
+  return null;
+};
 
 const RendererAppContent = () => {
   const [browserPlacementId, setBrowserPlacementId] = useState<string | null>(
@@ -257,6 +278,13 @@ const RendererAppContent = () => {
   });
 
   const activeDocumentTitle = activeDocument?.title ?? null;
+  const pageSourceDocumentId =
+    route.kind === "block" || route.kind === "url"
+      ? route.source?.documentId ?? route.docId ?? activeDocumentId
+      : activeDocumentId;
+  const pageDocumentTitle =
+    findDocumentTitle(documentTrees, pageSourceDocumentId)
+    ?? activeDocumentTitle;
   const { breadcrumbText, handleClick: handleTitleBarClick } = useStatusBar({
     profileName: activeProfileName,
     documentTitle: activeDocumentTitle,
@@ -386,6 +414,16 @@ const RendererAppContent = () => {
           editor={editor}
           notebookAddress={notebookAddress}
           notebookWriter={notebookWriter}
+          source={route.source ?? (
+            (blockRouteProps?.docId ?? route.docId ?? activeDocumentId)
+              ? {
+                  documentId: (blockRouteProps?.docId ?? route.docId ?? activeDocumentId) as string,
+                  blockId: route.blockId,
+                  fallbackLinkLabel: blockRouteProps?.url ?? undefined,
+                }
+              : undefined
+          )}
+          documentTitle={pageDocumentTitle}
           onUrlChange={(nextUrl) =>
             updateCachedBlockUrl(route.blockId, nextUrl)
           }
@@ -402,6 +440,8 @@ const RendererAppContent = () => {
           editor={editor}
           notebookAddress={notebookAddress}
           notebookWriter={notebookWriter}
+          source={route.source}
+          documentTitle={pageDocumentTitle}
         />
       )}
       {route.kind === "doc" && <div

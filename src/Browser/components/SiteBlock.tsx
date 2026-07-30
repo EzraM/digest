@@ -26,7 +26,14 @@ export const site = createReactBlockSpec(
       const isLive = useIsLivePage(profileId, url);
 
       const openInFullView = () => {
-        navigateToBlock(block.id, documentId ?? undefined);
+        navigateToBlock(
+          block.id,
+          documentId ? {
+            documentId,
+            blockId: block.id,
+            fallbackLinkLabel: url,
+          } : undefined
+        );
       };
 
       // Site blocks must always have a URL - if not, show an error

@@ -13,19 +13,20 @@ import React, {
   useRef,
 } from "react";
 import { useLocation, useRouter } from "@tanstack/react-router";
+import { NotebookPageSource } from "../domains/page-context/NotebookPageSource";
 
 // Route types matching the old router API for compatibility
 export type AppRoute =
   | { kind: "doc"; docId: string | null; focusBlockId?: string | null }
-  | { kind: "block"; blockId: string; docId?: string | null }
-  | { kind: "url"; url: string; docId?: string | null };
+  | { kind: "block"; blockId: string; docId?: string | null; source?: NotebookPageSource }
+  | { kind: "url"; url: string; docId?: string | null; source?: NotebookPageSource };
 
 export type AppRouteContextValue = {
   route: AppRoute;
   transitionGeneration: number;
   navigateToDoc: (docId: string, focusBlockId?: string | null) => void;
-  navigateToBlock: (blockId: string, docId?: string | null) => void;
-  navigateToUrl: (url: string, docId?: string | null) => void;
+  navigateToBlock: (blockId: string, source?: NotebookPageSource) => void;
+  navigateToUrl: (url: string, source?: NotebookPageSource) => void;
   /** Navigate back in history - triggers scroll restoration */
   goBack: () => void;
 };
@@ -69,10 +70,18 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
       const blockId = decodeURIComponent(blockMatch[1]);
       const search = new URLSearchParams(location.searchStr);
       const docId = search.get("doc");
+      const sourceBlockId = search.get("source");
+      const fallbackLinkLabel = search.get("label");
+      const resolvedDocId = docId ? decodeURIComponent(docId) : fallbackDocId;
       return {
         kind: "block",
         blockId,
-        docId: docId ? decodeURIComponent(docId) : fallbackDocId,
+        docId: resolvedDocId,
+        source: resolvedDocId && sourceBlockId ? {
+          documentId: resolvedDocId,
+          blockId: decodeURIComponent(sourceBlockId),
+          fallbackLinkLabel: fallbackLinkLabel ? decodeURIComponent(fallbackLinkLabel) : undefined,
+        } : undefined,
       };
     }
 
@@ -82,10 +91,18 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
       const url = decodeURIComponent(urlMatch[1]);
       const search = new URLSearchParams(location.searchStr);
       const docId = search.get("doc");
+      const sourceBlockId = search.get("source");
+      const fallbackLinkLabel = search.get("label");
+      const resolvedDocId = docId ? decodeURIComponent(docId) : fallbackDocId;
       return {
         kind: "url",
         url,
-        docId: docId ? decodeURIComponent(docId) : fallbackDocId,
+        docId: resolvedDocId,
+        source: resolvedDocId && sourceBlockId ? {
+          documentId: resolvedDocId,
+          blockId: decodeURIComponent(sourceBlockId),
+          fallbackLinkLabel: fallbackLinkLabel ? decodeURIComponent(fallbackLinkLabel) : undefined,
+        } : undefined,
       };
     }
 
@@ -137,22 +154,30 @@ export function AppRouteProvider({ children, fallbackDocId }: AppRouteProviderPr
   );
 
   const navigateToBlock = useCallback(
-    (blockId: string, docId?: string | null) => {
+    (blockId: string, source?: NotebookPageSource) => {
       router.navigate({
         to: "/block/$blockId",
         params: { blockId },
-        search: docId ? { doc: docId } : undefined,
+        search: source ? {
+          doc: source.documentId,
+          source: source.blockId,
+          label: source.fallbackLinkLabel,
+        } : undefined,
       });
     },
     [router]
   );
 
   const navigateToUrl = useCallback(
-    (url: string, docId?: string | null) => {
+    (url: string, source?: NotebookPageSource) => {
       router.navigate({
         to: "/url/$url",
         params: { url },
-        search: docId ? { doc: docId } : undefined,
+        search: source ? {
+          doc: source.documentId,
+          source: source.blockId,
+          label: source.fallbackLinkLabel,
+        } : undefined,
       });
     },
     [router]

@@ -13,6 +13,8 @@ interface ElectronAPI {
       kind: "url" | "doc";
       url?: string;
       documentId?: string;
+      sourceBlockId?: string;
+      fallbackLinkLabel?: string;
     }) => Promise<{ windowId: string }>;
   };
   clipboard: {

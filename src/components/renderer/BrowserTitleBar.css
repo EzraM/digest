@@ -18,6 +18,73 @@
   gap: 8px;
 }
 
+.browser-authored-breadcrumb,
+.browser-url-label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  padding: 3px 4px;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.browser-authored-breadcrumb {
+  cursor: pointer;
+}
+
+.browser-authored-breadcrumb > span,
+.browser-url-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.browser-authored-breadcrumb__notebook {
+  flex: 0 1 auto;
+}
+
+.browser-authored-breadcrumb__heading {
+  flex: 0 2 auto;
+}
+
+.browser-authored-breadcrumb__label {
+  flex: 0 1 auto;
+  font-weight: 600;
+}
+
+.browser-authored-breadcrumb__separator {
+  flex: 0 0 auto;
+  margin: 0 6px;
+  opacity: 0.45;
+}
+
+.browser-copy-button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 4px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.browser-copy-button:hover,
+.browser-copy-button:focus-visible,
+.browser-authored-breadcrumb:hover,
+.browser-authored-breadcrumb:focus-visible {
+  background: var(--digest-chrome-sky-tint);
+  outline: none;
+}
+
 .browser-location-zone {
   position: absolute;
   left: 50%;

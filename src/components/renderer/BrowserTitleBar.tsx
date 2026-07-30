@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { BrowserLoadStatus } from "../../types/browser";
 import "./BrowserTitleBar.css";
+import { ResolvedPageBreadcrumb } from "../../domains/page-context/resolvePageBreadcrumb";
 
 type BrowserTitleBarProps = {
   url: string;
@@ -12,6 +13,8 @@ type BrowserTitleBarProps = {
   devToolsOpen: boolean;
   isTogglingDevTools: boolean;
   onToggleDevTools: () => void;
+  breadcrumb: ResolvedPageBreadcrumb | null;
+  onReturn: () => void;
 };
 
 const PageStatusIcon = ({
@@ -81,7 +84,13 @@ export const BrowserTitleBar = ({
   devToolsOpen,
   isTogglingDevTools,
   onToggleDevTools,
+  breadcrumb,
+  onReturn,
 }: BrowserTitleBarProps) => {
+  const nearestHeading = breadcrumb?.headingPath.at(-1);
+  const returnDescription = breadcrumb
+    ? `Return to ${[breadcrumb.notebookTitle, nearestHeading?.text].filter(Boolean).join(", ")}`
+    : undefined;
   return (
     <div
       className="app-title-bar browser-title-bar"
@@ -134,28 +143,50 @@ export const BrowserTitleBar = ({
           </svg>
         </button>
         </span>
+        {breadcrumb ? (
+          <button
+            type="button"
+            className="browser-authored-breadcrumb"
+            onClick={onReturn}
+            title={`${returnDescription}. Current URL: ${url}`}
+            aria-label={returnDescription}
+          >
+            <span className="browser-authored-breadcrumb__notebook">
+              {breadcrumb.notebookTitle}
+            </span>
+            {nearestHeading && (
+              <>
+                <span className="browser-authored-breadcrumb__separator">/</span>
+                <span className="browser-authored-breadcrumb__heading">
+                  {nearestHeading.text}
+                </span>
+              </>
+            )}
+            {breadcrumb.linkLabel && (
+              <>
+                <span className="browser-authored-breadcrumb__separator">/</span>
+                <span className="browser-authored-breadcrumb__label">
+                  {breadcrumb.linkLabel}
+                </span>
+              </>
+            )}
+          </button>
+        ) : (
+          <span className="browser-url-label" title={url}>{url}</span>
+        )}
         <button
+          className="browser-copy-button app-title-bar__control"
           type="button"
           onClick={onCopy}
-          title={url}
+          title={copied ? "Copied" : `Copy ${url}`}
           aria-label={copied ? "Copied link" : "Copy link"}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            border: 0,
-            background: "transparent",
-            padding: 0,
-            color: "inherit",
-            font: "inherit",
-            textAlign: "center",
-            cursor: "pointer",
-          }}
         >
-          {copied ? "Copied · " : ""}
-          {url}
+          {copied ? "Copied" : (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="5.25" y="5.25" width="7.5" height="7.5" rx="1.25" stroke="currentColor" />
+              <path d="M10.5 5.25V3.5A1.25 1.25 0 0 0 9.25 2.25H3.5A1.25 1.25 0 0 0 2.25 3.5v5.75A1.25 1.25 0 0 0 3.5 10.5h1.75" stroke="currentColor" />
+            </svg>
+          )}
         </button>
         {devToolsAvailable && (
           <button

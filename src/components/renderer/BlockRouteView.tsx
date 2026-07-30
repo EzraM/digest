@@ -6,6 +6,7 @@ import { CustomBlockNoteEditor } from "../../types/schema";
 import { hasPreviousDigestRoute } from "./notebookReturnNavigation";
 import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
 import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
+import { NotebookPageSource } from "../../domains/page-context/NotebookPageSource";
 
 type BlockRouteViewProps = {
   blockId: string | undefined; // undefined for ephemeral URL routes
@@ -17,6 +18,8 @@ type BlockRouteViewProps = {
   editor: CustomBlockNoteEditor;
   notebookAddress: NotebookAddress;
   notebookWriter: NotebookWriteClient;
+  source?: NotebookPageSource;
+  documentTitle?: string | null;
   onUrlChange?: (url: string) => void;
 };
 
@@ -30,6 +33,8 @@ export const BlockRouteView = ({
   editor,
   notebookAddress,
   notebookWriter,
+  source,
+  documentTitle,
   onUrlChange,
 }: BlockRouteViewProps) => {
   const { route, goBack, navigateToDoc } = useAppRoute();
@@ -43,13 +48,22 @@ export const BlockRouteView = ({
       return;
     }
 
-    if (docId) {
-      navigateToDoc(docId);
+    const returnDocumentId = source?.documentId ?? docId;
+    if (returnDocumentId) {
+      let focusBlockId: string | null = null;
+      if (source) {
+        try {
+          focusBlockId = editor.getBlock(source.blockId)?.id ?? null;
+        } catch {
+          focusBlockId = null;
+        }
+      }
+      navigateToDoc(returnDocumentId, focusBlockId);
       return;
     }
 
     goBack();
-  }, [docId, goBack, navigateToDoc]);
+  }, [docId, editor, goBack, navigateToDoc, source]);
 
   // Type guard: ensure we're on a block or url route
   if (route.kind !== "block" && route.kind !== "url") {
@@ -71,6 +85,8 @@ export const BlockRouteView = ({
       editor={editor}
       notebookAddress={notebookAddress}
       notebookWriter={notebookWriter}
+      source={source}
+      documentTitle={documentTitle}
       onUrlChange={onUrlChange}
       onBack={handleMinimize}
     />

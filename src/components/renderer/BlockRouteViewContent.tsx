@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { useDevToolsState } from "../../hooks/useDevToolsState";
 import { useBrowserNavigationState } from "../../hooks/useBrowserNavigationState";
@@ -14,6 +14,11 @@ import { useBrowserLoadState } from "../../hooks/useBrowserLoadState";
 import { useTitleBar } from "../../context/TitleBarContext";
 import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
 import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
+import { NotebookPageSource } from "../../domains/page-context/NotebookPageSource";
+import {
+  PortableBlock,
+  resolvePageBreadcrumb,
+} from "../../domains/page-context/resolvePageBreadcrumb";
 
 type BlockRouteViewContentProps = {
   blockId: string | undefined; // undefined for ephemeral URL routes
@@ -25,6 +30,8 @@ type BlockRouteViewContentProps = {
   editor: CustomBlockNoteEditor;
   notebookAddress: NotebookAddress;
   notebookWriter: NotebookWriteClient;
+  source?: NotebookPageSource;
+  documentTitle?: string | null;
   onUrlChange?: (url: string) => void;
   onBack: () => void;
 };
@@ -38,11 +45,15 @@ export const BlockRouteViewContent = ({
   editor,
   notebookAddress,
   notebookWriter,
+  source,
+  documentTitle,
   onUrlChange,
   onBack,
 }: BlockRouteViewContentProps) => {
   const urlString = url;
   const loadStatus = useBrowserLoadState(placementId);
+  const [documentVersion, setDocumentVersion] = useState(0);
+  useEffect(() => editor.onChange(() => setDocumentVersion((value) => value + 1)), [editor]);
 
   const initialUrlRef = useRef(urlString);
   const [currentBrowserUrl, setCurrentBrowserUrl] = useState(urlString);
@@ -120,6 +131,17 @@ export const BlockRouteViewContent = ({
   }, [hasPageTool]);
 
   const { setContextualContent } = useTitleBar();
+  const breadcrumb = useMemo(
+    () => source
+      ? resolvePageBreadcrumb(
+          documentTitle,
+          editor.document as PortableBlock[],
+          source,
+          urlString
+        )
+      : null,
+    [documentTitle, documentVersion, editor, source, urlString]
+  );
   const siteTitleBar = useMemo(
     () => (
       <BrowserTitleBar
@@ -132,6 +154,8 @@ export const BlockRouteViewContent = ({
         devToolsOpen={devToolsOpen}
         isTogglingDevTools={isTogglingDevTools}
         onToggleDevTools={toggleDevTools}
+        breadcrumb={breadcrumb}
+        onReturn={onBack}
       />
     ),
     [
@@ -143,6 +167,8 @@ export const BlockRouteViewContent = ({
       handleReload,
       isTogglingDevTools,
       loadStatus,
+      breadcrumb,
+      onBack,
       toggleDevTools,
     ]
   );
