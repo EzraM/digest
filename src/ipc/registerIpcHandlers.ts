@@ -15,6 +15,7 @@ import { createDownloadHandlers } from "./handlers/downloadHandlers";
 import { createProfileHandlers } from "./handlers/profileHandlers";
 import { createRendererHandlers } from "./handlers/rendererHandlers";
 import { createSearchHandlers } from "./handlers/searchHandlers";
+import { createWindowHandlers } from "./handlers/windowHandlers";
 import { IPCHandlerMap, IPCRouter } from "./IPCRouter";
 
 type Services = ReturnType<typeof getServices>;
@@ -137,60 +138,7 @@ export const registerIpcHandlers = ({
     );
   };
 
-  registerMap({
-    "windows:open-route": {
-      type: "invoke",
-      fn: async (event, input: unknown) => {
-        if (!windowRegistry.resolve(event.sender)) {
-          throw new Error("Unknown Digest renderer");
-        }
-        if (!input || typeof input !== "object") {
-          throw new Error("Invalid Digest window route");
-        }
-        const route = input as {
-          kind?: unknown;
-          url?: unknown;
-          documentId?: unknown;
-          sourceBlockId?: unknown;
-          fallbackLinkLabel?: unknown;
-        };
-        let hash: string;
-        if (route.kind === "url" && typeof route.url === "string") {
-          const query = new URLSearchParams();
-          if (typeof route.documentId === "string") {
-            query.set("doc", route.documentId);
-          }
-          if (typeof route.sourceBlockId === "string") {
-            query.set("source", route.sourceBlockId);
-          }
-          if (typeof route.fallbackLinkLabel === "string") {
-            query.set("label", route.fallbackLinkLabel.slice(0, 240));
-          }
-          const documentQuery = query.size ? `?${query.toString()}` : "";
-          hash = `#/url/${encodeURIComponent(route.url)}${documentQuery}`;
-        } else if (
-          route.kind === "doc" &&
-          typeof route.documentId === "string"
-        ) {
-          hash = `#/doc/${encodeURIComponent(route.documentId)}`;
-        } else {
-          throw new Error("Invalid Digest window route");
-        }
-        const before = new Set(
-          windowRegistry.list().map((session) => session.windowId)
-        );
-        await openWindow(
-          hash,
-          typeof route.documentId === "string" ? route.documentId : null
-        );
-        const created = windowRegistry
-          .list()
-          .find((session) => !before.has(session.windowId));
-        return { windowId: created?.windowId ?? "" };
-      },
-    },
-  });
-
+  registerMap(createWindowHandlers(windowRegistry, openWindow));
   registerMap(createRendererHandlers());
   registerMap(
     createBrowserHandlers(
