@@ -69,12 +69,11 @@ export function createDocumentHandlers(
     },
     "documents:delete": {
       type: "invoke",
-      fn: async (event, documentId: string) => {
-        const document = documentManager.getDocument(documentId);
-        await documentManager.deleteDocument(documentId);
-        broadcastDocumentTree(document.profileId);
+      fn: async (_event, documentId: string) => {
+        const result = await documentManager.deleteDocument(documentId);
+        broadcastDocumentTree(result.profileId);
         broadcastActiveDocument();
-        return { success: true };
+        return result;
       },
     },
     "documents:move": {

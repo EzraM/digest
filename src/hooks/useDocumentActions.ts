@@ -51,15 +51,25 @@ export const useDocumentActions = ({
       }
 
       try {
-        await window.electronAPI.documents.delete(documentId);
+        const result = await window.electronAPI.documents.delete(documentId);
         onPendingDocumentRemoved(documentId);
+        if (
+          documentId === activeDocumentId
+          && result.replacementDocumentId
+        ) {
+          navigateToDoc?.(result.replacementDocumentId);
+        }
         return true;
       } catch (error) {
         log.debug(`Failed to delete document: ${error}`, "renderer");
         return false;
       }
     },
-    [onPendingDocumentRemoved]
+    [
+      activeDocumentId,
+      navigateToDoc,
+      onPendingDocumentRemoved,
+    ]
   );
 
   const handleMoveDocumentToProfile = useCallback(

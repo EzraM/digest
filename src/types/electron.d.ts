@@ -1,4 +1,9 @@
-import { DocumentRecord, DocumentTreeNode, ProfileRecord } from "./documents";
+import {
+  DeleteDocumentResult,
+  DocumentRecord,
+  DocumentTreeNode,
+  ProfileRecord,
+} from "./documents";
 import {
   BrowserLifecycleEvent,
   BrowserPageInfo,
@@ -179,7 +184,7 @@ interface ElectronAPI {
       documentId: string;
       title: string;
     }) => Promise<DocumentRecord>;
-    delete: (documentId: string) => Promise<{ success: boolean }>;
+    delete: (documentId: string) => Promise<DeleteDocumentResult>;
     move: (payload: {
       documentId: string;
       newParentId: string | null;

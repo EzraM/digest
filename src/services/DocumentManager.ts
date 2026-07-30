@@ -1,7 +1,11 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "crypto";
 import { DEFAULT_PROFILE_ID } from "../config/profiles";
-import { DocumentRecord, DocumentTreeNode } from "../types/documents";
+import {
+  DeleteDocumentResult,
+  DocumentRecord,
+  DocumentTreeNode,
+} from "../types/documents";
 import { log } from "../utils/mainLogger";
 import { ProfileManager } from "./ProfileManager";
 import { MAX_DOCUMENT_DEPTH } from "../config/documents";
@@ -170,7 +174,7 @@ export class DocumentManager {
     return updated;
   }
 
-  async deleteDocument(documentId: string): Promise<void> {
+  async deleteDocument(documentId: string): Promise<DeleteDocumentResult> {
     const document = this.getDocument(documentId);
     const now = Date.now();
 
@@ -181,12 +185,19 @@ export class DocumentManager {
 
     this.documents.set(documentId, { ...document, deletedAt: now, updatedAt: now });
 
+    const replacementDocumentId =
+      this.getDocumentTree(document.profileId)[0]?.document.id ?? null;
+
     if (this.activeDocumentId === documentId) {
-      const fallback = this.listDocuments(document.profileId).find(
-        (doc) => doc.id !== documentId
-      );
-      this.activeDocumentId = fallback ? fallback.id : null;
+      this.activeDocumentId = replacementDocumentId;
     }
+
+    return {
+      status: "deleted",
+      documentId,
+      profileId: document.profileId,
+      replacementDocumentId,
+    };
   }
 
   moveDocument(

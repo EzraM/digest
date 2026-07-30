@@ -34,6 +34,13 @@ export interface DocumentRecord {
   blockCount: number;
 }
 
+export type DeleteDocumentResult = {
+  status: "deleted";
+  documentId: string;
+  profileId: string;
+  replacementDocumentId: string | null;
+};
+
 export interface DocumentTreeNode {
   document: DocumentRecord;
   children: DocumentTreeNode[];
