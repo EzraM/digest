@@ -18,10 +18,12 @@ import {
 } from "../Search/YouTubeSearchBlock";
 import { clip } from "../components/clip/ClipBlock";
 import { workspace } from "../domains/workspace/WorkspaceBlock";
+import { codeBlock } from "../editor/codeBlock";
 
 export const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
+    codeBlock,
     site: site(),
     [GoogleSearchExtensionName]: GoogleSearch(),
     [ChatGPTExtensionName]: ChatGPT(),

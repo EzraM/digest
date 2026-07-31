@@ -73,6 +73,12 @@ body {
   padding-right: 5px;
 }
 
+.bn-editor .bn-block-content[data-content-type="codeBlock"] {
+  color: #000;
+  background-color: #f7f7f7;
+  border: 1px solid #e5e5e5;
+}
+
 .notebook-pane {
   box-sizing: border-box;
   height: 100%;
