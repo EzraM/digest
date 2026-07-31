@@ -2,6 +2,7 @@ import { app, BrowserWindow, globalShortcut } from "electron";
 import { dispose, openWindow } from "./application/DigestApplication";
 import { DatabaseManager } from "./database/DatabaseManager";
 import { configureElectron } from "./electron/configureElectron";
+import { configureApplicationMenu } from "./electron/configureApplicationMenu";
 import { log } from "./utils/mainLogger";
 
 if (require("electron-squirrel-startup")) {
@@ -13,6 +14,7 @@ configureElectron();
 app.on("ready", async () => {
   log.debug("App ready, creating window and setting up services", "main");
   try {
+    configureApplicationMenu(openWindow);
     await openWindow();
   } catch (error) {
     log.debug(`Failed to create window: ${error}`, "main");
