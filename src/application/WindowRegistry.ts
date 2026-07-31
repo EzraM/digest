@@ -32,6 +32,12 @@ export class WindowRegistry {
     return windowId ? this.byWindowId.get(windowId) : undefined;
   }
 
+  resolveWindow(browserWindow: BrowserWindow): WindowSession | undefined {
+    return this.list().find(
+      (session) => session.browserWindow === browserWindow
+    );
+  }
+
   get(windowId: string): WindowSession | undefined {
     return this.byWindowId.get(windowId);
   }

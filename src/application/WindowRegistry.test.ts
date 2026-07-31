@@ -3,11 +3,12 @@ import { WindowRegistry } from "./WindowRegistry";
 const session = (
   windowId: string,
   rendererId: number,
-  selectedDocumentId: string | null = null
+  selectedDocumentId: string | null = null,
+  browserWindow: object = {}
 ) =>
   ({
     windowId,
-    browserWindow: {},
+    browserWindow,
     rendererView: { webContents: { id: rendererId } },
     selectedDocumentId,
   }) as any;
@@ -29,6 +30,17 @@ describe("WindowRegistry", () => {
     expect(registry.resolve({ id: 11 } as any)?.selectedDocumentId).toBe(
       "document-a"
     );
+  });
+
+  it("resolves a session from its native window", () => {
+    const registry = new WindowRegistry();
+    const browserWindow = {};
+    registry.register(session("window-a", 11, "document-a", browserWindow));
+
+    expect(registry.resolveWindow(browserWindow as any)?.windowId).toBe(
+      "window-a"
+    );
+    expect(registry.resolveWindow({} as any)).toBeUndefined();
   });
 
   it("retires renderer mappings with their window", () => {

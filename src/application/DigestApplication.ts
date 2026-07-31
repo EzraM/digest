@@ -1,4 +1,4 @@
-import { WebContentsView } from "electron";
+import { BrowserWindow, WebContentsView } from "electron";
 import { WindowPresentationStore } from "../services/WindowPresentationStore";
 import { LinkInterceptionService } from "../services/LinkInterceptionService";
 import { log } from "../utils/mainLogger";
@@ -239,6 +239,24 @@ export const openWindow = async (
         digestProcess.windowRegistry.list()[0]?.rendererView ?? null;
     }
   });
+};
+
+export const openWindowFrom = async (
+  sourceWindow: BrowserWindow | null
+): Promise<void> => {
+  const initialized = await digestProcess.initialize();
+  const sourceSession = sourceWindow
+    ? digestProcess.windowRegistry.resolveWindow(sourceWindow)
+    : undefined;
+  const documentId =
+    sourceSession?.selectedDocumentId ??
+    initialized.services.documentManager.activeDocument?.id ??
+    null;
+
+  await openWindow(
+    documentId ? `#/doc/${encodeURIComponent(documentId)}` : undefined,
+    documentId
+  );
 };
 
 export const dispose = () => {
