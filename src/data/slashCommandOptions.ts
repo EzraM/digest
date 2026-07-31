@@ -73,6 +73,14 @@ export const slashCommandOptions: SlashCommandOption[] = [
     group: "Basic blocks",
   },
   {
+    badge: "⌘-Alt-C",
+    key: "code_block",
+    title: "Code Block",
+    subtext: "Write or paste multiline source code",
+    aliases: ["code", "codeblock", "code block", "source"],
+    group: "Basic blocks",
+  },
+  {
     key: "table",
     title: "Table",
     subtext: "Used for tables",

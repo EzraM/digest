@@ -38,9 +38,11 @@ export const handleElectronPaste = ({
 
     if (trimmedText) {
       if (looksLikeMarkdown(trimmedText)) {
-        editor.pasteMarkdown(trimmedText);
+        editor.pasteMarkdown(text);
       } else {
-        editor.pasteText(trimmedText);
+        // Inspect a trimmed copy above, but paste the source verbatim. Code
+        // blocks rely on leading whitespace and line breaks for indentation.
+        editor.pasteText(text);
       }
       return true;
     }

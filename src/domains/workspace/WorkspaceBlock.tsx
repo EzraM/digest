@@ -27,6 +27,8 @@ function getBlockInsertParams(
   switch (blockKey) {
     case "paragraph":
       return { type: "paragraph" };
+    case "code_block":
+      return { type: "codeBlock" };
     case "heading":
       return { type: "heading", props: { level: 1 } };
     case "heading_2":
