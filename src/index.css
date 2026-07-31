@@ -81,6 +81,7 @@ body {
 
 .bn-editor .bn-block-content[data-content-type="codeBlock"] > pre {
   padding-top: 40px;
+  padding-left: 52px;
 }
 
 .bn-editor .bn-block-content[data-content-type="codeBlock"] > div > select {
@@ -110,7 +111,34 @@ body {
 .bn-editor .digest-code-highlighted-line,
 .bn-editor .digest-code-highlighted-empty-line {
   background-color: #fff0b3;
-  box-shadow: -24px 0 #fff0b3, 24px 0 #fff0b3;
+  box-shadow: -48px 0 #fff0b3, 24px 0 #fff0b3;
+}
+
+.bn-editor .digest-code-line-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  width: 36px;
+  height: 1.5em;
+  margin-left: -44px;
+  margin-right: 8px;
+  padding: 0 6px 0 0;
+  color: #999;
+  font: inherit;
+  font-size: 0.78em;
+  line-height: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bn-editor .digest-code-line-number:hover,
+.bn-editor .digest-code-line-number[aria-pressed="true"] {
+  color: #6b5300;
+  background-color: #fff0b3;
 }
 
 .bn-editor .digest-code-highlighted-empty-line {

@@ -52,7 +52,8 @@ const selectionCodeLines = (state: EditorState): CodeSelection | null => {
 
 const buildDecorations = (
   state: EditorState,
-  highlights: Y.Map<string>
+  highlights: Y.Map<string>,
+  toggleLine: (blockId: string, line: number) => void
 ): DecorationSet => {
   const decorations: Decoration[] = [];
 
@@ -68,16 +69,45 @@ const buildDecorations = (
     }
 
     const selected = new Set(parseHighlightedLines(highlights.get(blockId)));
-    if (selected.size === 0) return false;
-
     const contentStart = position + 2;
     let line = 1;
     let lineStart = 0;
     const text = codeBlock.textContent;
     for (let offset = 0; offset <= text.length; offset += 1) {
       if (offset !== text.length && text[offset] !== "\n") continue;
+      const currentLine = line;
+      const linePosition = contentStart + lineStart;
+      decorations.push(
+        Decoration.widget(
+          linePosition,
+          () => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "digest-code-line-number";
+            button.textContent = String(currentLine);
+            button.contentEditable = "false";
+            button.tabIndex = -1;
+            button.title = selected.has(currentLine)
+              ? `Remove highlight from line ${currentLine}`
+              : `Highlight line ${currentLine}`;
+            button.setAttribute("aria-pressed", String(selected.has(currentLine)));
+            button.addEventListener("mousedown", (event) => {
+              event.preventDefault();
+            });
+            button.addEventListener("click", (event) => {
+              event.preventDefault();
+              toggleLine(blockId, currentLine);
+            });
+            return button;
+          },
+          {
+            key: `code-line-${blockId}-${currentLine}`,
+            side: -1,
+          }
+        )
+      );
       if (selected.has(line)) {
-        const from = contentStart + lineStart;
+        const from = linePosition;
         const to = contentStart + offset;
         if (to > from) {
           decorations.push(
@@ -124,6 +154,11 @@ export const createCodeLineHighlightExtension = createExtension(
   ({ editor, options }: ExtensionOptions<{ yDoc: Y.Doc }>) => {
     const highlights = options.yDoc.getMap<string>(mapName);
 
+    const toggleLine = (blockId: string, line: number): void => {
+      const next = toggleLines(readLineHighlights(highlights, blockId), [line]);
+      writeLineHighlights(highlights, blockId, next);
+    };
+
     const toggleSelectedLines = (): boolean => {
       const selection = selectionCodeLines(editor.prosemirrorState);
       if (!selection) return false;
@@ -146,10 +181,11 @@ export const createCodeLineHighlightExtension = createExtension(
         new Plugin<DecorationSet>({
           key: pluginKey,
           state: {
-            init: (_config, state) => buildDecorations(state, highlights),
+            init: (_config, state) =>
+              buildDecorations(state, highlights, toggleLine),
             apply: (transaction, decorations, _oldState, newState) =>
               transaction.docChanged || transaction.getMeta(refreshMeta)
-                ? buildDecorations(newState, highlights)
+                ? buildDecorations(newState, highlights, toggleLine)
                 : decorations.map(transaction.mapping, transaction.doc),
           },
           props: {
