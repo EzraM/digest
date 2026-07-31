@@ -79,6 +79,19 @@ body {
   border: 1px solid #e5e5e5;
 }
 
+.bn-editor .digest-code-highlighted-line,
+.bn-editor .digest-code-highlighted-empty-line {
+  background-color: #fff0b3;
+  box-shadow: -24px 0 #fff0b3, 24px 0 #fff0b3;
+}
+
+.bn-editor .digest-code-highlighted-empty-line {
+  display: inline-block;
+  width: 1px;
+  height: 1.5em;
+  vertical-align: text-bottom;
+}
+
 .notebook-pane {
   box-sizing: border-box;
   height: 100%;

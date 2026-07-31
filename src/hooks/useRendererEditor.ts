@@ -24,6 +24,7 @@ import { createLiveLinkIndicatorExtension } from "../domains/blocks/adapters/cre
 import { createFocusedBlockExtension } from "../domains/blocks/adapters/createFocusedBlockExtension";
 import { useAppRoute } from "../context/AppRouteContext";
 import { boundedFallbackLinkLabel } from "../domains/page-context/NotebookPageSource";
+import { createCodeLineHighlightExtension } from "../editor/createCodeLineHighlightExtension";
 
 export const useRendererEditor = (
   pluginProfile?: {
@@ -85,6 +86,7 @@ export const useRendererEditor = (
       createMiddleClickDeleteExtension,
       createLiveLinkIndicatorExtension,
       createFocusedBlockExtension,
+      createCodeLineHighlightExtension({ yDoc }),
     ],
     pasteHandler: (context: Parameters<typeof handleElectronPaste>[0]) =>
       handleElectronPaste(context),

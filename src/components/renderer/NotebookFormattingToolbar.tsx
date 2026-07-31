@@ -6,6 +6,7 @@ import {
   useSelectedBlocks,
 } from "@blocknote/react";
 import { useCallback, useMemo, useState } from "react";
+import { createCodeLineHighlightExtension } from "../../editor/createCodeLineHighlightExtension";
 
 export const NotebookFormattingToolbar = () => {
   const items = getFormattingToolbarItems();
@@ -19,8 +20,42 @@ export const NotebookFormattingToolbar = () => {
     <CopyImageButton key="copyImageButton" />
   );
 
+  items.unshift(<HighlightCodeLinesButton key="highlightCodeLinesButton" />);
+
   return <FormattingToolbar>{items}</FormattingToolbar>;
 };
+
+const HighlightCodeLinesButton = () => {
+  const editor = useBlockNoteEditor();
+  const components = useComponentsContext();
+  const selectedBlocks = useSelectedBlocks(editor);
+  const isCodeSelection =
+    selectedBlocks.length === 1 && selectedBlocks[0].type === "codeBlock";
+
+  if (!components || !isCodeSelection || !editor.isEditable) return null;
+
+  const toggle = () => {
+    editor.getExtension(createCodeLineHighlightExtension)?.toggleSelectedLines();
+    editor.focus();
+  };
+
+  return (
+    <components.FormattingToolbar.Button
+      className="bn-button"
+      label="Highlight code lines"
+      mainTooltip="Toggle line highlight (Cmd-Shift-H)"
+      icon={<HighlightLineIcon />}
+      onClick={toggle}
+    />
+  );
+};
+
+const HighlightLineIcon = () => (
+  <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+    <path d="M5 7h14M5 12h10M5 17h14" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+    <path d="M3 10h18v4H3z" fill="currentColor" opacity="0.18" />
+  </svg>
+);
 
 const CopyImageButton = () => {
   const editor = useBlockNoteEditor();
