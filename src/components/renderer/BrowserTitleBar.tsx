@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserLoadStatus } from "../../types/browser";
 import "./BrowserTitleBar.css";
 import { ResolvedPageBreadcrumb } from "../../domains/page-context/resolvePageBreadcrumb";
 import { AddPageButton } from "../clip/AddPageButton";
 import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
 import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
+import { usePageBookmark } from "../../hooks/usePageBookmark";
 
 type BrowserTitleBarProps = {
   url: string;
@@ -109,6 +110,18 @@ export const BrowserTitleBar = ({
   onBrowserBack,
 }: BrowserTitleBarProps) => {
   const [actionHint, setActionHint] = useState("Open notebook");
+  const bookmarkInputRef = useRef<HTMLInputElement>(null);
+  const bookmark = usePageBookmark(notebookAddress, notebookWriter);
+
+  useEffect(() => {
+    if (bookmark.phase === "naming") bookmarkInputRef.current?.focus();
+  }, [bookmark.phase]);
+
+  const handleBookmarkSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    void bookmark.save();
+  };
+
   const showActionHint = (label: string) => () => setActionHint(label);
   const resetActionHint = () => setActionHint("Open notebook");
   const nearestHeading = breadcrumb?.headingPath.at(-1);
@@ -152,13 +165,16 @@ export const BrowserTitleBar = ({
         </div>
       )}
       <div
-        className={`browser-location-zone browser-location-zone--${loadStatus} app-title-bar__control`}
+        className={`browser-location-zone browser-location-zone--${loadStatus}${bookmark.draft ? " browser-location-zone--bookmarking" : ""} app-title-bar__control`}
       >
         <span className="browser-load-control">
           <AddPageButton
             viewId={viewId}
-            notebookAddress={notebookAddress}
-            notebookWriter={notebookWriter}
+            disabled={bookmark.phase === "naming" || bookmark.phase === "saving" || bookmark.phase === "error"}
+            busy={bookmark.phase === "saving"}
+            filled={bookmark.phase === "saved"}
+            onPageBookmark={bookmark.begin}
+            onSelectionAdded={bookmark.showSaved}
             className="browser-add-button app-title-bar__control"
             onInteractionStart={showActionHint("Add to notebook")}
             onInteractionEnd={resetActionHint}
@@ -179,6 +195,33 @@ export const BrowserTitleBar = ({
             </svg>
           </button>
         </span>
+        {bookmark.draft && bookmark.phase !== "idle" && bookmark.phase !== "saved" && (
+          <form className="browser-bookmark-name" onSubmit={handleBookmarkSubmit}>
+            <span className="browser-bookmark-name__chip">
+              {bookmark.phase === "error" ? "Save failed" : "Bookmark name"}
+            </span>
+            <input
+              ref={bookmarkInputRef}
+              className="browser-bookmark-name__input app-title-bar__control"
+              value={bookmark.draft.name}
+              onChange={(event) => bookmark.rename(event.target.value)}
+              placeholder={bookmark.draft.pageTitle}
+              aria-label="Bookmark name"
+              disabled={bookmark.phase === "saving"}
+            />
+            <button
+              className="browser-bookmark-name__timer app-title-bar__control"
+              type="submit"
+              title={bookmark.phase === "error" ? "Retry save" : "Save bookmark now"}
+              aria-label={bookmark.phase === "error"
+                ? "Retry saving bookmark"
+                : `Save bookmark now, automatic save in ${bookmark.secondsRemaining} seconds`}
+              disabled={bookmark.phase === "saving"}
+            >
+              {bookmark.phase === "saving" ? "…" : bookmark.phase === "error" ? "Retry" : `${bookmark.secondsRemaining}s`}
+            </button>
+          </form>
+        )}
         {breadcrumb ? (
           <button
             type="button"

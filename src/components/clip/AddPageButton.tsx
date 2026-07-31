@@ -1,8 +1,5 @@
-import { useState } from "react";
+import { useRef } from "react";
 import { useClipCapture } from "../../hooks/useClipCapture";
-import { createInlineLinkBlock } from "../../hooks/inlineLinkInsertion";
-import { NotebookAddress } from "../../domains/notebook-content/core/NotebookAddress";
-import { NotebookWriteClient } from "../../domains/notebook-content/application/NotebookWriteClient";
 
 const BookmarkIcon = ({ filled }: { filled: boolean }) => (
   <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -16,73 +13,71 @@ const BookmarkIcon = ({ filled }: { filled: boolean }) => (
   </svg>
 );
 
+export type PageBookmarkCandidate = {
+  url: string;
+  pageTitle: string;
+};
+
 type AddPageButtonProps = {
   viewId: string;
-  notebookAddress: NotebookAddress;
-  notebookWriter: NotebookWriteClient;
+  disabled?: boolean;
+  busy?: boolean;
+  filled?: boolean;
   className?: string;
+  onPageBookmark: (candidate: PageBookmarkCandidate) => void;
+  onSelectionAdded: () => void;
   onInteractionStart?: () => void;
   onInteractionEnd?: () => void;
 };
 
 export const AddPageButton = ({
   viewId,
-  notebookAddress,
-  notebookWriter,
+  disabled = false,
+  busy = false,
+  filled = false,
   className,
+  onPageBookmark,
+  onSelectionAdded,
   onInteractionStart,
   onInteractionEnd,
 }: AddPageButtonProps) => {
   const { isCapturing, captureSelection } = useClipCapture();
-  const [didAddPage, setDidAddPage] = useState(false);
+  const requestInFlightRef = useRef(false);
 
   const handleAdd = async () => {
-    const result = await captureSelection(viewId);
+    if (requestInFlightRef.current || disabled) return;
+    requestInFlightRef.current = true;
 
-    if (result.success) {
-      console.info("[AddPageButton] Added current selection to notebook");
-      setDidAddPage(true);
-      window.setTimeout(() => setDidAddPage(false), 1500);
-      return;
-    }
+    try {
+      const result = await captureSelection(viewId);
 
-    if (result.error === "No selection found") {
-      const pageInfo = await window.electronAPI.browser.getPageInfo(viewId);
-      if (
-        pageInfo.success &&
-        (await notebookWriter.insert(
-          notebookAddress,
-          [
-            createInlineLinkBlock({
-              url: pageInfo.url,
-              title: pageInfo.title || pageInfo.url,
-            }),
-          ],
-          {
-            source: "page-link",
-            sourceUrl: pageInfo.url,
-            capturedAt: Date.now(),
-          }
-        )).status !== "rejected"
-      ) {
-        console.info("[AddPageButton] Added current page link to notebook", {
-          url: pageInfo.url,
-          notebookAddress,
-        });
-        setDidAddPage(true);
-        window.setTimeout(() => setDidAddPage(false), 1500);
+      if (result.success) {
+        console.info("[AddPageButton] Added current selection to notebook");
+        onSelectionAdded();
         return;
       }
 
-      console.error("[AddPageButton] Failed to add current page link", {
-        pageInfo,
-        notebookAddress,
-      });
-      return;
-    }
+      if (result.error === "No selection found") {
+        const pageInfo = await window.electronAPI.browser.getPageInfo(viewId);
+        if (pageInfo.success) {
+          onPageBookmark({
+            url: pageInfo.url,
+            pageTitle: pageInfo.title || pageInfo.url,
+          });
+          return;
+        }
 
-    console.error("[AddPageButton] Failed to add page:", result.error);
+        console.error("[AddPageButton] Failed to read current page", { pageInfo });
+        return;
+      }
+
+      console.error("[AddPageButton] Failed to add page:", result.error);
+    } finally {
+      requestInFlightRef.current = false;
+    }
   };
+
+  const isBusy = busy || isCapturing;
 
   return (
     <button
@@ -93,11 +88,11 @@ export const AddPageButton = ({
       onMouseLeave={onInteractionEnd}
       onFocus={onInteractionStart}
       onBlur={onInteractionEnd}
-      disabled={isCapturing}
+      disabled={disabled || isBusy}
       title="Add current page to notebook"
       aria-label="Add current page to notebook"
     >
-      {isCapturing ? <span aria-hidden="true">…</span> : <BookmarkIcon filled={didAddPage} />}
+      {isBusy ? <span aria-hidden="true">…</span> : <BookmarkIcon filled={filled} />}
     </button>
   );
 };
