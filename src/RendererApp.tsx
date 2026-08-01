@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MantineProvider } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
 import { theme } from "./config/theme";
 import { useRendererDocuments } from "./hooks/useRendererDocuments";
 import { useDocumentCreationFlow } from "./hooks/useDocumentCreationFlow";
@@ -69,8 +68,6 @@ const RendererAppContent = () => {
     null
   );
   const [contextualTitleBar, setContextualTitleBar] = useState<React.ReactNode>(null);
-  const [isNavbarOpened, { close: closeNavbar }] =
-    useDisclosure(true);
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
   const {
     profiles,
@@ -215,14 +212,6 @@ const RendererAppContent = () => {
     onPendingDocumentRemoved: handlePendingDocumentRemoved,
     navigateToDoc,
   });
-
-  const handleSidebarDocumentSelect = useCallback(
-    (documentId: string) => {
-      closeNavbar();
-      handleDocumentSelect(documentId);
-    },
-    [closeNavbar, handleDocumentSelect]
-  );
 
   const {
     isModalOpen: isCreateProfileModalOpen,
@@ -450,7 +439,7 @@ const RendererAppContent = () => {
         }}
       >
         <RendererLayout
-          isNavbarOpened={isNavbarOpened}
+          isNavbarOpened
           isDebugSidebarVisible={isDebugSidebarVisible}
           navbar={
             <FileTreePane
@@ -464,7 +453,7 @@ const RendererAppContent = () => {
               onReorderProfiles={handleReorderProfiles}
               documentTree={activeProfileTree}
               activeDocumentId={activeDocumentId}
-              onSelectDocument={handleSidebarDocumentSelect}
+              onSelectDocument={handleDocumentSelect}
               onCreateDocument={handleCreateDocument}
               onRenameDocument={handleRenameDocument}
               onDeleteDocument={handleDeleteDocument}
