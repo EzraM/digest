@@ -2,19 +2,12 @@ import "./StatusBar.css";
 
 type StatusBarProps = {
   breadcrumbText: string;
-  onClick: () => void;
 };
 
-export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
+export const StatusBar = ({ breadcrumbText }: StatusBarProps) => {
   return (
     <header className="app-title-bar notebook-title-bar">
-      <button
-        className="app-title-bar__control notebook-title-bar__location"
-        type="button"
-        onClick={onClick}
-        title={`${breadcrumbText} — toggle sidebar`}
-        aria-label={`${breadcrumbText}. Toggle sidebar`}
-      >
+      <div className="notebook-title-bar__location" title={breadcrumbText}>
         <svg
           className="notebook-title-bar__icon"
           width="16"
@@ -29,10 +22,7 @@ export const StatusBar = ({ breadcrumbText, onClick }: StatusBarProps) => {
         <span className="notebook-title-bar__breadcrumb">
           {breadcrumbText}
         </span>
-        <span className="app-title-bar__hint notebook-title-bar__hint">
-          Toggle sidebar
-        </span>
-      </button>
+      </div>
     </header>
   );
 };

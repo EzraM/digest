@@ -69,7 +69,7 @@ const RendererAppContent = () => {
     null
   );
   const [contextualTitleBar, setContextualTitleBar] = useState<React.ReactNode>(null);
-  const [isNavbarOpened, { toggle: toggleNavbar, close: closeNavbar }] =
+  const [isNavbarOpened, { close: closeNavbar }] =
     useDisclosure(true);
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
   const {
@@ -286,10 +286,9 @@ const RendererAppContent = () => {
   const pageDocumentTitle =
     findDocumentTitle(documentTrees, pageSourceDocumentId)
     ?? activeDocumentTitle;
-  const { breadcrumbText, handleClick: handleTitleBarClick } = useStatusBar({
+  const { breadcrumbText } = useStatusBar({
     profileName: activeProfileName,
     documentTitle: activeDocumentTitle,
-    onToggleSidebar: toggleNavbar,
   });
   const titleBarContextValue = useMemo(
     () => ({ setContextualContent: setContextualTitleBar }),
@@ -393,10 +392,7 @@ const RendererAppContent = () => {
         }}
       >
         {contextualTitleBar ?? (
-          <StatusBar
-            breadcrumbText={breadcrumbText}
-            onClick={handleTitleBarClick}
-          />
+          <StatusBar breadcrumbText={breadcrumbText} />
         )}
         <div style={{ position: "relative", minHeight: 0, overflow: "hidden" }}>
       {route.kind === "block" && notebookAddress && browserPlacementId && (
