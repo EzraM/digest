@@ -1,21 +1,14 @@
 import { useState } from "react";
-import { Menu, Stack, Text } from "@mantine/core";
+import { ActionIcon, Menu, Stack, Text } from "@mantine/core";
 import { ProfileRecord } from "../../types/documents";
 import { DEFAULT_PROFILE_ID } from "../../config/profiles";
 import "./ProfileList.css";
-
-const MoreIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <circle cx="3.25" cy="8" r="1.1" fill="currentColor" />
-    <circle cx="8" cy="8" r="1.1" fill="currentColor" />
-    <circle cx="12.75" cy="8" r="1.1" fill="currentColor" />
-  </svg>
-);
 
 type ProfileListProps = {
   profiles: ProfileRecord[];
   activeProfileId: string | null;
   onSelectProfile: (profileId: string) => void;
+  onCreateProfile: () => void;
   onRenameProfile?: (profileId: string) => void;
   onDeleteProfile?: (profileId: string) => void;
   onToggleJiraLinks?: (profileId: string, enabled: boolean) => void;
@@ -26,6 +19,10 @@ export const ProfileList = ({
   profiles,
   activeProfileId,
   onSelectProfile,
+  onCreateProfile,
+  onRenameProfile,
+  onDeleteProfile,
+  onToggleJiraLinks,
   onReorderProfiles,
 }: ProfileListProps) => {
   const [draggedProfileId, setDraggedProfileId] = useState<string | null>(null);
@@ -34,8 +31,6 @@ export const ProfileList = ({
   const isActiveProfileValid =
     activeProfileId && profiles.some((p) => p.id === activeProfileId);
   const value = isActiveProfileValid ? activeProfileId : profiles[0]?.id ?? null;
-
-  const isStacked = profiles.length > 3;
 
   const moveProfile = (
     profileId: string,
@@ -60,25 +55,36 @@ export const ProfileList = ({
 
   return (
     <Stack className="profile-list" gap={0}>
+      <div className="profile-list__heading">
+        <span>Profiles</span>
+        <button
+          type="button"
+          className="file-tree__section-add"
+          onClick={onCreateProfile}
+          aria-label="New profile"
+          title="New profile"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3.25v9.5M3.25 8h9.5" />
+          </svg>
+        </button>
+      </div>
       {profiles.length === 0 ? (
         <Text size="sm" c="dimmed">
           No profiles available yet.
         </Text>
       ) : (
         <div
-          className={`profile-switcher${isStacked ? " profile-switcher--stacked" : ""}`}
+          className="profile-switcher profile-switcher--stacked"
           role="tablist"
-          aria-orientation={isStacked ? "vertical" : "horizontal"}
+          aria-orientation="vertical"
         >
           {profiles.map((profile) => (
-            <button
+            <div
               key={profile.id}
-              type="button"
-              role="tab"
-              aria-selected={profile.id === value}
-              className="profile-switcher__control"
+              className="profile-switcher__row"
+              data-selected={profile.id === value || undefined}
               draggable
-              onClick={() => onSelectProfile(profile.id)}
               onDragStart={(event) => {
                 setDraggedProfileId(profile.id);
                 event.dataTransfer.effectAllowed = "move";
@@ -94,26 +100,41 @@ export const ProfileList = ({
                 const draggedId =
                   draggedProfileId || event.dataTransfer.getData("text/plain");
                 const bounds = event.currentTarget.getBoundingClientRect();
-                const placeAfter = isStacked
-                  ? event.clientY > bounds.top + bounds.height / 2
-                  : event.clientX > bounds.left + bounds.width / 2;
+                const placeAfter = event.clientY > bounds.top + bounds.height / 2;
                 if (draggedId) moveProfile(draggedId, profile.id, placeAfter);
                 setDraggedProfileId(null);
               }}
-              onKeyDown={(event) => {
-                if (!event.altKey) return;
-                const previousKey = isStacked ? "ArrowUp" : "ArrowLeft";
-                const nextKey = isStacked ? "ArrowDown" : "ArrowRight";
-                if (event.key === previousKey || event.key === nextKey) {
-                  event.preventDefault();
-                  moveProfileBy(profile.id, event.key === previousKey ? -1 : 1);
-                }
-              }}
               title="Drag to reorder, or use Alt + arrow key"
             >
-              <span className="profile-switcher__grip" aria-hidden="true">⠿</span>
-              <span className="profile-switcher__label">{profile.name}</span>
-            </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={profile.id === value}
+                className="profile-switcher__control"
+                onClick={() => onSelectProfile(profile.id)}
+                onKeyDown={(event) => {
+                  if (!event.altKey) return;
+                  const previousKey = "ArrowUp";
+                  const nextKey = "ArrowDown";
+                  if (event.key === previousKey || event.key === nextKey) {
+                    event.preventDefault();
+                    moveProfileBy(
+                      profile.id,
+                      event.key === previousKey ? -1 : 1
+                    );
+                  }
+                }}
+              >
+                <span className="profile-switcher__grip" aria-hidden="true">⠿</span>
+                <span className="profile-switcher__label">{profile.name}</span>
+              </button>
+              <ProfileActionsMenu
+                profile={profile}
+                onRenameProfile={onRenameProfile}
+                onDeleteProfile={onDeleteProfile}
+                onToggleJiraLinks={onToggleJiraLinks}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -122,66 +143,61 @@ export const ProfileList = ({
 };
 
 export const ProfileActionsMenu = ({
-  profiles,
-  activeProfileId,
+  profile,
   onRenameProfile,
   onDeleteProfile,
   onToggleJiraLinks,
-}: Pick<
-  ProfileListProps,
-  | "profiles"
-  | "activeProfileId"
-  | "onRenameProfile"
-  | "onDeleteProfile"
-  | "onToggleJiraLinks"
->) => {
-  const activeProfile = profiles.find((profile) => profile.id === activeProfileId);
-  const canDelete = activeProfile && activeProfile.id !== DEFAULT_PROFILE_ID;
+}: Pick<ProfileListProps, "onRenameProfile" | "onDeleteProfile" | "onToggleJiraLinks"> & {
+  profile: ProfileRecord;
+}) => {
+  const canDelete = profile.id !== DEFAULT_PROFILE_ID;
 
   return (
-    <Menu withinPortal position="top-end">
+    <Menu withinPortal position="bottom-end">
       <Menu.Target>
-        <button
-          type="button"
-          className="file-tree__footer-action"
-          aria-label="Profile settings"
-          disabled={!activeProfile}
+        <ActionIcon
+          variant="subtle"
+          size="sm"
+          radius="md"
+          className="profile-switcher__actions"
+          aria-label={`${profile.name} settings`}
+          onClick={(event) => event.stopPropagation()}
         >
-          <MoreIcon />
-        </button>
+          <Text fw={600} size="xs">...</Text>
+        </ActionIcon>
       </Menu.Target>
       <Menu.Dropdown className="profile-actions-menu">
         <Menu.Label className="profile-actions-menu__label">
-          {activeProfile?.name ?? "Profile"}
+          {profile.name}
         </Menu.Label>
-        {activeProfile && onRenameProfile && (
+        {onRenameProfile && (
           <Menu.Item
             className="profile-actions-menu__item"
-            onClick={() => onRenameProfile(activeProfile.id)}
+            onClick={() => onRenameProfile(profile.id)}
           >
             Rename
           </Menu.Item>
         )}
-        {activeProfile && canDelete && onDeleteProfile && (
+        {canDelete && onDeleteProfile && (
           <Menu.Item
             className="profile-actions-menu__item profile-actions-menu__item--danger"
             color="red"
-            onClick={() => onDeleteProfile(activeProfile.id)}
+            onClick={() => onDeleteProfile(profile.id)}
           >
             Delete
           </Menu.Item>
         )}
-        {activeProfile && onToggleJiraLinks && (
+        {onToggleJiraLinks && (
           <Menu.Item
             className="profile-actions-menu__item"
             onClick={() =>
               onToggleJiraLinks(
-                activeProfile.id,
-                !activeProfile.settings?.plugins?.["builtin.jira-links"]?.enabled
+                profile.id,
+                !profile.settings?.plugins?.["builtin.jira-links"]?.enabled
               )
             }
           >
-            {activeProfile.settings?.plugins?.["builtin.jira-links"]?.enabled
+            {profile.settings?.plugins?.["builtin.jira-links"]?.enabled
               ? "Disable Jira links"
               : "Enable Jira links"}
           </Menu.Item>

@@ -87,18 +87,13 @@ export const RendererLayout = ({
           zIndex: 1,
           minWidth: navWidth,
           maxWidth: navWidth,
-          backgroundColor: "var(--digest-chrome-panel)",
-          // Vertical half of the page's inner seam: crisp hairline + soft lift.
-          boxShadow: navWidth
-            ? "1px 0 0 var(--digest-chrome-seam), 4px 0 10px -6px var(--digest-chrome-lift)"
-            : "none",
+          backgroundColor: "var(--mantine-color-body)",
+          boxShadow: "none",
           overflow: "hidden",
           transition: `min-width ${NAVBAR_TRANSITION_MS}ms ease, max-width ${NAVBAR_TRANSITION_MS}ms ease, box-shadow 120ms ease`,
           pointerEvents: isNavbarOpened ? "auto" : "none",
         }}
-        px={isNavbarOpened ? "sm" : 0}
-        pt={isNavbarOpened ? "md" : 0}
-        pb={isNavbarOpened ? "sm" : 0}
+        p={isNavbarOpened ? 12 : 0}
       >
         <Transition
           mounted={isNavbarOpened}

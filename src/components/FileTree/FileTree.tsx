@@ -4,7 +4,7 @@ import {
   DocumentTreeNode,
   ProfileRecord,
 } from "../../types/documents";
-import { ProfileActionsMenu, ProfileList } from "./ProfileList";
+import { ProfileList } from "./ProfileList";
 import { DocumentTree } from "./DocumentTree";
 import "./FileTree.css";
 
@@ -70,16 +70,33 @@ export const FileTree = ({
   };
 
   return (
-    <Stack className="file-tree" gap={0} h="100%">
+    <Stack className="file-tree" gap={0}>
       <ProfileList
         profiles={profiles}
         activeProfileId={activeProfileId}
         onSelectProfile={onSelectProfile}
+        onCreateProfile={onCreateProfile}
         onRenameProfile={onRenameProfile}
         onDeleteProfile={onDeleteProfile}
         onToggleJiraLinks={onToggleJiraLinks}
         onReorderProfiles={onReorderProfiles}
       />
+
+      <div className="file-tree__section-heading">
+        <span>Pages</span>
+        <button
+          type="button"
+          className="file-tree__section-add"
+          onClick={handleCreateRootDocument}
+          disabled={!activeProfileId}
+          aria-label="New page"
+          title="New page"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3.25v9.5M3.25 8h9.5" />
+          </svg>
+        </button>
+      </div>
 
       {profiles.length === 0 ? (
         <Stack className="file-tree__empty" gap="xs">
@@ -106,36 +123,6 @@ export const FileTree = ({
         </ScrollArea>
       )}
 
-      <div className="file-tree__footer">
-        <button
-          type="button"
-          className="file-tree__footer-action"
-          onClick={handleCreateRootDocument}
-          disabled={!activeProfileId}
-        >
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 3.25v9.5M3.25 8h9.5" />
-          </svg>
-          <span>New page</span>
-        </button>
-        <button
-          type="button"
-          className="file-tree__footer-action"
-          onClick={onCreateProfile}
-        >
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 3.25v9.5M3.25 8h9.5" />
-          </svg>
-          <span>New profile</span>
-        </button>
-        <ProfileActionsMenu
-          profiles={profiles}
-          activeProfileId={activeProfileId}
-          onRenameProfile={onRenameProfile}
-          onDeleteProfile={onDeleteProfile}
-          onToggleJiraLinks={onToggleJiraLinks}
-        />
-      </div>
     </Stack>
   );
 };

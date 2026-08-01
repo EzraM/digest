@@ -16,9 +16,13 @@
 }
 
 .document-tree__node[data-active] {
-  border-color: var(--digest-chrome-menu-edge);
-  background: var(--digest-chrome-violet-tint);
+  border-color: transparent;
+  background: var(--digest-chrome-indigo-hover);
   color: var(--digest-chrome-indigo);
+}
+
+.document-tree__node[data-active] .document-tree__title {
+  font-weight: 600;
 }
 
 .document-tree__node[data-drop-inside] {
