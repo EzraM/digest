@@ -122,6 +122,7 @@
 }
 
 .profile-switcher__row:hover .profile-switcher__actions,
+.profile-switcher__row[data-selected] .profile-switcher__actions,
 .profile-switcher__row:focus-within .profile-switcher__actions,
 .profile-switcher__actions[data-expanded] {
   opacity: 1;
