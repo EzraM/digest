@@ -45,6 +45,7 @@
 }
 
 .document-tree__node:hover .document-tree__actions,
+.document-tree__node[data-active] .document-tree__actions,
 .document-tree__node:focus-within .document-tree__actions,
 .document-tree__actions[data-expanded] {
   opacity: 1;
