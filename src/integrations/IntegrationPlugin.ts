@@ -17,8 +17,10 @@ export interface ConnectedIntegrationAccount {
 export interface IntegrationPlugin {
   manifest: IntegrationManifest;
   jobHandlers: JobHandler[];
-  connect(): Promise<ConnectedIntegrationAccount>;
-  disconnect(accountId: string): Promise<void>;
+  start?(): void | Promise<void>;
+  stop?(): void;
+  connect?(): Promise<ConnectedIntegrationAccount>;
+  disconnect?(accountId: string): Promise<void>;
 }
 
 export class IntegrationRegistry {
@@ -37,5 +39,17 @@ export class IntegrationRegistry {
 
   list(): IntegrationManifest[] {
     return [...this.plugins.values()].map((plugin) => plugin.manifest);
+  }
+
+  jobHandlers(): JobHandler[] {
+    return [...this.plugins.values()].flatMap((plugin) => plugin.jobHandlers);
+  }
+
+  async start(): Promise<void> {
+    for (const plugin of this.plugins.values()) await plugin.start?.();
+  }
+
+  stop(): void {
+    for (const plugin of this.plugins.values()) plugin.stop?.();
   }
 }
