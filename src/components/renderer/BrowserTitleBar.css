@@ -188,6 +188,7 @@
 .browser-authored-breadcrumb {
   position: absolute;
   left: 50%;
+  box-sizing: border-box;
   display: flex;
   width: calc(100% - 230px);
   min-width: 0;
@@ -197,7 +198,8 @@
   overflow: hidden;
   border: 0;
   background: transparent;
-  padding: 3px 4px;
+  /* Keep the centered breadcrumb clear of the action-hint chip. */
+  padding: 3px 92px;
   color: inherit;
   font: inherit;
   white-space: nowrap;
@@ -247,7 +249,10 @@
 .browser-authored-breadcrumb__hint {
   position: absolute;
   right: 4px;
-  overflow: visible !important;
+  max-width: 84px;
+  background: var(--digest-chrome-surface);
+  overflow: hidden !important;
+  text-overflow: ellipsis;
 }
 
 .browser-copy-button {
