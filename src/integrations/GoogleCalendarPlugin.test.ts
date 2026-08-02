@@ -7,6 +7,7 @@ import {
   GoogleOAuthAuthorizer,
   GoogleOAuthGrant,
 } from "./google-calendar/GoogleOAuthAuthorizer";
+import { ScheduledJob } from "../scheduler/ScheduledJobStore";
 
 const createDatabase = () => {
   const database = new Database(":memory:");
@@ -115,6 +116,55 @@ describe("GoogleCalendarPlugin", () => {
     }
     expect(failed).toBe(true);
     expect(plugin.listAccounts().length).toBe(1);
+    database.close();
+  });
+
+  it("schedules and repeats account sync through its job handler", async () => {
+    const database = createDatabase();
+    const credentials = new SqliteCredentialStore(database, {
+      encrypt: async (value) => Buffer.from(value),
+      decrypt: async (value) => value.toString(),
+    });
+    const accounts = new IntegrationAccountStore(database);
+    const authorizer = new FakeAuthorizer({
+      providerAccountId: "scheduled-user",
+      displayName: "Scheduled User",
+      email: "scheduled@example.test",
+      scopes: [],
+      refreshToken: "refresh",
+    });
+    const scheduled: Array<Omit<ScheduledJob<unknown>, "attempts">> = [];
+    const removed: string[] = [];
+    const synced: string[] = [];
+    const scheduler = {
+      schedule: <State>(job: Omit<ScheduledJob<State>, "attempts">) =>
+        scheduled.push(job as Omit<ScheduledJob<unknown>, "attempts">),
+      removeOwner: (ownerId: string) => removed.push(ownerId),
+    };
+    const plugin = new GoogleCalendarPlugin(
+      accounts,
+      credentials,
+      authorizer,
+      scheduler,
+      { sync: async (accountId) => void synced.push(accountId) },
+      () => 1_000
+    );
+
+    const account = await plugin.connect();
+    expect(scheduled[0]).toMatchObject({
+      ownerId: account.id,
+      kind: "google-calendar.sync",
+      runAt: 1_000,
+    });
+    const result = await plugin.jobHandlers[0].run({
+      ...scheduled[0],
+      state: { accountId: account.id },
+      attempts: 0,
+    });
+    expect(synced).toEqual([account.id]);
+    expect(result).toMatchObject({ runAt: 901_000 });
+    await plugin.disconnect(account.id);
+    expect(removed).toEqual([account.id]);
     database.close();
   });
 });
