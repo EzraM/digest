@@ -58,6 +58,18 @@ export class PlacementGenerationStore {
     return true;
   }
 
+  isActive(
+    placementId: string,
+    placementGeneration: number,
+    transitionGeneration: number
+  ): boolean {
+    const active = this.activeByPlacement.get(placementId);
+    return (
+      active?.placementGeneration === placementGeneration &&
+      active.transitionGeneration === transitionGeneration
+    );
+  }
+
   remove(placementId: string): void {
     this.activeByPlacement.delete(placementId);
   }

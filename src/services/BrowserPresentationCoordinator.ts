@@ -110,12 +110,12 @@ export class BrowserPresentationCoordinator {
         execution.plan.type === "reuse-history"
           ? execution.plan.historyIndex
           : undefined;
-      const prepared = store.prepareNavigationEntry(
+      const preparation = store.prepareNavigationEntry(
         execution.plan.handleId,
         execution.plan.requestedUrl,
         targetIndex
       );
-      if (!prepared) {
+      if (preparation.state === "failed") {
         this.allocator.releaseReservation(execution.plan);
         this.allocator.forgetHistoryAssociation(
           execution.plan.handleId,
@@ -129,24 +129,37 @@ export class BrowserPresentationCoordinator {
         );
       }
 
-      if (store.attachHandle(execution.plan.handleId)) {
-        this.allocator.activateReservation(execution.plan, {
-          placementId: update.placementId,
-          routeId: update.routeId,
-          transitionGeneration: update.transitionGeneration,
+      if (preparation.state === "pending") {
+        void preparation.completion.then((result) => {
+          if (!store.isCurrentPlacement(update)) {
+            this.allocator.releaseReservation(execution.plan);
+            return;
+          }
+          if (!result.success) {
+            this.allocator.releaseReservation(execution.plan);
+            this.allocator.forgetHistoryAssociation(
+              execution.plan.handleId,
+              execution.plan.requestedUrl
+            );
+            void this.createReference(
+              store,
+              update,
+              diagnostics,
+              "stale_association"
+            );
+            return;
+          }
+          if (!this.attachReservedReference(store, update, execution.plan)) {
+            this.discardJourney(store, execution.plan.handleId);
+            this.pendingCreates.delete(update.placementId);
+            void this.createReference(store, update, diagnostics, "attach_failed");
+          }
         });
-        store.updatePlacementBounds(execution.plan.handleId, update);
-        this.notifyPlacementReady(store, update);
-        store.publishLiveReferences();
-        return this.finishCacheAttempt(update, diagnostics, {
-          journeyId: execution.plan.journeyId,
-          outcome:
-            execution.plan.type === "reuse-history"
-              ? "hit_history"
-              : "hit_current",
-          loadAvoided: true,
-        });
+        return undefined;
       }
+
+      const attached = this.attachReservedReference(store, update, execution.plan);
+      if (attached) return this.finishCacheAttempt(update, diagnostics, attached);
 
       this.discardJourney(store, execution.plan.handleId);
       this.pendingCreates.delete(update.placementId);
@@ -224,7 +237,8 @@ export class BrowserPresentationCoordinator {
       historyMatch?.handleId === handleId
         ? historyMatch.historyIndex
         : undefined;
-    if (!store.prepareNavigationEntry(handleId, update.url, targetIndex)) {
+    const preparation = store.prepareNavigationEntry(handleId, update.url, targetIndex);
+    if (preparation.state === "failed") {
       this.discardJourney(store, handleId);
       this.pendingCreates.delete(update.placementId);
       return this.createReference(
@@ -234,25 +248,73 @@ export class BrowserPresentationCoordinator {
         "stale_association"
       );
     }
-    if (!store.attachHandle(handleId)) {
+    if (preparation.state === "pending") {
+      void preparation.completion.then((result) => {
+        if (!store.isCurrentPlacement(update)) return;
+        if (!result.success) {
+          this.discardJourney(store, handleId);
+          this.pendingCreates.delete(update.placementId);
+          void this.createReference(store, update, diagnostics, "stale_association");
+          return;
+        }
+        if (!this.attachExistingReference(store, update, handleId, targetIndex)) {
+          this.discardJourney(store, handleId);
+          this.pendingCreates.delete(update.placementId);
+          void this.createReference(store, update, diagnostics, "attach_failed");
+        }
+      });
+      return undefined;
+    }
+    if (!this.attachExistingReference(store, update, handleId, targetIndex)) {
       this.discardJourney(store, handleId);
       this.pendingCreates.delete(update.placementId);
       return this.createReference(store, update, diagnostics, "attach_failed");
     }
 
-    this.allocator.markVisible(handleId, {
-      placementId: update.placementId,
-      routeId: update.routeId,
-      transitionGeneration: update.transitionGeneration,
-    });
-    store.updatePlacementBounds(handleId, update, existing);
-    this.notifyPlacementReady(store, update);
-    store.publishLiveReferences();
     return this.finishCacheAttempt(update, diagnostics, {
       journeyId: this.allocator.getJourneyId(handleId),
       outcome: targetIndex === undefined ? "hit_current" : "hit_history",
       loadAvoided: true,
     });
+  }
+
+  private attachReservedReference(
+    store: WindowPresentationStore,
+    update: OpenReferenceCommand,
+    plan: Extract<ReturnType<ApplicationJourneyAllocator["planOpenReference"]>, { type: "reuse-current" | "reuse-history" }>
+  ): OpenReferenceResult | undefined {
+    if (!store.isCurrentPlacement(update) || !store.attachHandle(plan.handleId)) return undefined;
+    this.allocator.activateReservation(plan, {
+      placementId: update.placementId,
+      routeId: update.routeId,
+      transitionGeneration: update.transitionGeneration,
+    });
+    store.updatePlacementBounds(plan.handleId, update);
+    this.notifyPlacementReady(store, update);
+    store.publishLiveReferences();
+    return {
+      journeyId: plan.journeyId,
+      outcome: plan.type === "reuse-history" ? "hit_history" : "hit_current",
+      loadAvoided: true,
+    };
+  }
+
+  private attachExistingReference(
+    store: WindowPresentationStore,
+    update: OpenReferenceCommand,
+    handleId: string,
+    targetIndex?: number
+  ): boolean {
+    if (!store.isCurrentPlacement(update) || !store.attachHandle(handleId)) return false;
+    this.allocator.markVisible(handleId, {
+      placementId: update.placementId,
+      routeId: update.routeId,
+      transitionGeneration: update.transitionGeneration,
+    });
+    store.updatePlacementBounds(handleId, update);
+    this.notifyPlacementReady(store, update);
+    store.publishLiveReferences();
+    return true;
   }
 
   private createReference(

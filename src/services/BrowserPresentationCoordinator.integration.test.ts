@@ -10,6 +10,7 @@ import type {
   ViewEffects,
   ViewEvents,
   ViewHandleOperations,
+  NavigationEntryPreparation,
   ViewNotifications,
 } from "./BrowserPresentationContracts";
 import { BrowsingJourneyStore } from "./BrowsingJourneyStore";
@@ -35,6 +36,7 @@ const firstHandleIdFor = (placementId: string) => `native:${placementId}:1`;
 function createHarness(options: {
   attachSucceeds?: boolean;
   cacheLimit?: number;
+  prepareNavigationEntry?: () => NavigationEntryPreparation;
 } = {}) {
   const effects: Effect[] = [];
   const handles = new HandleRegistry();
@@ -67,10 +69,9 @@ function createHarness(options: {
         url: handles.get(id)?.webContents.getURL() ?? "",
       },
     }),
-    prepareNavigationEntry: () => ({
-      success: true,
-      value: { activeIndex: 0 },
-    }),
+    prepareNavigationEntry:
+      options.prepareNavigationEntry ??
+      (() => ({ state: "ready", activeIndex: 0 })),
     getDevToolsState: () => ({ success: true, value: { isOpen: false } }),
     toggleDevTools: () => ({ success: true, value: { isOpen: true } }),
     goBack: () => ({ success: true, value: { canGoBack: false } }),
@@ -177,6 +178,37 @@ function createHarness(options: {
 }
 
 describe("BrowserPresentationCoordinator fake-native integration", () => {
+  it("does not attach after a pending history restore is superseded", async () => {
+    let complete!: (result: { success: true; value: { activeIndex: number } }) => void;
+    const completion = new Promise<{ success: true; value: { activeIndex: number } }>(
+      (resolve) => {
+        complete = resolve;
+      }
+    );
+    const { coordinator, effects, request } = createHarness({
+      prepareNavigationEntry: () => ({ state: "pending", completion }),
+    });
+    coordinator.openReference(request("page:full", undefined, 1000));
+    coordinator.detachPlacement({
+      placementId: "page:full",
+      placementGeneration: 1000,
+      transitionGeneration: 1000,
+    });
+    coordinator.openReference(request("page:full", undefined, 2000));
+    coordinator.detachPlacement({
+      placementId: "page:full",
+      placementGeneration: 2000,
+      transitionGeneration: 2000,
+    });
+
+    complete({ success: true, value: { activeIndex: 0 } });
+    await Promise.resolve();
+    expect(effects.filter((effect) => effect.type === "attach")).toEqual([]);
+    expect(
+      effects.filter((effect) => effect.type === "placement-ready")
+    ).toEqual([]);
+  });
+
   it("opens, resizes, detaches, reattaches, and destroys one live journey", () => {
     const { store, coordinator, allocator, effects, handles, request, advanceTime } = createHarness();
     const baseRequest = request("page:full");

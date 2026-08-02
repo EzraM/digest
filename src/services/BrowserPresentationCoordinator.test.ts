@@ -93,7 +93,8 @@ describe("BrowserPresentationCoordinator", () => {
           });
           calls.push(`${name}:adopt:${handleId}`);
         },
-        prepareNavigationEntry: () => true,
+        prepareNavigationEntry: () => ({ state: "ready", activeIndex: 0 }),
+        isCurrentPlacement: () => true,
         attachHandle: (handleId: string) => {
           calls.push(`${name}:attach:${handleId}`);
           return true;

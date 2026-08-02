@@ -113,11 +113,19 @@ export interface ViewHandleOperations {
     id: string,
     requestedUrl: string,
     historyIndex?: number
-  ): Result<{ activeIndex: number }>;
+  ): NavigationEntryPreparation;
   getDevToolsState(id: string): Result<{ isOpen: boolean }>;
   toggleDevTools(id: string): Result<{ isOpen: boolean }>;
   goBack(id: string): Result<{ canGoBack: boolean }>;
 }
+
+export type NavigationEntryPreparation =
+  | { state: "ready"; activeIndex: number }
+  | {
+      state: "pending";
+      completion: Promise<Result<{ activeIndex: number }>>;
+    }
+  | { state: "failed"; error: string };
 
 export type WindowPresentationStoreDependencies = {
   now?: () => number;

@@ -219,12 +219,16 @@ export class WindowPresentationStore {
     handleId: string,
     requestedUrl: string,
     historyIndex?: number
-  ): boolean {
-    return this.operations.prepareNavigationEntry(
-      handleId,
-      requestedUrl,
-      historyIndex
-    ).success;
+  ) {
+    return this.operations.prepareNavigationEntry(handleId, requestedUrl, historyIndex);
+  }
+
+  isCurrentPlacement(update: OpenReferenceCommand): boolean {
+    return this.placementGenerations.isActive(
+      update.placementId,
+      update.placementGeneration,
+      update.transitionGeneration
+    );
   }
 
   adoptHandle(handleId: string, update: OpenReferenceCommand): void {

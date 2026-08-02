@@ -1,6 +1,7 @@
 import { HandleRegistry } from './HandleRegistry';
 import { log } from '../../../utils/mainLogger';
 import { normalizeJourneyUrl } from '../../../services/BrowsingJourneyStore';
+import type { NavigationEntryPreparation } from '../../../services/BrowserPresentationContracts';
 
 export type Result<T> = { success: true; value: T } | { success: false; error: string };
 
@@ -33,10 +34,10 @@ export class HandleOperations {
     id: string,
     requestedUrl: string,
     historyIndex?: number
-  ): Result<{ activeIndex: number }> {
+  ): NavigationEntryPreparation {
     const view = this.handles.get(id);
     if (!view || view.webContents.isDestroyed()) {
-      return { success: false, error: `No live WebContents for ${id}` };
+      return { state: 'failed', error: `No live WebContents for ${id}` };
     }
     const history = view.webContents.navigationHistory;
     const index = historyIndex ?? history.getActiveIndex();
@@ -45,17 +46,75 @@ export class HandleOperations {
       !entry ||
       normalizeJourneyUrl(entry.url) !== normalizeJourneyUrl(requestedUrl)
     ) {
-      return { success: false, error: `History entry ${index} is stale for ${id}` };
+      return { state: 'failed', error: `History entry ${index} is stale for ${id}` };
     }
+    if (history.getActiveIndex() === index) {
+      return { state: 'ready', activeIndex: index };
+    }
+
+    const pending = this.waitForNavigationEntry(id, index, requestedUrl);
     try {
-      if (history.getActiveIndex() !== index) history.goToIndex(index);
-      return { success: true, value: { activeIndex: index } };
+      history.goToIndex(index);
+      return { state: 'pending', completion: pending.completion };
     } catch (error) {
-      return {
-        success: false,
-        error: `Failed to select history entry ${index} for ${id}: ${error}`,
-      };
+      pending.cancel();
+      return { state: 'failed', error: `Failed to select history entry ${index} for ${id}: ${error}` };
     }
+  }
+
+  private waitForNavigationEntry(
+    id: string,
+    targetIndex: number,
+    requestedUrl: string
+  ): {
+    completion: Promise<Result<{ activeIndex: number }>>;
+    cancel: () => void;
+  } {
+    const view = this.handles.get(id)!;
+    const { webContents } = view;
+    let cancel: () => void = () => undefined;
+    const completion = new Promise<Result<{ activeIndex: number }>>((resolve) => {
+      let settled = false;
+      const events = ['did-navigate', 'did-navigate-in-page', 'did-finish-load', 'did-stop-loading', 'dom-ready'];
+      const finish = (result: Result<{ activeIndex: number }>) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        for (const event of events) webContents.removeListener(event as any, check as any);
+        webContents.removeListener('did-fail-load' as any, fail as any);
+        webContents.removeListener('render-process-gone' as any, gone as any);
+        webContents.removeListener('destroyed' as any, destroyed as any);
+        resolve(result);
+      };
+      const check = () => {
+        if (webContents.isDestroyed()) return destroyed();
+        const history = webContents.navigationHistory;
+        const activeIndex = history.getActiveIndex();
+        const entry = history.getEntryAtIndex(activeIndex);
+        if (
+          activeIndex === targetIndex &&
+          entry &&
+          normalizeJourneyUrl(entry.url) === normalizeJourneyUrl(requestedUrl)
+        ) {
+          finish({ success: true, value: { activeIndex } });
+        }
+      };
+      const fail = (_event: unknown, code: number, description: string, url: string, isMainFrame: boolean) => {
+        if (isMainFrame && code !== -3) finish({ success: false, error: `History navigation failed for ${id}: ${description} (${code}) at ${url}` });
+      };
+      const gone = () => finish({ success: false, error: `Renderer exited while restoring history for ${id}` });
+      const destroyed = () => finish({ success: false, error: `WebContents destroyed while restoring history for ${id}` });
+      cancel = () => finish({ success: false, error: `History navigation did not start for ${id}` });
+      for (const event of events) webContents.on(event as any, check as any);
+      webContents.on('did-fail-load' as any, fail as any);
+      webContents.on('render-process-gone' as any, gone as any);
+      webContents.on('destroyed' as any, destroyed as any);
+      const timeout = setTimeout(
+        () => finish({ success: false, error: `Timed out restoring history entry ${targetIndex} for ${id}` }),
+        5000
+      );
+    });
+    return { completion, cancel };
   }
 
   /**
