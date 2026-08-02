@@ -6,6 +6,7 @@ import {
 import { IntegrationPlugin } from "../IntegrationPlugin";
 import { GoogleOAuthAuthorizer } from "./GoogleOAuthAuthorizer";
 import { JobHandler, Scheduler } from "../../scheduler/Scheduler";
+import { MeetingJoinService } from "./MeetingJoinService";
 
 interface CalendarSyncJobState {
   accountId: string;
@@ -23,7 +24,7 @@ export class GoogleCalendarPlugin implements IntegrationPlugin {
     summary: "Projects upcoming Google Calendar events into Digest",
     connectionDescription: "Connect a Google account with read-only calendar access",
   };
-  readonly jobHandlers: JobHandler<CalendarSyncJobState>[];
+  readonly jobHandlers: JobHandler[];
 
   constructor(
     private readonly accounts: IntegrationAccountStore,
@@ -31,15 +32,17 @@ export class GoogleCalendarPlugin implements IntegrationPlugin {
     private readonly authorizer: GoogleOAuthAuthorizer,
     private readonly scheduler?: ScheduledJobs,
     private readonly syncService?: CalendarSync,
+    private readonly meetingActions?: MeetingJoinService,
     private readonly now: () => number = () => Date.now()
   ) {
-    this.jobHandlers = syncService
+    const syncHandlers: JobHandler<CalendarSyncJobState>[] = syncService
       ? [
           {
             kind: "google-calendar.sync",
             run: async (job) => {
               if (!this.accounts.get(job.state.accountId)) return { complete: true };
               await syncService.sync(job.state.accountId);
+              this.meetingActions?.reconcile(job.state.accountId);
               return {
                 runAt: this.now() + 15 * 60_000,
                 state: job.state,
@@ -48,6 +51,10 @@ export class GoogleCalendarPlugin implements IntegrationPlugin {
           },
         ]
       : [];
+    this.jobHandlers = [
+      ...syncHandlers,
+      ...(meetingActions?.jobHandlers ?? []),
+    ] as JobHandler[];
   }
 
   start(): void {

@@ -30,6 +30,8 @@ import {
 } from "../integrations/google-calendar/GoogleCalendarClient";
 import { CalendarProjectionStore } from "../integrations/google-calendar/CalendarProjectionStore";
 import { GoogleCalendarSyncService } from "../integrations/google-calendar/GoogleCalendarSyncService";
+import { MeetingJoinService } from "../integrations/google-calendar/MeetingJoinService";
+import { MeetingAction, MeetingIdentity } from "../types/calendar";
 
 export type OpenWindow = (
   initialHash?: string,
@@ -51,6 +53,7 @@ export class DigestProcess {
   readonly integrationRegistry = new IntegrationRegistry();
   private electronBound = false;
   private schedulerInstance: Scheduler | null = null;
+  private meetingJoinService: MeetingJoinService | null = null;
   private readonly wakeScheduler = () => this.schedulerInstance?.wake();
 
   get scheduler(): Scheduler {
@@ -80,6 +83,13 @@ export class DigestProcess {
           accounts,
           credentials
         );
+        const projection = new CalendarProjectionStore(database);
+        const meetingActions = new MeetingJoinService(
+          projection,
+          scheduler,
+          (action) => this.publishMeetingAction(action)
+        );
+        this.meetingJoinService = meetingActions;
         this.integrationRegistry.register(
           new GoogleCalendarPlugin(
             accounts,
@@ -91,8 +101,9 @@ export class DigestProcess {
             scheduler,
             new GoogleCalendarSyncService(
               new GoogleCalendarClient(tokenProvider),
-              new CalendarProjectionStore(database)
-            )
+              projection
+            ),
+            meetingActions
           )
         );
       }
@@ -171,6 +182,21 @@ export class DigestProcess {
       fn: (_event, integrationId: string, accountId: string) =>
         this.integrationRegistry.disconnect(integrationId, accountId),
     });
+    this.ipcRouter.register("calendar:upcoming", {
+      type: "invoke",
+      fn: () => {
+        const now = Date.now();
+        return this.meetingJoinService?.upcoming(now, now + 24 * 60 * 60_000) ?? [];
+      },
+    });
+    this.ipcRouter.register("calendar:join", {
+      type: "invoke",
+      fn: async (_event, identity: MeetingIdentity) => {
+        const url = this.meetingJoinService?.joinUrl(identity);
+        if (!url) throw new Error("Meeting link is no longer available");
+        await shell.openExternal(url);
+      },
+    });
     powerMonitor.on("resume", this.wakeScheduler);
     powerMonitor.on("unlock-screen", this.wakeScheduler);
     this.electronBound = true;
@@ -186,6 +212,15 @@ export class DigestProcess {
     this.integrationRegistry.stop();
     this.schedulerInstance?.stop();
     this.schedulerInstance = null;
+    this.meetingJoinService = null;
     this.applicationServices.dispose();
+  }
+
+  private publishMeetingAction(action: MeetingAction): void {
+    for (const window of this.windowRegistry.list()) {
+      if (!window.rendererView.webContents.isDestroyed()) {
+        window.rendererView.webContents.send("calendar:meeting-ready", action);
+      }
+    }
   }
 }

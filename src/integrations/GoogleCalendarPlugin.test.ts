@@ -147,6 +147,7 @@ describe("GoogleCalendarPlugin", () => {
       authorizer,
       scheduler,
       { sync: async (accountId) => void synced.push(accountId) },
+      undefined,
       () => 1_000
     );
 

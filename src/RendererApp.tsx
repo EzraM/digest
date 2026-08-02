@@ -42,6 +42,7 @@ import { useInterceptedLinkInsertion } from "./hooks/useInterceptedLinkInsertion
 import { useDownloadNotebookInsertion } from "./hooks/useDownloadNotebookInsertion";
 import { DocumentTreeNode } from "./types/documents";
 import { useProfileSelection } from "./hooks/useProfileSelection";
+import { MeetingNotification } from "./integrations/google-calendar/MeetingNotification";
 
 const findDocumentTitle = (
   trees: Record<string, DocumentTreeNode[]>,
@@ -521,6 +522,7 @@ const RendererAppContent = () => {
       />
       <LinkCaptureNotification />
       <DownloadNotification />
+      <MeetingNotification />
     </MantineProvider>
   );
 };

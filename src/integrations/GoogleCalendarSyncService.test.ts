@@ -36,6 +36,7 @@ const createProjection = () => {
       html_link TEXT,
       conference_links_json TEXT NOT NULL DEFAULT '[]',
       provider_updated_at INTEGER,
+      join_notified_at INTEGER,
       updated_at INTEGER NOT NULL,
       PRIMARY KEY(account_id, calendar_id, event_id)
     );

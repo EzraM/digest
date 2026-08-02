@@ -20,6 +20,7 @@ import migration010 from "./migrations/010_add_yjs_document_updates";
 import migration011 from "./migrations/011_add_scheduled_jobs";
 import migration012 from "./migrations/012_add_integration_accounts";
 import migration013 from "./migrations/013_add_calendar_projection";
+import migration014 from "./migrations/014_add_join_delivery_state";
 
 /** Singleton database manager that handles initialization and migrations. */
 export class DatabaseManager {
@@ -42,6 +43,7 @@ export class DatabaseManager {
     migration011,
     migration012,
     migration013,
+    migration014,
   ];
 
   private constructor() {}
