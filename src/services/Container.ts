@@ -20,8 +20,8 @@ export type ServiceDependency =
 export interface ServiceDefinition<T = any> {
   /** Factory function that creates the service instance */
   factory: ServiceFactory<T>;
-  /** Array of service names this service depends on */
-  dependencies?: ServiceDependency[];
+  /** Service names this service depends on */
+  dependencies?: readonly ServiceDependency[];
   /** Whether to cache the instance (default: true) */
   singleton?: boolean;
   /** Optional semantic version for the service API */

@@ -40,20 +40,27 @@ loader will need to select a distinct entrypoint for each environment.
 ### Dependency boundaries
 
 Services declare dependencies by name and optional semantic-version range. A
-factory receives a lookup containing only those declared dependencies:
+module exports that declaration as data, and a factory receives a lookup
+containing only those declared dependencies:
 
 ```ts
-module.provide("google.calendar", {
-  dependencies: [
-    { name: "database", version: "^1.0.0" },
-    { name: "digest.scheduler", version: "^1.0.0" },
-    { name: "google.authorization", version: "^1.0.0" },
-  ],
-  factory: (dependencies) => {
-    const database = dependencies.get("database");
-    // An undeclared lookup fails.
-  },
-});
+export const calendarModule = {
+  id: "google-calendar",
+  provides: [{
+    name: "google.calendar",
+    definition: {
+      dependencies: [
+        { name: "database", version: "^1.0.0" },
+        { name: "digest.scheduler", version: "^1.0.0" },
+        { name: "google.authorization", version: "^1.0.0" },
+      ],
+      factory: (dependencies) => {
+        const database = dependencies.get("database");
+        // An undeclared lookup fails.
+      },
+    },
+  }],
+} satisfies ProcessModuleDefinition;
 ```
 
 This makes the dependency declaration an enforced capability boundary within
@@ -132,21 +139,41 @@ configuration as data. Duct modules can expand a concise configuration into a
 larger system definition. This keeps feature-specific construction out of the
 application entrypoint.
 
-Digest borrows the idea that a feature should describe how it expands the
-application:
+Digest adopts that representational choice directly. A process module exports
+a typed record describing its provided services, activation roots,
+contributions, and IPC operations. `ProcessModuleHost` interprets the record;
+the module does not execute registration methods:
 
 ```ts
-module.provide(...);
-module.activate(...);
-module.contribute(...);
-module.ipc.handle(...);
+export const googleCalendarModule = {
+  id: "google-calendar",
+  provides: [{
+    name: "google.calendar",
+    definition: {
+      version: "1.0.0",
+      dependencies: [
+        { name: "database", version: "^1.0.0" },
+        { name: "digest.scheduler", version: "^1.0.0" },
+        { name: "google.authorization", version: "^1.0.0" },
+      ],
+      factory: createGoogleCalendarRuntime,
+    },
+  }],
+  activates: [{ name: "google.calendar", version: "^1.0.0" }],
+  contributes: [{
+    point: "digest.integration",
+    id: "google-calendar",
+    dependencies: [{ name: "google.calendar", version: "^1.0.0" }],
+    create: ({ get }) => get("google.calendar").plugin,
+  }],
+} satisfies ProcessModuleDefinition;
 ```
 
-The important difference is representation. Duct primarily transforms Clojure
-data; Digest modules execute TypeScript registration functions because they
-must connect typed services, Electron capabilities, and separately bundled
-renderer code. A future plugin manifest may add a data layer above this API,
-but the runtime module boundary will remain necessary.
+Factories and handlers remain executable leaf values inside the record. The
+composition itself is inert, inspectable data. Platform capabilities such as
+opening an external URL are ordinary declared services rather than constructor
+arguments used to assemble module objects. A future plugin manifest could be
+an even more restricted, serializable layer above the same model.
 
 ## Comparison with Visual Studio Code
 

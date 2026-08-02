@@ -1,16 +1,14 @@
-import { ProcessModule } from "../services/ProcessModule";
-import { SchedulerProbeModule } from "./development/SchedulerProbeModule";
-import { GoogleCalendarModule } from "./google-calendar/GoogleCalendarModule";
-import { GoogleAuthorizationModule } from "./google/GoogleAuthorizationModule";
+import { ProcessModuleDefinition } from "../services/ProcessModule";
+import { schedulerProbeModule } from "./development/SchedulerProbeModule";
+import { googleCalendarModule } from "./google-calendar/GoogleCalendarModule";
+import { googleAuthorizationModule } from "./google/GoogleAuthorizationModule";
 
-export const createBuiltInModules = (
-  openExternal: (url: string) => Promise<unknown>,
+const productionModules: readonly ProcessModuleDefinition[] = [
+  googleAuthorizationModule,
+  googleCalendarModule,
+];
+
+export const builtInModules = (
   development: boolean
-): ProcessModule[] => {
-  const modules: ProcessModule[] = [
-    new GoogleAuthorizationModule(openExternal),
-    new GoogleCalendarModule(openExternal),
-  ];
-  if (development) modules.push(new SchedulerProbeModule());
-  return modules;
-};
+): readonly ProcessModuleDefinition[] =>
+  development ? [...productionModules, schedulerProbeModule] : productionModules;

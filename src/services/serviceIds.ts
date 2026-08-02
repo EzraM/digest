@@ -14,6 +14,7 @@ export const SERVICE_IDS = {
   SEARCH_INDEX_MANAGER: "searchIndexManager",
   BRAVE_SEARCH_SERVICE: "braveSearchService",
   SCHEDULER: "digest.scheduler",
+  OPEN_EXTERNAL: "electron.open-external",
 } as const;
 
 export type ServiceId = (typeof SERVICE_IDS)[keyof typeof SERVICE_IDS];
