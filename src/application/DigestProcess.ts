@@ -1,5 +1,4 @@
-import { powerMonitor, session, shell } from "electron";
-import type Database from "better-sqlite3";
+import { powerMonitor, session } from "electron";
 import { registerAssetProtocol } from "../domains/assets/adapter/registerAssetProtocol";
 import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry";
 import { IPCRouter } from "../ipc/IPCRouter";
@@ -17,13 +16,14 @@ import {
   IntegrationRegistry,
 } from "../integrations/IntegrationPlugin";
 import { builtInModules } from "../integrations/builtInModules";
-import { ScheduledJobStore } from "../scheduler/ScheduledJobStore";
 import { Scheduler } from "../scheduler/Scheduler";
 import { isDevelopment } from "../config/development";
 import { CONTRIBUTION_POINTS } from "../services/contributionPoints";
 import { ModuleEventEnvelope, ModuleIPCRegistry } from "../services/ModuleIPCRegistry";
 import { ProcessModuleHost } from "../services/ProcessModule";
 import { SERVICE_IDS } from "../services/serviceIds";
+import { activateServices } from "../services/Container";
+import { digestProcessServices } from "./DigestProcessServices";
 
 export type OpenWindow = (
   initialHash?: string,
@@ -64,24 +64,9 @@ export class DigestProcess {
   async initialize() {
     const initialized = await this.applicationServices.initialize();
     if (!this.schedulerInstance) {
-      const store = new ScheduledJobStore(
-        initialized.services.database as Database.Database
-      );
-      const scheduler = new Scheduler(store);
       const container = this.applicationServices.container;
-      if (!container.has(SERVICE_IDS.SCHEDULER)) {
-        container.registerInstance(SERVICE_IDS.SCHEDULER, scheduler, {
-          version: "1.0.0",
-        });
-        await container.resolve(SERVICE_IDS.SCHEDULER);
-      }
-      if (!container.has(SERVICE_IDS.OPEN_EXTERNAL)) {
-        container.registerInstance(
-          SERVICE_IDS.OPEN_EXTERNAL,
-          (url: string) => shell.openExternal(url),
-          { version: "1.0.0" }
-        );
-      }
+      await activateServices(container, digestProcessServices);
+      const scheduler = container.get<Scheduler>(SERVICE_IDS.SCHEDULER);
       if (!this.modulesRegistered) {
         for (const module of builtInModules(isDevelopment())) {
           this.moduleHost.register(module);

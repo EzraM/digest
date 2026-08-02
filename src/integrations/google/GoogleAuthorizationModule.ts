@@ -19,28 +19,26 @@ export const googleAuthorizationModule = {
   provides: [
     {
       name: GOOGLE_AUTHORIZATION_SERVICE.name,
-      definition: {
-        version: GOOGLE_AUTHORIZATION_SERVICE.version,
-        dependencies: [
-          { name: SERVICE_IDS.DATABASE, version: "^1.0.0" },
-          { name: SERVICE_IDS.OPEN_EXTERNAL, version: "^1.0.0" },
-        ],
-        factory: (dependencies) => {
-          const database = dependencies.get<Database.Database>(
-            SERVICE_IDS.DATABASE
-          );
-          const openExternal = dependencies.get<
-            (url: string) => Promise<unknown>
-          >(SERVICE_IDS.OPEN_EXTERNAL);
-          const clientId = getEnvVar("GOOGLE_OAUTH_CLIENT_ID");
-          return new DefaultGoogleAuthorizationProvider(
-            clientId,
-            new IntegrationAccountStore(database),
-            new GoogleAuthorizationStore(database),
-            new SqliteCredentialStore(database, new ElectronSecretEncryption()),
-            new InstalledAppGoogleOAuthAuthorizer(clientId, openExternal)
-          );
-        },
+      version: GOOGLE_AUTHORIZATION_SERVICE.version,
+      dependencies: [
+        { name: SERVICE_IDS.DATABASE, version: "^1.0.0" },
+        { name: SERVICE_IDS.OPEN_EXTERNAL, version: "^1.0.0" },
+      ],
+      create: (dependencies) => {
+        const database = dependencies.get<Database.Database>(
+          SERVICE_IDS.DATABASE
+        );
+        const openExternal = dependencies.get<
+          (url: string) => Promise<unknown>
+        >(SERVICE_IDS.OPEN_EXTERNAL);
+        const clientId = getEnvVar("GOOGLE_OAUTH_CLIENT_ID");
+        return new DefaultGoogleAuthorizationProvider(
+          clientId,
+          new IntegrationAccountStore(database),
+          new GoogleAuthorizationStore(database),
+          new SqliteCredentialStore(database, new ElectronSecretEncryption()),
+          new InstalledAppGoogleOAuthAuthorizer(clientId, openExternal)
+        );
       },
     },
   ],

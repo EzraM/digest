@@ -50,26 +50,26 @@ describe("GoogleCalendarModule", () => {
         return authorization;
       },
     };
-    container.registerInstance(
-      SERVICE_IDS.DATABASE,
-      database,
-      { version: "1.0.0" }
-    );
-    container.registerInstance(
-      SERVICE_IDS.SCHEDULER,
-      { schedule: () => undefined, removeOwner: () => undefined },
-      { version: "1.0.0" }
-    );
-    container.registerInstance(
-      GOOGLE_AUTHORIZATION_SERVICE.name,
-      provider,
-      { version: GOOGLE_AUTHORIZATION_SERVICE.version }
-    );
-    container.registerInstance(
-      SERVICE_IDS.OPEN_EXTERNAL,
-      async () => undefined,
-      { version: "1.0.0" }
-    );
+    container.register({
+      name: SERVICE_IDS.DATABASE,
+      version: "1.0.0",
+      create: () => database,
+    });
+    container.register({
+      name: SERVICE_IDS.SCHEDULER,
+      version: "1.0.0",
+      create: () => ({ schedule: () => undefined, removeOwner: () => undefined }),
+    });
+    container.register({
+      name: GOOGLE_AUTHORIZATION_SERVICE.name,
+      version: GOOGLE_AUTHORIZATION_SERVICE.version,
+      create: () => provider,
+    });
+    container.register({
+      name: SERVICE_IDS.OPEN_EXTERNAL,
+      version: "1.0.0",
+      create: () => async () => undefined,
+    });
     const host = new ProcessModuleHost(container);
     host.register(googleCalendarModule);
 

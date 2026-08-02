@@ -5,19 +5,21 @@ import { emptyShape, shape } from "./ModuleProtocol";
 describe("ProcessModuleHost", () => {
   it("interprets declared services, roots, contributions, and operations", async () => {
     const container = new Container();
-    container.registerInstance("core.value", { value: 42 }, { version: "1.0.0" });
+    container.register({
+      name: "core.value",
+      version: "1.0.0",
+      create: () => ({ value: 42 }),
+    });
     const host = new ProcessModuleHost(container);
     const module = {
       id: "sample",
       provides: [
         {
           name: "sample.service",
-          definition: {
-            version: "1.0.0",
-            dependencies: [{ name: "core.value", version: "^1.0.0" }],
-            factory: (dependencies) =>
-              dependencies.get<{ value: number }>("core.value"),
-          },
+          version: "1.0.0",
+          dependencies: [{ name: "core.value", version: "^1.0.0" }],
+          create: (dependencies) =>
+            dependencies.get<{ value: number }>("core.value"),
         },
       ],
       activates: [{ name: "sample.service", version: "^1.0.0" }],
@@ -76,7 +78,7 @@ describe("ProcessModuleHost", () => {
 
   it("does not expose undeclared dependencies to contributions", async () => {
     const container = new Container();
-    container.registerInstance("secret", 42);
+    container.register({ name: "secret", create: () => 42 });
     const host = new ProcessModuleHost(container);
     host.register({
       id: "sample",

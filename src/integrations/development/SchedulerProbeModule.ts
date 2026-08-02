@@ -12,14 +12,12 @@ export const schedulerProbeModule = {
   provides: [
     {
       name: SCHEDULER_PROBE_SERVICE,
-      definition: {
-        dependencies: [{ name: SERVICE_IDS.SCHEDULER, version: "^1.0.0" }],
-        factory: (dependencies) =>
-          new SchedulerProbePlugin(
-            dependencies.get<Scheduler>(SERVICE_IDS.SCHEDULER),
-            (message) => log.debug(`Probe fired: ${message}`, "Scheduler")
-          ),
-      },
+      dependencies: [{ name: SERVICE_IDS.SCHEDULER, version: "^1.0.0" }],
+      create: (dependencies) =>
+        new SchedulerProbePlugin(
+          dependencies.get<Scheduler>(SERVICE_IDS.SCHEDULER),
+          (message) => log.debug(`Probe fired: ${message}`, "Scheduler")
+        ),
     },
   ],
   activates: [{ name: SCHEDULER_PROBE_SERVICE }],
