@@ -2,6 +2,8 @@
 
 This directory contains documentation for the Digest project.
 
+- **[module-composition.md](./module-composition.md)**: Container and module architecture, with comparisons to Atom, Clojure Component, Duct, and Visual Studio Code
+
 ## Directory Structure
 
 - **[product/](./product/)**: Product documentation
