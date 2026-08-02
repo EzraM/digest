@@ -36,6 +36,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     disconnect: (integrationId: string, accountId: string) =>
       ipcRenderer.invoke("integrations:disconnect", integrationId, accountId),
   },
+  calendar: {
+    upcoming: () => ipcRenderer.invoke("calendar:upcoming"),
+    join: (identity: import("./types/calendar").MeetingIdentity) =>
+      ipcRenderer.invoke("calendar:join", identity),
+    onMeetingReady: (
+      callback: (action: import("./types/calendar").MeetingAction) => void
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        action: import("./types/calendar").MeetingAction
+      ) => callback(action);
+      ipcRenderer.on("calendar:meeting-ready", handler);
+      return () => ipcRenderer.removeListener("calendar:meeting-ready", handler);
+    },
+  },
   windows: {
     openRoute: (route: {
       kind: "url" | "doc";

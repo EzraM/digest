@@ -13,6 +13,13 @@ import {
 } from "./browser";
 
 interface ElectronAPI {
+  calendar: {
+    upcoming: () => Promise<import("./calendar").MeetingAction[]>;
+    join: (identity: import("./calendar").MeetingIdentity) => Promise<void>;
+    onMeetingReady: (
+      callback: (action: import("./calendar").MeetingAction) => void
+    ) => () => void;
+  };
   integrations: {
     list: () => Promise<import("./integrations").IntegrationsView>;
     connect: (

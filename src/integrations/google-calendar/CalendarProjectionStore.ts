@@ -18,6 +18,12 @@ export interface ProjectedCalendarEvent {
   conferenceLinks: ReturnType<typeof extractConferenceLinks>;
 }
 
+export interface MeetingIdentity {
+  accountId: string;
+  calendarId: string;
+  eventId: string;
+}
+
 const eventTime = (value?: { date?: string; dateTime?: string }): number | null => {
   const source = value?.dateTime ?? (value?.date ? `${value.date}T00:00:00Z` : undefined);
   if (!source) return null;
@@ -106,6 +112,12 @@ export class CalendarProjectionStore {
           html_link = excluded.html_link,
           conference_links_json = excluded.conference_links_json,
           provider_updated_at = excluded.provider_updated_at,
+          join_notified_at = CASE
+            WHEN calendar_events.start_at IS NOT excluded.start_at
+              OR calendar_events.conference_links_json IS NOT excluded.conference_links_json
+            THEN NULL
+            ELSE calendar_events.join_notified_at
+          END,
           updated_at = excluded.updated_at
       `);
       const now = this.now();
@@ -145,6 +157,69 @@ export class CalendarProjectionStore {
       WHERE status != 'cancelled' AND start_at >= ? AND start_at <= ?
       ORDER BY start_at, end_at, event_id
     `).all(from, to) as Array<{
+      account_id: string;
+      calendar_id: string;
+      event_id: string;
+      title: string;
+      start_at: number | null;
+      end_at: number | null;
+      all_day: number;
+      html_link: string | null;
+      conference_links_json: string;
+    }>;
+    return rows.map((row) => ({
+      accountId: row.account_id,
+      calendarId: row.calendar_id,
+      eventId: row.event_id,
+      title: row.title,
+      startAt: row.start_at,
+      endAt: row.end_at,
+      allDay: row.all_day === 1,
+      htmlLink: row.html_link,
+      conferenceLinks: JSON.parse(row.conference_links_json),
+    }));
+  }
+
+  pendingMeetingActions(
+    accountId: string,
+    from: number,
+    to: number
+  ): ProjectedCalendarEvent[] {
+    return this.queryEvents(
+      `account_id = ? AND join_notified_at IS NULL
+       AND conference_links_json != '[]' AND start_at >= ? AND start_at <= ?`,
+      [accountId, from, to]
+    );
+  }
+
+  meeting(identity: MeetingIdentity): ProjectedCalendarEvent | null {
+    return this.queryEvents(
+      "account_id = ? AND calendar_id = ? AND event_id = ?",
+      [identity.accountId, identity.calendarId, identity.eventId]
+    )[0] ?? null;
+  }
+
+  markMeetingNotified(identity: MeetingIdentity, notifiedAt: number): void {
+    this.database.prepare(`
+      UPDATE calendar_events SET join_notified_at = ?, updated_at = ?
+      WHERE account_id = ? AND calendar_id = ? AND event_id = ?
+    `).run(
+      notifiedAt,
+      notifiedAt,
+      identity.accountId,
+      identity.calendarId,
+      identity.eventId
+    );
+  }
+
+  private queryEvents(where: string, parameters: unknown[]): ProjectedCalendarEvent[] {
+    const rows = this.database.prepare(`
+      SELECT account_id, calendar_id, event_id, title, start_at, end_at,
+             all_day, html_link, conference_links_json
+      FROM calendar_events
+      WHERE status != 'cancelled' AND ${where}
+      ORDER BY start_at, end_at, event_id
+    `).all(...parameters) as Array<{
       account_id: string;
       calendar_id: string;
       event_id: string;
