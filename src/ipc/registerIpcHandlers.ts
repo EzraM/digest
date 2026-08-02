@@ -185,7 +185,9 @@ export const registerIpcHandlers = ({
       windowRegistry,
       resolveProfileId,
       broadcastDocumentTree,
-      broadcastActiveDocument
+      broadcastActiveDocument,
+      (documentId) =>
+        services.searchIndexManager.reindexDocument(documentId, [])
     )
   );
   registerMap(

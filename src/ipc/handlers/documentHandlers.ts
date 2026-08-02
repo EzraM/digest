@@ -6,7 +6,8 @@ export function createDocumentHandlers(
   windowRegistry: WindowRegistry,
   profileIdResolver: () => string | null,
   broadcastDocumentTree: (profileId: string | null) => void,
-  broadcastActiveDocument: (rendererId?: number) => void
+  broadcastActiveDocument: (rendererId?: number) => void,
+  clearDocumentSearchIndex: (documentId: string) => Promise<void>
 ): IPCHandlerMap {
   return {
     "documents:get-active": {
@@ -71,6 +72,7 @@ export function createDocumentHandlers(
       type: "invoke",
       fn: async (_event, documentId: string) => {
         const result = await documentManager.deleteDocument(documentId);
+        await clearDocumentSearchIndex(documentId);
         broadcastDocumentTree(result.profileId);
         broadcastActiveDocument();
         return result;
