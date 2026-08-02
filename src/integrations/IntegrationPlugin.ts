@@ -12,11 +12,13 @@ export interface ConnectedIntegrationAccount {
   integrationId: string;
   providerAccountId: string;
   displayName: string;
+  email?: string;
 }
 
 export interface IntegrationPlugin {
   manifest: IntegrationManifest;
   jobHandlers: JobHandler[];
+  listAccounts?(): ConnectedIntegrationAccount[];
   start?(): void | Promise<void>;
   stop?(): void;
   connect?(): Promise<ConnectedIntegrationAccount>;
@@ -51,5 +53,23 @@ export class IntegrationRegistry {
 
   stop(): void {
     for (const plugin of this.plugins.values()) plugin.stop?.();
+  }
+
+  connectedAccounts(): ConnectedIntegrationAccount[] {
+    return [...this.plugins.values()].flatMap(
+      (plugin) => plugin.listAccounts?.() ?? []
+    );
+  }
+
+  async connect(id: string): Promise<ConnectedIntegrationAccount> {
+    const plugin = this.plugins.get(id);
+    if (!plugin?.connect) throw new Error(`Integration cannot connect: ${id}`);
+    return plugin.connect();
+  }
+
+  async disconnect(id: string, accountId: string): Promise<void> {
+    const plugin = this.plugins.get(id);
+    if (!plugin?.disconnect) throw new Error(`Integration cannot disconnect: ${id}`);
+    await plugin.disconnect(accountId);
   }
 }
