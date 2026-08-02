@@ -29,27 +29,28 @@ const EVENTS = {
 } as const;
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  modules: {
+    invoke: (moduleId: string, method: string, input: unknown) =>
+      ipcRenderer.invoke("modules:invoke", moduleId, method, input),
+    onEvent: (
+      callback: (
+        event: import("./services/ModuleIPCRegistry").ModuleEventEnvelope
+      ) => void
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        envelope: import("./services/ModuleIPCRegistry").ModuleEventEnvelope
+      ) => callback(envelope);
+      ipcRenderer.on("modules:event", handler);
+      return () => ipcRenderer.removeListener("modules:event", handler);
+    },
+  },
   integrations: {
     list: () => ipcRenderer.invoke("integrations:list"),
     connect: (integrationId: string) =>
       ipcRenderer.invoke("integrations:connect", integrationId),
     disconnect: (integrationId: string, accountId: string) =>
       ipcRenderer.invoke("integrations:disconnect", integrationId, accountId),
-  },
-  calendar: {
-    upcoming: () => ipcRenderer.invoke("calendar:upcoming"),
-    join: (identity: import("./types/calendar").MeetingIdentity) =>
-      ipcRenderer.invoke("calendar:join", identity),
-    onMeetingReady: (
-      callback: (action: import("./types/calendar").MeetingAction) => void
-    ) => {
-      const handler = (
-        _event: Electron.IpcRendererEvent,
-        action: import("./types/calendar").MeetingAction
-      ) => callback(action);
-      ipcRenderer.on("calendar:meeting-ready", handler);
-      return () => ipcRenderer.removeListener("calendar:meeting-ready", handler);
-    },
   },
   windows: {
     openRoute: (route: {

@@ -12,32 +12,17 @@ import { WindowPresentationStore } from "../services/WindowPresentationStore";
 import { createApplicationServices } from "./ApplicationServices";
 import { PlacementRegistry } from "./PlacementRegistry";
 import { WindowRegistry } from "./WindowRegistry";
-import { IntegrationRegistry } from "../integrations/IntegrationPlugin";
+import {
+  IntegrationPlugin,
+  IntegrationRegistry,
+} from "../integrations/IntegrationPlugin";
+import { createBuiltInModules } from "../integrations/builtInModules";
 import { ScheduledJobStore } from "../scheduler/ScheduledJobStore";
 import { Scheduler } from "../scheduler/Scheduler";
-import { log } from "../utils/mainLogger";
 import { isDevelopment } from "../config/development";
-import { SchedulerProbePlugin } from "../integrations/development/SchedulerProbePlugin";
-import { SqliteCredentialStore } from "../integrations/CredentialStore";
-import { ElectronSecretEncryption } from "../integrations/ElectronSecretEncryption";
-import { IntegrationAccountStore } from "../integrations/IntegrationAccountStore";
-import {
-  InstalledAppGoogleOAuthAuthorizer,
-} from "../integrations/google/GoogleOAuthAuthorizer";
-import { GoogleCalendarPlugin } from "../integrations/google-calendar/GoogleCalendarPlugin";
-import { getEnvVar } from "../config/environment";
-import {
-  GoogleCalendarClient,
-} from "../integrations/google-calendar/GoogleCalendarClient";
-import { CalendarProjectionStore } from "../integrations/google-calendar/CalendarProjectionStore";
-import { GoogleCalendarSyncService } from "../integrations/google-calendar/GoogleCalendarSyncService";
-import { MeetingJoinService } from "../integrations/google-calendar/MeetingJoinService";
-import { MeetingAction, MeetingIdentity } from "../types/calendar";
-import {
-  DefaultGoogleAuthorizationProvider,
-  GoogleAuthorizationProvider,
-} from "../integrations/google/GoogleAuthorizationService";
-import { GoogleAuthorizationStore } from "../integrations/google/GoogleAuthorizationStore";
+import { CONTRIBUTION_POINTS } from "../services/contributionPoints";
+import { ModuleEventEnvelope, ModuleIPCRegistry } from "../services/ModuleIPCRegistry";
+import { ProcessModuleHost } from "../services/ProcessModule";
 import { SERVICE_IDS } from "../services/serviceIds";
 
 export type OpenWindow = (
@@ -58,9 +43,15 @@ export class DigestProcess {
   });
   readonly ipcRouter = new IPCRouter();
   readonly integrationRegistry = new IntegrationRegistry();
+  readonly moduleIPC = new ModuleIPCRegistry();
+  readonly moduleHost = new ProcessModuleHost(
+    this.applicationServices.container,
+    this.moduleIPC
+  );
   private electronBound = false;
+  private modulesRegistered = false;
   private schedulerInstance: Scheduler | null = null;
-  private meetingJoinService: MeetingJoinService | null = null;
+  private unpublishModuleEvents: (() => void) | null = null;
   private readonly wakeScheduler = () => this.schedulerInstance?.wake();
 
   get scheduler(): Scheduler {
@@ -84,75 +75,20 @@ export class DigestProcess {
         });
         await container.resolve(SERVICE_IDS.SCHEDULER);
       }
-      if (!container.has(SERVICE_IDS.GOOGLE_AUTHORIZATION)) {
-        container.register(SERVICE_IDS.GOOGLE_AUTHORIZATION, {
-          version: "1.0.0",
-          dependencies: [{ name: SERVICE_IDS.DATABASE, version: "^1.0.0" }],
-          factory: () => {
-            const database = initialized.services.database as Database.Database;
-            const clientId = getEnvVar("GOOGLE_OAUTH_CLIENT_ID");
-            const openExternal = (url: string) => shell.openExternal(url);
-            return new DefaultGoogleAuthorizationProvider(
-              clientId,
-              new IntegrationAccountStore(database),
-              new GoogleAuthorizationStore(database),
-              new SqliteCredentialStore(database, new ElectronSecretEncryption()),
-              new InstalledAppGoogleOAuthAuthorizer(clientId, openExternal)
-            );
-          },
-        });
-      }
-      if (!this.integrationRegistry.get("google-calendar")) {
-        if (!container.has(SERVICE_IDS.GOOGLE_CALENDAR_PLUGIN)) {
-          container.register(SERVICE_IDS.GOOGLE_CALENDAR_PLUGIN, {
-            version: "1.0.0",
-            dependencies: [
-              { name: SERVICE_IDS.GOOGLE_AUTHORIZATION, version: "^1.0.0" },
-              { name: SERVICE_IDS.SCHEDULER, version: "^1.0.0" },
-              { name: SERVICE_IDS.DATABASE, version: "^1.0.0" },
-            ],
-            factory: (services) => {
-              const database = initialized.services.database as Database.Database;
-              const authorization = services
-                .get<GoogleAuthorizationProvider>(SERVICE_IDS.GOOGLE_AUTHORIZATION)
-                .forConsumer({
-                  consumerId: "google-calendar",
-                  scopes: [
-                    "https://www.googleapis.com/auth/calendar.readonly",
-                  ],
-                });
-              const projection = new CalendarProjectionStore(database);
-              const meetingActions = new MeetingJoinService(
-                projection,
-                scheduler,
-                (action) => this.publishMeetingAction(action)
-              );
-              this.meetingJoinService = meetingActions;
-              return new GoogleCalendarPlugin(
-                authorization,
-                scheduler,
-                new GoogleCalendarSyncService(
-                  new GoogleCalendarClient(authorization),
-                  projection
-                ),
-                meetingActions
-              );
-            },
-          });
+      if (!this.modulesRegistered) {
+        for (const module of createBuiltInModules(
+          (url) => shell.openExternal(url),
+          isDevelopment()
+        )) {
+          this.moduleHost.register(module);
         }
-        this.integrationRegistry.register(
-          await container.resolve<GoogleCalendarPlugin>(
-            SERVICE_IDS.GOOGLE_CALENDAR_PLUGIN,
-            "^1.0.0"
-          )
-        );
-      }
-      if (isDevelopment() && !this.integrationRegistry.get("scheduler-probe")) {
-        this.integrationRegistry.register(
-          new SchedulerProbePlugin(scheduler, (message) =>
-            log.debug(`Probe fired: ${message}`, "Scheduler")
-          )
-        );
+        this.modulesRegistered = true;
+        await this.moduleHost.activate();
+        for (const plugin of this.moduleHost.contributions.list<IntegrationPlugin>(
+          CONTRIBUTION_POINTS.INTEGRATION
+        )) {
+          this.integrationRegistry.register(plugin);
+        }
       }
       for (const handler of this.integrationRegistry.jobHandlers()) {
         scheduler.register(handler);
@@ -222,21 +158,16 @@ export class DigestProcess {
       fn: (_event, integrationId: string, accountId: string) =>
         this.integrationRegistry.disconnect(integrationId, accountId),
     });
-    this.ipcRouter.register("calendar:upcoming", {
+    this.ipcRouter.register("modules:invoke", {
       type: "invoke",
-      fn: () => {
-        const now = Date.now();
-        return this.meetingJoinService?.upcoming(now, now + 24 * 60 * 60_000) ?? [];
-      },
+      fn: (event, moduleId: string, method: string, input: unknown) =>
+        this.moduleIPC.invoke(moduleId, method, input, {
+          rendererId: event.sender.id,
+        }),
     });
-    this.ipcRouter.register("calendar:join", {
-      type: "invoke",
-      fn: async (_event, identity: MeetingIdentity) => {
-        const url = this.meetingJoinService?.joinUrl(identity);
-        if (!url) throw new Error("Meeting link is no longer available");
-        await shell.openExternal(url);
-      },
-    });
+    this.unpublishModuleEvents = this.moduleIPC.setPublisher((event) =>
+      this.publishModuleEvent(event)
+    );
     powerMonitor.on("resume", this.wakeScheduler);
     powerMonitor.on("unlock-screen", this.wakeScheduler);
     this.electronBound = true;
@@ -252,14 +183,16 @@ export class DigestProcess {
     this.integrationRegistry.stop();
     this.schedulerInstance?.stop();
     this.schedulerInstance = null;
-    this.meetingJoinService = null;
+    this.unpublishModuleEvents?.();
+    this.unpublishModuleEvents = null;
+    this.moduleHost.clear();
     this.applicationServices.dispose();
   }
 
-  private publishMeetingAction(action: MeetingAction): void {
+  private publishModuleEvent(event: ModuleEventEnvelope): void {
     for (const window of this.windowRegistry.list()) {
       if (!window.rendererView.webContents.isDestroyed()) {
-        window.rendererView.webContents.send("calendar:meeting-ready", action);
+        window.rendererView.webContents.send("modules:event", event);
       }
     }
   }

@@ -32,11 +32,9 @@ export function registerServices(container: Container): void {
   container.register(SERVICE_IDS.EVENT_LOGGER, {
     version: "1.0.0",
     dependencies: [SERVICE_IDS.DATABASE],
-    factory: async (c) => {
+    factory: async (dependencies) => {
       log.debug("Initializing EventLogger service", "ServiceRegistry");
-      const database = await c.resolve<Database.Database>(
-        SERVICE_IDS.DATABASE
-      );
+      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
       return initializeEventLogger(database);
     },
   });
@@ -45,11 +43,9 @@ export function registerServices(container: Container): void {
   container.register(SERVICE_IDS.PROFILE_MANAGER, {
     version: "1.0.0",
     dependencies: [SERVICE_IDS.DATABASE],
-    factory: async (c) => {
+    factory: async (dependencies) => {
       log.debug("Initializing ProfileManager service", "ServiceRegistry");
-      const database = await c.resolve<Database.Database>(
-        SERVICE_IDS.DATABASE
-      );
+      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
       return new ProfileManager(database);
     },
   });
@@ -58,14 +54,12 @@ export function registerServices(container: Container): void {
   container.register(SERVICE_IDS.DOCUMENT_MANAGER, {
     version: "1.0.0",
     dependencies: [SERVICE_IDS.DATABASE, SERVICE_IDS.PROFILE_MANAGER],
-    factory: async (c) => {
+    factory: async (dependencies) => {
       log.debug("Initializing DocumentManager service", "ServiceRegistry");
-      const database = await c.resolve<Database.Database>(
-        SERVICE_IDS.DATABASE
-      );
-      const profileManager = (await c.resolve(
+      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
+      const profileManager = dependencies.get<ProfileManager>(
         SERVICE_IDS.PROFILE_MANAGER
-      )) as ProfileManager;
+      );
       return new DocumentManager(database, profileManager);
     },
   });
@@ -84,11 +78,9 @@ export function registerServices(container: Container): void {
   container.register(SERVICE_IDS.ASSET_SERVICE, {
     version: "1.0.0",
     dependencies: [SERVICE_IDS.DATABASE],
-    factory: async (c) => {
+    factory: async (dependencies) => {
       log.debug("Initializing asset capability", "ServiceRegistry");
-      const database = await c.resolve<Database.Database>(
-        SERVICE_IDS.DATABASE
-      );
+      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
       return new AssetService(new SqliteAssetStore(database));
     },
   });
@@ -97,11 +89,9 @@ export function registerServices(container: Container): void {
   container.register(SERVICE_IDS.SEARCH_INDEX_MANAGER, {
     version: "1.0.0",
     dependencies: [SERVICE_IDS.DATABASE],
-    factory: async (c) => {
+    factory: async (dependencies) => {
       log.debug("Initializing SearchIndexManager", "ServiceRegistry");
-      const database = await c.resolve<Database.Database>(
-        SERVICE_IDS.DATABASE
-      );
+      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
       // Use FTS5 for full-text search (works offline, no API key required)
       return SearchIndexManager.initialize(database, {
         searchProvider: "fts5",

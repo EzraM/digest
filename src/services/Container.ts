@@ -5,7 +5,13 @@
 
 import semver from "semver";
 
-export type ServiceFactory<T = any> = (container: Container) => T | Promise<T>;
+export interface ResolvedDependencies {
+  get<T>(name: string): T;
+}
+
+export type ServiceFactory<T = any> = (
+  dependencies: ResolvedDependencies
+) => T | Promise<T>;
 
 export type ServiceDependency =
   | string
@@ -96,18 +102,24 @@ export class Container {
     
     try {
       // Resolve all dependencies first (topological sort)
-      if (definition.dependencies) {
-        for (const dependency of definition.dependencies) {
-          if (typeof dependency === "string") {
-            await this.resolve(dependency);
-          } else {
-            await this.resolve(dependency.name, dependency.version);
-          }
-        }
+      const dependencies = new Map<string, unknown>();
+      for (const dependency of definition.dependencies ?? []) {
+        const name = typeof dependency === "string" ? dependency : dependency.name;
+        const version = typeof dependency === "string" ? undefined : dependency.version;
+        dependencies.set(name, await this.resolve(name, version));
       }
 
       // Create the service instance
-      const instance = await definition.factory(this);
+      const instance = await definition.factory({
+        get: <Dependency>(dependencyName: string): Dependency => {
+          if (!dependencies.has(dependencyName)) {
+            throw new Error(
+              `Service ${name} did not declare dependency: ${dependencyName}`
+            );
+          }
+          return dependencies.get(dependencyName) as Dependency;
+        },
+      });
       
       // Cache singleton instances (default behavior)
       if (definition.singleton !== false) {
