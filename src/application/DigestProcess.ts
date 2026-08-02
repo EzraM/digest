@@ -16,7 +16,7 @@ import {
   IntegrationPlugin,
   IntegrationRegistry,
 } from "../integrations/IntegrationPlugin";
-import { createBuiltInModules } from "../integrations/builtInModules";
+import { builtInModules } from "../integrations/builtInModules";
 import { ScheduledJobStore } from "../scheduler/ScheduledJobStore";
 import { Scheduler } from "../scheduler/Scheduler";
 import { isDevelopment } from "../config/development";
@@ -75,11 +75,15 @@ export class DigestProcess {
         });
         await container.resolve(SERVICE_IDS.SCHEDULER);
       }
+      if (!container.has(SERVICE_IDS.OPEN_EXTERNAL)) {
+        container.registerInstance(
+          SERVICE_IDS.OPEN_EXTERNAL,
+          (url: string) => shell.openExternal(url),
+          { version: "1.0.0" }
+        );
+      }
       if (!this.modulesRegistered) {
-        for (const module of createBuiltInModules(
-          (url) => shell.openExternal(url),
-          isDevelopment()
-        )) {
+        for (const module of builtInModules(isDevelopment())) {
           this.moduleHost.register(module);
         }
         this.modulesRegistered = true;

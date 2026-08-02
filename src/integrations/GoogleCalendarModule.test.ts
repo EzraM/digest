@@ -11,7 +11,7 @@ import {
 import {
   GOOGLE_AUTHORIZATION_SERVICE,
 } from "./google/GoogleAuthorizationModule";
-import { GoogleCalendarModule } from "./google-calendar/GoogleCalendarModule";
+import { googleCalendarModule } from "./google-calendar/GoogleCalendarModule";
 
 describe("GoogleCalendarModule", () => {
   it("declares dependencies and contributes integration and typed IPC behavior", async () => {
@@ -65,8 +65,13 @@ describe("GoogleCalendarModule", () => {
       provider,
       { version: GOOGLE_AUTHORIZATION_SERVICE.version }
     );
+    container.registerInstance(
+      SERVICE_IDS.OPEN_EXTERNAL,
+      async () => undefined,
+      { version: "1.0.0" }
+    );
     const host = new ProcessModuleHost(container);
-    host.register(new GoogleCalendarModule(async () => undefined));
+    host.register(googleCalendarModule);
 
     await host.activate();
 

@@ -1,52 +1,102 @@
 import { Container } from "./Container";
-import { ProcessModuleHost } from "./ProcessModule";
+import { ProcessModuleDefinition, ProcessModuleHost } from "./ProcessModule";
+import { emptyShape, shape } from "./ModuleProtocol";
 
 describe("ProcessModuleHost", () => {
-  it("lets a module provide roots and publish contributions", async () => {
+  it("interprets declared services, roots, contributions, and operations", async () => {
     const container = new Container();
     container.registerInstance("core.value", { value: 42 }, { version: "1.0.0" });
     const host = new ProcessModuleHost(container);
-
-    host.register({
+    const module = {
       id: "sample",
-      register: (module) => {
-        module.provide("sample.service", {
-          version: "1.0.0",
-          dependencies: [{ name: "core.value", version: "^1.0.0" }],
-          factory: (dependencies) => {
-            const value = dependencies.get<{ value: number }>("core.value");
-            module.contribute("commands", "sample.run", value.value);
-            return value;
+      provides: [
+        {
+          name: "sample.service",
+          definition: {
+            version: "1.0.0",
+            dependencies: [{ name: "core.value", version: "^1.0.0" }],
+            factory: (dependencies) =>
+              dependencies.get<{ value: number }>("core.value"),
           },
-        });
-        module.activate("sample.service", "^1.0.0");
-      },
-    });
+        },
+      ],
+      activates: [{ name: "sample.service", version: "^1.0.0" }],
+      contributes: [
+        {
+          point: "commands",
+          id: "sample.run",
+          dependencies: [{ name: "sample.service", version: "^1.0.0" }],
+          create: (dependencies) =>
+            dependencies.get<{ value: number }>("sample.service").value,
+        },
+      ],
+      operations: [
+        {
+          name: "value",
+          request: { input: emptyShape, output: shape<number>((value) => Number(value)) },
+          dependencies: [{ name: "sample.service", version: "^1.0.0" }],
+          handle: (dependencies) =>
+            dependencies.get<{ value: number }>("sample.service").value,
+        },
+      ],
+    } satisfies ProcessModuleDefinition;
 
+    host.register(module);
     await host.activate();
 
     expect(host.contributions.get("commands", "sample.run")).toBe(42);
+    expect(
+      await host.moduleIPC.invoke("sample", "value", {}, { rendererId: 1 })
+    ).toBe(42);
   });
 
   it("rejects duplicate modules and contributions", () => {
     const host = new ProcessModuleHost(new Container());
-    const module = { id: "sample", register: () => undefined };
+    const module = { id: "sample" } satisfies ProcessModuleDefinition;
     host.register(module);
-    let duplicateModuleFailed = false;
+    let duplicateModuleError = "";
     try {
       host.register(module);
-    } catch {
-      duplicateModuleFailed = true;
+    } catch (error) {
+      duplicateModuleError = (error as Error).message;
     }
-    expect(duplicateModuleFailed).toBe(true);
+    expect(duplicateModuleError).toBe("Process module already registered: sample");
 
     host.contributions.add("commands", "sample.run", {});
-    let duplicateContributionFailed = false;
+    let duplicateContributionError = "";
     try {
       host.contributions.add("commands", "sample.run", {});
-    } catch {
-      duplicateContributionFailed = true;
+    } catch (error) {
+      duplicateContributionError = (error as Error).message;
     }
-    expect(duplicateContributionFailed).toBe(true);
+    expect(duplicateContributionError).toBe(
+      "Contribution already registered: commands/sample.run"
+    );
+  });
+
+  it("does not expose undeclared dependencies to contributions", async () => {
+    const container = new Container();
+    container.registerInstance("secret", 42);
+    const host = new ProcessModuleHost(container);
+    host.register({
+      id: "sample",
+      contributes: [
+        {
+          point: "commands",
+          id: "sample.run",
+          create: (dependencies) => dependencies.get("secret"),
+        },
+      ],
+    });
+
+    let activationError = "";
+    try {
+      await host.activate();
+    } catch (error) {
+      activationError = (error as Error).message;
+    }
+    expect(activationError).toBe(
+      "Module declaration did not declare dependency: secret"
+    );
   });
 });
