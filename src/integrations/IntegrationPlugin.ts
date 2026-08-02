@@ -1,15 +1,10 @@
 import { JobHandler } from "../scheduler/Scheduler";
 
-export type IntegrationPermission =
-  | { type: "external-account"; provider: string }
-  | { type: "background-network-access" }
-  | { type: "read-calendar-events" }
-  | { type: "open-external-url" };
-
 export interface IntegrationManifest {
   id: string;
   name: string;
-  permissions: IntegrationPermission[];
+  summary: string;
+  connectionDescription: string;
 }
 
 export interface ConnectedIntegrationAccount {
