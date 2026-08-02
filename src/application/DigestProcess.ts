@@ -21,7 +21,9 @@ import { SchedulerProbePlugin } from "../integrations/development/SchedulerProbe
 import { SqliteCredentialStore } from "../integrations/CredentialStore";
 import { ElectronSecretEncryption } from "../integrations/ElectronSecretEncryption";
 import { IntegrationAccountStore } from "../integrations/IntegrationAccountStore";
-import { BrowserGoogleOAuthAuthorizer } from "../integrations/google/GoogleOAuthAuthorizer";
+import {
+  InstalledAppGoogleOAuthAuthorizer,
+} from "../integrations/google/GoogleOAuthAuthorizer";
 import { GoogleCalendarPlugin } from "../integrations/google-calendar/GoogleCalendarPlugin";
 import { getEnvVar } from "../config/environment";
 import {
@@ -88,15 +90,14 @@ export class DigestProcess {
           dependencies: [{ name: SERVICE_IDS.DATABASE, version: "^1.0.0" }],
           factory: () => {
             const database = initialized.services.database as Database.Database;
+            const clientId = getEnvVar("GOOGLE_OAUTH_CLIENT_ID");
+            const openExternal = (url: string) => shell.openExternal(url);
             return new DefaultGoogleAuthorizationProvider(
-              getEnvVar("GOOGLE_OAUTH_CLIENT_ID"),
+              clientId,
               new IntegrationAccountStore(database),
               new GoogleAuthorizationStore(database),
               new SqliteCredentialStore(database, new ElectronSecretEncryption()),
-              new BrowserGoogleOAuthAuthorizer(
-                getEnvVar("GOOGLE_OAUTH_CLIENT_ID"),
-                (url) => shell.openExternal(url)
-              )
+              new InstalledAppGoogleOAuthAuthorizer(clientId, openExternal)
             );
           },
         });

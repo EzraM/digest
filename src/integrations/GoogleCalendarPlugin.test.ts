@@ -2,7 +2,9 @@ import { ScheduledJob } from "../scheduler/ScheduledJobStore";
 import { StoredIntegrationAccount } from "./IntegrationAccountStore";
 import { GoogleAuthorization } from "./google/GoogleAuthorizationService";
 import { GoogleCalendarPlugin } from "./google-calendar/GoogleCalendarPlugin";
-import { BrowserGoogleOAuthAuthorizer } from "./google/GoogleOAuthAuthorizer";
+import {
+  InstalledAppGoogleOAuthAuthorizer,
+} from "./google/GoogleOAuthAuthorizer";
 
 const account: StoredIntegrationAccount = {
   id: "google:scheduled-user",
@@ -64,11 +66,11 @@ describe("GoogleCalendarPlugin", () => {
   });
 });
 
-describe("BrowserGoogleOAuthAuthorizer", () => {
+describe("InstalledAppGoogleOAuthAuthorizer", () => {
   it("uses a loopback PKCE flow for caller-provided scopes", async () => {
     let authorizationUrl: URL | undefined;
     const calendarScope = "https://www.googleapis.com/auth/calendar.readonly";
-    const authorizer = new BrowserGoogleOAuthAuthorizer(
+    const authorizer = new InstalledAppGoogleOAuthAuthorizer(
       "desktop-client-id",
       async (url) => {
         authorizationUrl = new URL(url);
