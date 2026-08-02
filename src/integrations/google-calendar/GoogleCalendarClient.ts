@@ -1,5 +1,3 @@
-import { CredentialStore } from "../CredentialStore";
-import { IntegrationAccountStore } from "../IntegrationAccountStore";
 import { GoogleCalendarEventLike } from "./extractConferenceLinks";
 
 type Fetch = typeof fetch;
@@ -28,53 +26,13 @@ export interface GoogleCalendarDelta {
 
 export class GoogleSyncTokenExpiredError extends Error {}
 
-export class GoogleAccessTokenProvider {
-  private readonly cache = new Map<string, { token: string; expiresAt: number }>();
-
-  constructor(
-    private readonly clientId: string,
-    private readonly accounts: IntegrationAccountStore,
-    private readonly credentials: CredentialStore,
-    private readonly fetcher: Fetch = fetch,
-    private readonly now: () => number = () => Date.now()
-  ) {}
-
-  async accessToken(accountId: string): Promise<string> {
-    const cached = this.cache.get(accountId);
-    if (cached && cached.expiresAt - 60_000 > this.now()) return cached.token;
-    const account = this.accounts.get(accountId);
-    if (!account) throw new Error(`Unknown integration account: ${accountId}`);
-    const refreshToken = await this.credentials.read(account.credentialKey);
-    if (!refreshToken) throw new Error(`Missing credential for account: ${accountId}`);
-    const response = await this.fetcher("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: this.clientId,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token",
-      }),
-    });
-    if (!response.ok) throw new Error(`Google token refresh failed (${response.status})`);
-    const result = (await response.json()) as {
-      access_token: string;
-      expires_in: number;
-    };
-    this.cache.set(accountId, {
-      token: result.access_token,
-      expiresAt: this.now() + result.expires_in * 1_000,
-    });
-    return result.access_token;
-  }
-
-  forget(accountId: string): void {
-    this.cache.delete(accountId);
-  }
+export interface GoogleAccessTokens {
+  accessToken(accountId: string): Promise<string>;
 }
 
 export class GoogleCalendarClient {
   constructor(
-    private readonly tokens: GoogleAccessTokenProvider,
+    private readonly tokens: GoogleAccessTokens,
     private readonly fetcher: Fetch = fetch,
     private readonly now: () => number = () => Date.now()
   ) {}

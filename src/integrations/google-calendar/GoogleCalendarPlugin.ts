@@ -1,12 +1,8 @@
-import { CredentialStore } from "../CredentialStore";
-import {
-  IntegrationAccountStore,
-  StoredIntegrationAccount,
-} from "../IntegrationAccountStore";
 import { IntegrationPlugin } from "../IntegrationPlugin";
-import { GoogleOAuthAuthorizer } from "./GoogleOAuthAuthorizer";
 import { JobHandler, Scheduler } from "../../scheduler/Scheduler";
 import { MeetingJoinService } from "./MeetingJoinService";
+import { GoogleAuthorization } from "../google/GoogleAuthorizationService";
+import { StoredIntegrationAccount } from "../IntegrationAccountStore";
 
 interface CalendarSyncJobState {
   accountId: string;
@@ -27,9 +23,7 @@ export class GoogleCalendarPlugin implements IntegrationPlugin {
   readonly jobHandlers: JobHandler[];
 
   constructor(
-    private readonly accounts: IntegrationAccountStore,
-    private readonly credentials: CredentialStore,
-    private readonly authorizer: GoogleOAuthAuthorizer,
+    private readonly authorization: GoogleAuthorization,
     private readonly scheduler?: ScheduledJobs,
     private readonly syncService?: CalendarSync,
     private readonly meetingActions?: MeetingJoinService,
@@ -40,7 +34,7 @@ export class GoogleCalendarPlugin implements IntegrationPlugin {
           {
             kind: "google-calendar.sync",
             run: async (job) => {
-              if (!this.accounts.get(job.state.accountId)) return { complete: true };
+              if (!this.hasAccount(job.state.accountId)) return { complete: true };
               await syncService.sync(job.state.accountId);
               this.meetingActions?.reconcile(job.state.accountId);
               return {
@@ -62,41 +56,26 @@ export class GoogleCalendarPlugin implements IntegrationPlugin {
   }
 
   listAccounts(): StoredIntegrationAccount[] {
-    return this.accounts.list(this.manifest.id);
+    return this.authorization.accounts().map((account) => ({
+      ...account,
+      integrationId: this.manifest.id,
+    }));
   }
 
   async connect(): Promise<StoredIntegrationAccount> {
-    const grant = await this.authorizer.authorize();
-    const id = `${this.manifest.id}:${grant.providerAccountId}`;
-    const credentialKey = `${id}:refresh-token`;
-    await this.credentials.write(credentialKey, grant.refreshToken);
-    const account: StoredIntegrationAccount = {
-      id,
-      integrationId: this.manifest.id,
-      providerAccountId: grant.providerAccountId,
-      displayName: grant.displayName,
-      email: grant.email,
-      scopes: grant.scopes,
-      credentialKey,
-    };
-    try {
-      this.accounts.put(account);
-      this.scheduleSync(account.id, this.now());
-      return account;
-    } catch (error) {
-      await this.credentials.remove(credentialKey);
-      throw error;
-    }
+    const account = await this.authorization.connect();
+    this.scheduleSync(account.id, this.now());
+    return { ...account, integrationId: this.manifest.id };
   }
 
   async disconnect(accountId: string): Promise<void> {
-    const account = this.accounts.get(accountId);
-    if (!account || account.integrationId !== this.manifest.id) return;
-    const refreshToken = await this.credentials.read(account.credentialKey);
-    if (refreshToken) await this.authorizer.revoke(refreshToken);
-    this.scheduler?.removeOwner(account.id);
-    this.accounts.remove(account.id);
-    await this.credentials.remove(account.credentialKey);
+    if (!this.hasAccount(accountId)) return;
+    this.scheduler?.removeOwner(accountId);
+    await this.authorization.disconnect(accountId);
+  }
+
+  private hasAccount(accountId: string): boolean {
+    return this.authorization.accounts().some((account) => account.id === accountId);
   }
 
   private scheduleSync(accountId: string, runAt: number): void {
