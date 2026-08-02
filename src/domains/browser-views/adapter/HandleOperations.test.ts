@@ -68,8 +68,15 @@ describe("HandleOperations history preparation", () => {
     await tick();
     expect(settled).toBe(false);
 
+    emitter.emit(
+      "did-start-navigation",
+      {},
+      "https://target.test/",
+      false,
+      true
+    );
     history.activeIndex = 0;
-    emitter.emit("did-navigate", {}, "https://target.test/");
+    emitter.emit("dom-ready");
     expect(await preparation.completion).toEqual({
       success: true,
       value: { activeIndex: 0 },
@@ -103,9 +110,8 @@ describe("HandleOperations history preparation", () => {
   });
 
   it("survives randomized loading-event order without early success", async () => {
-    const eventNames = [
+    const noiseEvents = [
       "did-navigate",
-      "did-navigate-in-page",
       "did-finish-load",
       "did-stop-loading",
       "dom-ready",
@@ -131,7 +137,7 @@ describe("HandleOperations history preparation", () => {
 
       const noise = Array.from(
         { length: 1 + Math.floor(random() * 20) },
-        () => eventNames[Math.floor(random() * eventNames.length)]
+        () => noiseEvents[Math.floor(random() * noiseEvents.length)]
       );
       for (const event of noise) {
         emitter.emit(event, {}, "https://recent.test/", false, true);
@@ -149,8 +155,31 @@ describe("HandleOperations history preparation", () => {
       await tick();
       expect(settled).toBe(false);
 
+      // Electron may update the active index before its compositor swaps out
+      // the old page. No generic load event may complete preparation here.
       history.activeIndex = 0;
-      emitter.emit(eventNames[Math.floor(random() * eventNames.length)]);
+      emitter.emit("did-stop-loading");
+      emitter.emit("dom-ready");
+      await tick();
+      expect(settled).toBe(false);
+
+      emitter.emit(
+        "did-start-navigation",
+        {},
+        "https://target.test/",
+        false,
+        true
+      );
+      if (random() < 0.5) {
+        emitter.emit("dom-ready");
+      } else {
+        emitter.emit(
+          "did-navigate-in-page",
+          {},
+          "https://target.test/",
+          true
+        );
+      }
       const result = await preparation.completion;
       expect(result).toEqual({ success: true, value: { activeIndex: 0 } });
 

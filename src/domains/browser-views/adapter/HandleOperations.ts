@@ -75,18 +75,20 @@ export class HandleOperations {
     let cancel: () => void = () => undefined;
     const completion = new Promise<Result<{ activeIndex: number }>>((resolve) => {
       let settled = false;
-      const events = ['did-navigate', 'did-navigate-in-page', 'did-finish-load', 'did-stop-loading', 'dom-ready'];
+      let sawTargetNavigationStart = false;
       const finish = (result: Result<{ activeIndex: number }>) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
-        for (const event of events) webContents.removeListener(event as any, check as any);
+        webContents.removeListener('did-start-navigation' as any, started as any);
+        webContents.removeListener('dom-ready' as any, ready as any);
+        webContents.removeListener('did-navigate-in-page' as any, inPage as any);
         webContents.removeListener('did-fail-load' as any, fail as any);
         webContents.removeListener('render-process-gone' as any, gone as any);
         webContents.removeListener('destroyed' as any, destroyed as any);
         resolve(result);
       };
-      const check = () => {
+      const isTargetActive = () => {
         if (webContents.isDestroyed()) return destroyed();
         const history = webContents.navigationHistory;
         const activeIndex = history.getActiveIndex();
@@ -99,13 +101,44 @@ export class HandleOperations {
           finish({ success: true, value: { activeIndex } });
         }
       };
+      const started = (
+        _event: unknown,
+        url: string,
+        _isInPlace: boolean,
+        isMainFrame: boolean
+      ) => {
+        if (
+          isMainFrame &&
+          normalizeJourneyUrl(url) === normalizeJourneyUrl(requestedUrl)
+        ) {
+          sawTargetNavigationStart = true;
+        }
+      };
+      const ready = () => {
+        if (sawTargetNavigationStart) isTargetActive();
+      };
+      const inPage = (
+        _event: unknown,
+        url: string,
+        isMainFrame: boolean
+      ) => {
+        if (
+          sawTargetNavigationStart &&
+          isMainFrame &&
+          normalizeJourneyUrl(url) === normalizeJourneyUrl(requestedUrl)
+        ) {
+          isTargetActive();
+        }
+      };
       const fail = (_event: unknown, code: number, description: string, url: string, isMainFrame: boolean) => {
         if (isMainFrame && code !== -3) finish({ success: false, error: `History navigation failed for ${id}: ${description} (${code}) at ${url}` });
       };
       const gone = () => finish({ success: false, error: `Renderer exited while restoring history for ${id}` });
       const destroyed = () => finish({ success: false, error: `WebContents destroyed while restoring history for ${id}` });
       cancel = () => finish({ success: false, error: `History navigation did not start for ${id}` });
-      for (const event of events) webContents.on(event as any, check as any);
+      webContents.on('did-start-navigation' as any, started as any);
+      webContents.on('dom-ready' as any, ready as any);
+      webContents.on('did-navigate-in-page' as any, inPage as any);
       webContents.on('did-fail-load' as any, fail as any);
       webContents.on('render-process-gone' as any, gone as any);
       webContents.on('destroyed' as any, destroyed as any);
