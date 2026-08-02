@@ -13,6 +13,9 @@ export const SERVICE_IDS = {
   ASSET_SERVICE: "assetService",
   SEARCH_INDEX_MANAGER: "searchIndexManager",
   BRAVE_SEARCH_SERVICE: "braveSearchService",
+  SCHEDULER: "digest.scheduler",
+  GOOGLE_AUTHORIZATION: "google.authorization",
+  GOOGLE_CALENDAR_PLUGIN: "google.calendar",
 } as const;
 
 export type ServiceId = (typeof SERVICE_IDS)[keyof typeof SERVICE_IDS];

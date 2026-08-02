@@ -10,7 +10,7 @@ export interface GoogleOAuthGrant {
 }
 
 export interface GoogleOAuthAuthorizer {
-  authorize(): Promise<GoogleOAuthGrant>;
+  authorize(scopes: readonly string[]): Promise<GoogleOAuthGrant>;
   revoke(refreshToken: string): Promise<void>;
 }
 
@@ -80,7 +80,7 @@ export class BrowserGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer {
     private readonly fetcher: Fetch = fetch
   ) {}
 
-  async authorize(): Promise<GoogleOAuthGrant> {
+  async authorize(scopes: readonly string[]): Promise<GoogleOAuthGrant> {
     if (!this.clientId) throw new Error("GOOGLE_OAUTH_CLIENT_ID is not configured");
     const verifier = encode(randomBytes(48));
     const challenge = encode(createHash("sha256").update(verifier).digest());
@@ -91,12 +91,7 @@ export class BrowserGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer {
       client_id: this.clientId,
       redirect_uri: callback.redirectUri,
       response_type: "code",
-      scope: [
-        "openid",
-        "email",
-        "profile",
-        "https://www.googleapis.com/auth/calendar.readonly",
-      ].join(" "),
+      scope: [...new Set(scopes)].join(" "),
       access_type: "offline",
       prompt: "consent",
       code_challenge: challenge,

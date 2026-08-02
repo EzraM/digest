@@ -21,17 +21,22 @@ import { SchedulerProbePlugin } from "../integrations/development/SchedulerProbe
 import { SqliteCredentialStore } from "../integrations/CredentialStore";
 import { ElectronSecretEncryption } from "../integrations/ElectronSecretEncryption";
 import { IntegrationAccountStore } from "../integrations/IntegrationAccountStore";
-import { BrowserGoogleOAuthAuthorizer } from "../integrations/google-calendar/GoogleOAuthAuthorizer";
+import { BrowserGoogleOAuthAuthorizer } from "../integrations/google/GoogleOAuthAuthorizer";
 import { GoogleCalendarPlugin } from "../integrations/google-calendar/GoogleCalendarPlugin";
 import { getEnvVar } from "../config/environment";
 import {
-  GoogleAccessTokenProvider,
   GoogleCalendarClient,
 } from "../integrations/google-calendar/GoogleCalendarClient";
 import { CalendarProjectionStore } from "../integrations/google-calendar/CalendarProjectionStore";
 import { GoogleCalendarSyncService } from "../integrations/google-calendar/GoogleCalendarSyncService";
 import { MeetingJoinService } from "../integrations/google-calendar/MeetingJoinService";
 import { MeetingAction, MeetingIdentity } from "../types/calendar";
+import {
+  DefaultGoogleAuthorizationProvider,
+  GoogleAuthorizationProvider,
+} from "../integrations/google/GoogleAuthorizationService";
+import { GoogleAuthorizationStore } from "../integrations/google/GoogleAuthorizationStore";
+import { SERVICE_IDS } from "../services/serviceIds";
 
 export type OpenWindow = (
   initialHash?: string,
@@ -70,40 +75,74 @@ export class DigestProcess {
         initialized.services.database as Database.Database
       );
       const scheduler = new Scheduler(store);
+      const container = this.applicationServices.container;
+      if (!container.has(SERVICE_IDS.SCHEDULER)) {
+        container.registerInstance(SERVICE_IDS.SCHEDULER, scheduler, {
+          version: "1.0.0",
+        });
+        await container.resolve(SERVICE_IDS.SCHEDULER);
+      }
+      if (!container.has(SERVICE_IDS.GOOGLE_AUTHORIZATION)) {
+        container.register(SERVICE_IDS.GOOGLE_AUTHORIZATION, {
+          version: "1.0.0",
+          dependencies: [{ name: SERVICE_IDS.DATABASE, version: "^1.0.0" }],
+          factory: () => {
+            const database = initialized.services.database as Database.Database;
+            return new DefaultGoogleAuthorizationProvider(
+              getEnvVar("GOOGLE_OAUTH_CLIENT_ID"),
+              new IntegrationAccountStore(database),
+              new GoogleAuthorizationStore(database),
+              new SqliteCredentialStore(database, new ElectronSecretEncryption()),
+              new BrowserGoogleOAuthAuthorizer(
+                getEnvVar("GOOGLE_OAUTH_CLIENT_ID"),
+                (url) => shell.openExternal(url)
+              )
+            );
+          },
+        });
+      }
       if (!this.integrationRegistry.get("google-calendar")) {
-        const database = initialized.services.database as Database.Database;
-        const accounts = new IntegrationAccountStore(database);
-        const credentials = new SqliteCredentialStore(
-          database,
-          new ElectronSecretEncryption()
-        );
-        const clientId = getEnvVar("GOOGLE_OAUTH_CLIENT_ID");
-        const tokenProvider = new GoogleAccessTokenProvider(
-          clientId,
-          accounts,
-          credentials
-        );
-        const projection = new CalendarProjectionStore(database);
-        const meetingActions = new MeetingJoinService(
-          projection,
-          scheduler,
-          (action) => this.publishMeetingAction(action)
-        );
-        this.meetingJoinService = meetingActions;
+        if (!container.has(SERVICE_IDS.GOOGLE_CALENDAR_PLUGIN)) {
+          container.register(SERVICE_IDS.GOOGLE_CALENDAR_PLUGIN, {
+            version: "1.0.0",
+            dependencies: [
+              { name: SERVICE_IDS.GOOGLE_AUTHORIZATION, version: "^1.0.0" },
+              { name: SERVICE_IDS.SCHEDULER, version: "^1.0.0" },
+              { name: SERVICE_IDS.DATABASE, version: "^1.0.0" },
+            ],
+            factory: (services) => {
+              const database = initialized.services.database as Database.Database;
+              const authorization = services
+                .get<GoogleAuthorizationProvider>(SERVICE_IDS.GOOGLE_AUTHORIZATION)
+                .forConsumer({
+                  consumerId: "google-calendar",
+                  scopes: [
+                    "https://www.googleapis.com/auth/calendar.readonly",
+                  ],
+                });
+              const projection = new CalendarProjectionStore(database);
+              const meetingActions = new MeetingJoinService(
+                projection,
+                scheduler,
+                (action) => this.publishMeetingAction(action)
+              );
+              this.meetingJoinService = meetingActions;
+              return new GoogleCalendarPlugin(
+                authorization,
+                scheduler,
+                new GoogleCalendarSyncService(
+                  new GoogleCalendarClient(authorization),
+                  projection
+                ),
+                meetingActions
+              );
+            },
+          });
+        }
         this.integrationRegistry.register(
-          new GoogleCalendarPlugin(
-            accounts,
-            credentials,
-            new BrowserGoogleOAuthAuthorizer(
-              clientId,
-              (url) => shell.openExternal(url)
-            ),
-            scheduler,
-            new GoogleCalendarSyncService(
-              new GoogleCalendarClient(tokenProvider),
-              projection
-            ),
-            meetingActions
+          await container.resolve<GoogleCalendarPlugin>(
+            SERVICE_IDS.GOOGLE_CALENDAR_PLUGIN,
+            "^1.0.0"
           )
         );
       }

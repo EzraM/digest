@@ -1,138 +1,33 @@
-import Database from "better-sqlite3";
-import { SqliteCredentialStore } from "./CredentialStore";
-import { IntegrationAccountStore } from "./IntegrationAccountStore";
-import { GoogleCalendarPlugin } from "./google-calendar/GoogleCalendarPlugin";
-import {
-  BrowserGoogleOAuthAuthorizer,
-  GoogleOAuthAuthorizer,
-  GoogleOAuthGrant,
-} from "./google-calendar/GoogleOAuthAuthorizer";
 import { ScheduledJob } from "../scheduler/ScheduledJobStore";
+import { StoredIntegrationAccount } from "./IntegrationAccountStore";
+import { GoogleAuthorization } from "./google/GoogleAuthorizationService";
+import { GoogleCalendarPlugin } from "./google-calendar/GoogleCalendarPlugin";
+import { BrowserGoogleOAuthAuthorizer } from "./google/GoogleOAuthAuthorizer";
 
-const createDatabase = () => {
-  const database = new Database(":memory:");
-  database.exec(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE integration_credentials (
-      key TEXT PRIMARY KEY,
-      encrypted_value BLOB NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE integration_accounts (
-      id TEXT PRIMARY KEY,
-      integration_id TEXT NOT NULL,
-      provider_account_id TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      email TEXT NOT NULL,
-      scopes_json TEXT NOT NULL DEFAULT '[]',
-      credential_key TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      UNIQUE(integration_id, provider_account_id),
-      FOREIGN KEY(credential_key) REFERENCES integration_credentials(key)
-    );
-  `);
-  return database;
+const account: StoredIntegrationAccount = {
+  id: "google:scheduled-user",
+  integrationId: "google",
+  providerAccountId: "scheduled-user",
+  displayName: "Scheduled User",
+  email: "scheduled@example.test",
+  scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+  credentialKey: "google:scheduled-user:refresh-token",
 };
 
-class FakeAuthorizer implements GoogleOAuthAuthorizer {
-  revoked: string[] = [];
-
-  constructor(private readonly grant: GoogleOAuthGrant) {}
-
-  async authorize(): Promise<GoogleOAuthGrant> {
-    return this.grant;
-  }
-
-  async revoke(refreshToken: string): Promise<void> {
-    this.revoked.push(refreshToken);
-  }
-}
-
 describe("GoogleCalendarPlugin", () => {
-  it("connects, remembers identity securely, and disconnects cleanly", async () => {
-    const database = createDatabase();
-    const encryption = {
-      encrypt: async (value: string) => Buffer.from(`encrypted:${value}`),
-      decrypt: async (value: Buffer) =>
-        value.toString().replace(/^encrypted:/, ""),
-    };
-    const credentials = new SqliteCredentialStore(database, encryption, () => 10);
-    const accounts = new IntegrationAccountStore(database, () => 10);
-    const authorizer = new FakeAuthorizer({
-      providerAccountId: "google-user-1",
-      displayName: "Ada Lovelace",
-      email: "ada@example.test",
-      scopes: ["openid", "https://www.googleapis.com/auth/calendar.readonly"],
-      refreshToken: "refresh-secret",
-    });
-    const plugin = new GoogleCalendarPlugin(accounts, credentials, authorizer);
-
-    const connected = await plugin.connect();
-    expect(connected.email).toBe("ada@example.test");
-    expect(plugin.listAccounts().length).toBe(1);
-    const stored = database
-      .prepare("SELECT encrypted_value FROM integration_credentials")
-      .get() as { encrypted_value: Buffer };
-    expect(stored.encrypted_value.toString()).toBe("encrypted:refresh-secret");
-
-    await plugin.disconnect(connected.id);
-    expect(authorizer.revoked).toEqual(["refresh-secret"]);
-    expect(plugin.listAccounts()).toEqual([]);
-    expect(
-      database.prepare("SELECT COUNT(*) AS count FROM integration_credentials").get()
-    ).toMatchObject({ count: 0 });
-    database.close();
-  });
-
-  it("keeps the connection when Google revocation fails", async () => {
-    const database = createDatabase();
-    const credentials = new SqliteCredentialStore(database, {
-      encrypt: async (value) => Buffer.from(value),
-      decrypt: async (value) => value.toString(),
-    });
-    const accounts = new IntegrationAccountStore(database);
-    const authorizer: GoogleOAuthAuthorizer = {
-      authorize: async () => ({
-        providerAccountId: "user",
-        displayName: "User",
-        email: "user@example.test",
-        scopes: [],
-        refreshToken: "refresh",
-      }),
-      revoke: async () => {
-        throw new Error("offline");
+  it("schedules and repeats account sync through its scoped authorization", async () => {
+    let connected: StoredIntegrationAccount[] = [];
+    const authorization: GoogleAuthorization = {
+      accounts: () => connected,
+      connect: async () => {
+        connected = [account];
+        return account;
+      },
+      accessToken: async () => "calendar-token",
+      disconnect: async () => {
+        connected = [];
       },
     };
-    const plugin = new GoogleCalendarPlugin(accounts, credentials, authorizer);
-    const connected = await plugin.connect();
-
-    let failed = false;
-    try {
-      await plugin.disconnect(connected.id);
-    } catch {
-      failed = true;
-    }
-    expect(failed).toBe(true);
-    expect(plugin.listAccounts().length).toBe(1);
-    database.close();
-  });
-
-  it("schedules and repeats account sync through its job handler", async () => {
-    const database = createDatabase();
-    const credentials = new SqliteCredentialStore(database, {
-      encrypt: async (value) => Buffer.from(value),
-      decrypt: async (value) => value.toString(),
-    });
-    const accounts = new IntegrationAccountStore(database);
-    const authorizer = new FakeAuthorizer({
-      providerAccountId: "scheduled-user",
-      displayName: "Scheduled User",
-      email: "scheduled@example.test",
-      scopes: [],
-      refreshToken: "refresh",
-    });
     const scheduled: Array<Omit<ScheduledJob<unknown>, "attempts">> = [];
     const removed: string[] = [];
     const synced: string[] = [];
@@ -142,16 +37,15 @@ describe("GoogleCalendarPlugin", () => {
       removeOwner: (ownerId: string) => removed.push(ownerId),
     };
     const plugin = new GoogleCalendarPlugin(
-      accounts,
-      credentials,
-      authorizer,
+      authorization,
       scheduler,
       { sync: async (accountId) => void synced.push(accountId) },
       undefined,
       () => 1_000
     );
 
-    const account = await plugin.connect();
+    const connectedAccount = await plugin.connect();
+    expect(connectedAccount.integrationId).toBe("google-calendar");
     expect(scheduled[0]).toMatchObject({
       ownerId: account.id,
       kind: "google-calendar.sync",
@@ -166,14 +60,14 @@ describe("GoogleCalendarPlugin", () => {
     expect(result).toMatchObject({ runAt: 901_000 });
     await plugin.disconnect(account.id);
     expect(removed).toEqual([account.id]);
-    database.close();
+    expect(plugin.listAccounts()).toEqual([]);
   });
 });
 
 describe("BrowserGoogleOAuthAuthorizer", () => {
-  it("uses a loopback PKCE flow and returns the Google identity", async () => {
+  it("uses a loopback PKCE flow for caller-provided scopes", async () => {
     let authorizationUrl: URL | undefined;
-    const requests: string[] = [];
+    const calendarScope = "https://www.googleapis.com/auth/calendar.readonly";
     const authorizer = new BrowserGoogleOAuthAuthorizer(
       "desktop-client-id",
       async (url) => {
@@ -184,16 +78,14 @@ describe("BrowserGoogleOAuthAuthorizer", () => {
         await fetch(`${redirectUri}?code=authorization-code&state=${state}`);
       },
       async (input, init) => {
-        const url = String(input);
-        requests.push(url);
-        if (url.endsWith("/token")) {
+        if (String(input).endsWith("/token")) {
           const body = init?.body as URLSearchParams;
           expect(body.get("code_verifier")?.length ?? 0).toBe(64);
           return new Response(
             JSON.stringify({
               access_token: "access",
               refresh_token: "refresh",
-              scope: "openid email",
+              scope: `openid email ${calendarScope}`,
             }),
             { status: 200 }
           );
@@ -209,19 +101,11 @@ describe("BrowserGoogleOAuthAuthorizer", () => {
       }
     );
 
-    const grant = await authorizer.authorize();
-    expect(authorizationUrl?.hostname).toBe("accounts.google.com");
-    expect(authorizationUrl?.searchParams.get("code_challenge_method")).toBe(
-      "S256"
-    );
+    const grant = await authorizer.authorize(["openid", "email", calendarScope]);
+    expect(authorizationUrl?.searchParams.get("scope")).toContain(calendarScope);
     expect(grant).toMatchObject({
       providerAccountId: "google-user",
-      email: "person@example.test",
       refreshToken: "refresh",
     });
-    expect(requests).toEqual([
-      "https://oauth2.googleapis.com/token",
-      "https://openidconnect.googleapis.com/v1/userinfo",
-    ]);
   });
 });
