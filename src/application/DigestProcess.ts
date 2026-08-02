@@ -24,6 +24,12 @@ import { IntegrationAccountStore } from "../integrations/IntegrationAccountStore
 import { BrowserGoogleOAuthAuthorizer } from "../integrations/google-calendar/GoogleOAuthAuthorizer";
 import { GoogleCalendarPlugin } from "../integrations/google-calendar/GoogleCalendarPlugin";
 import { getEnvVar } from "../config/environment";
+import {
+  GoogleAccessTokenProvider,
+  GoogleCalendarClient,
+} from "../integrations/google-calendar/GoogleCalendarClient";
+import { CalendarProjectionStore } from "../integrations/google-calendar/CalendarProjectionStore";
+import { GoogleCalendarSyncService } from "../integrations/google-calendar/GoogleCalendarSyncService";
 
 export type OpenWindow = (
   initialHash?: string,
@@ -62,18 +68,30 @@ export class DigestProcess {
       );
       const scheduler = new Scheduler(store);
       if (!this.integrationRegistry.get("google-calendar")) {
+        const database = initialized.services.database as Database.Database;
+        const accounts = new IntegrationAccountStore(database);
+        const credentials = new SqliteCredentialStore(
+          database,
+          new ElectronSecretEncryption()
+        );
+        const clientId = getEnvVar("GOOGLE_OAUTH_CLIENT_ID");
+        const tokenProvider = new GoogleAccessTokenProvider(
+          clientId,
+          accounts,
+          credentials
+        );
         this.integrationRegistry.register(
           new GoogleCalendarPlugin(
-            new IntegrationAccountStore(
-              initialized.services.database as Database.Database
-            ),
-            new SqliteCredentialStore(
-              initialized.services.database as Database.Database,
-              new ElectronSecretEncryption()
-            ),
+            accounts,
+            credentials,
             new BrowserGoogleOAuthAuthorizer(
-              getEnvVar("GOOGLE_OAUTH_CLIENT_ID"),
+              clientId,
               (url) => shell.openExternal(url)
+            ),
+            scheduler,
+            new GoogleCalendarSyncService(
+              new GoogleCalendarClient(tokenProvider),
+              new CalendarProjectionStore(database)
             )
           )
         );

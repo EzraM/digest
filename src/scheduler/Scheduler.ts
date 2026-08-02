@@ -47,6 +47,11 @@ export class Scheduler {
     this.wake();
   }
 
+  removeOwner(ownerId: string): void {
+    this.store.removeOwner(ownerId);
+    this.wake();
+  }
+
   start(): void {
     if (this.running) return;
     this.running = true;
