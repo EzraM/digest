@@ -104,7 +104,8 @@ Key scenarios requiring seamless focus transitions:
 
 1. Install dependencies: `yarn install`
 2. Optional: Create `.env.local` with `BRAVE_SEARCH_API_KEY=your-key` for Brave web search in the workspace (no default; when missing, web search is disabled).
-3. Start development: `yarn start`
+3. To connect Google, create a Google OAuth client with application type `Desktop app` and set `GOOGLE_OAUTH_CLIENT_ID` in `.env.local`. Digest uses the system browser and a loopback PKCE callback; no client secret is stored in the application.
+4. Start development: `yarn start`
 
 ### Enable DevTools
 Edit `src/config/development.ts`:

@@ -31,7 +31,8 @@ const listenForAuthorizationCode = (
     const server = createServer((request, response) => {
       const address = server.address();
       if (!address || typeof address === "string" || !request.url) return;
-      const redirectUri = `http://127.0.0.1:${address.port}/oauth/google/callback`;
+      const redirectUri =
+        `http://127.0.0.1:${address.port}/oauth/google/callback`;
       const url = new URL(request.url, redirectUri);
       if (url.pathname !== "/oauth/google/callback") {
         response.writeHead(404).end();
@@ -44,12 +45,14 @@ const listenForAuthorizationCode = (
         response.writeHead(400, { "Content-Type": "text/plain" });
         response.end("Digest could not connect this Google account. You may close this tab.");
         server.close();
+        clearTimeout(timeout);
         rejectCode(new Error(error ?? "Invalid Google OAuth callback"));
         return;
       }
       response.writeHead(200, { "Content-Type": "text/plain" });
       response.end("Google is connected to Digest. You may close this tab.");
       server.close();
+      clearTimeout(timeout);
       resolveCode(code);
     });
     server.once("error", (error) => {
@@ -67,13 +70,61 @@ const listenForAuthorizationCode = (
         code,
       });
     });
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       server.close();
       rejectCode(new Error("Google authorization timed out"));
     }, 5 * 60_000).unref();
   });
 
-export class BrowserGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer {
+const exchangeCode = async (
+  fetcher: Fetch,
+  parameters: Record<string, string>
+): Promise<GoogleOAuthGrant> => {
+  const tokenResponse = await fetcher("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(parameters),
+  });
+  if (!tokenResponse.ok) {
+    throw new Error(`Google token exchange failed (${tokenResponse.status})`);
+  }
+  const tokens = (await tokenResponse.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    scope?: string;
+  };
+  if (!tokens.refresh_token) throw new Error("Google did not return a refresh token");
+  const profileResponse = await fetcher(
+    "https://openidconnect.googleapis.com/v1/userinfo",
+    { headers: { Authorization: `Bearer ${tokens.access_token}` } }
+  );
+  if (!profileResponse.ok) {
+    throw new Error(`Google profile lookup failed (${profileResponse.status})`);
+  }
+  const profile = (await profileResponse.json()) as {
+    sub: string;
+    email: string;
+    name?: string;
+  };
+  return {
+    providerAccountId: profile.sub,
+    displayName: profile.name ?? profile.email,
+    email: profile.email,
+    scopes: tokens.scope?.split(" ").filter(Boolean) ?? [],
+    refreshToken: tokens.refresh_token,
+  };
+};
+
+const revokeToken = async (fetcher: Fetch, refreshToken: string): Promise<void> => {
+  const response = await fetcher("https://oauth2.googleapis.com/revoke", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token: refreshToken }),
+  });
+  if (!response.ok) throw new Error(`Google token revocation failed (${response.status})`);
+};
+
+export class InstalledAppGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer {
   constructor(
     private readonly clientId: string,
     private readonly openExternal: (url: string) => Promise<unknown>,
@@ -104,12 +155,7 @@ export class BrowserGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer {
   }
 
   async revoke(refreshToken: string): Promise<void> {
-    const response = await this.fetcher("https://oauth2.googleapis.com/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ token: refreshToken }),
-    });
-    if (!response.ok) throw new Error(`Google token revocation failed (${response.status})`);
+    await revokeToken(this.fetcher, refreshToken);
   }
 
   private async exchange(
@@ -117,44 +163,12 @@ export class BrowserGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer {
     redirectUri: string,
     verifier: string
   ): Promise<GoogleOAuthGrant> {
-    const tokenResponse = await this.fetcher("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: this.clientId,
-        code,
-        code_verifier: verifier,
-        grant_type: "authorization_code",
-        redirect_uri: redirectUri,
-      }),
+    return exchangeCode(this.fetcher, {
+      client_id: this.clientId,
+      code,
+      code_verifier: verifier,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
     });
-    if (!tokenResponse.ok) {
-      throw new Error(`Google token exchange failed (${tokenResponse.status})`);
-    }
-    const tokens = (await tokenResponse.json()) as {
-      access_token: string;
-      refresh_token?: string;
-      scope?: string;
-    };
-    if (!tokens.refresh_token) throw new Error("Google did not return a refresh token");
-    const profileResponse = await this.fetcher(
-      "https://openidconnect.googleapis.com/v1/userinfo",
-      { headers: { Authorization: `Bearer ${tokens.access_token}` } }
-    );
-    if (!profileResponse.ok) {
-      throw new Error(`Google profile lookup failed (${profileResponse.status})`);
-    }
-    const profile = (await profileResponse.json()) as {
-      sub: string;
-      email: string;
-      name?: string;
-    };
-    return {
-      providerAccountId: profile.sub,
-      displayName: profile.name ?? profile.email,
-      email: profile.email,
-      scopes: tokens.scope?.split(" ").filter(Boolean) ?? [],
-      refreshToken: tokens.refresh_token,
-    };
   }
 }
