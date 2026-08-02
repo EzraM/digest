@@ -1,4 +1,5 @@
-import { session } from "electron";
+import { powerMonitor, session } from "electron";
+import type Database from "better-sqlite3";
 import { registerAssetProtocol } from "../domains/assets/adapter/registerAssetProtocol";
 import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry";
 import { IPCRouter } from "../ipc/IPCRouter";
@@ -11,6 +12,12 @@ import { WindowPresentationStore } from "../services/WindowPresentationStore";
 import { createApplicationServices } from "./ApplicationServices";
 import { PlacementRegistry } from "./PlacementRegistry";
 import { WindowRegistry } from "./WindowRegistry";
+import { IntegrationRegistry } from "../integrations/IntegrationPlugin";
+import { ScheduledJobStore } from "../scheduler/ScheduledJobStore";
+import { Scheduler } from "../scheduler/Scheduler";
+import { log } from "../utils/mainLogger";
+import { isDevelopment } from "../config/development";
+import { SchedulerProbePlugin } from "../integrations/development/SchedulerProbePlugin";
 
 export type OpenWindow = (
   initialHash?: string,
@@ -29,10 +36,40 @@ export class DigestProcess {
     handles: new HandleRegistry(),
   });
   readonly ipcRouter = new IPCRouter();
+  readonly integrationRegistry = new IntegrationRegistry();
   private electronBound = false;
+  private schedulerInstance: Scheduler | null = null;
+  private readonly wakeScheduler = () => this.schedulerInstance?.wake();
 
-  initialize() {
-    return this.applicationServices.initialize();
+  get scheduler(): Scheduler {
+    if (!this.schedulerInstance) {
+      throw new Error("DigestProcess has not been initialized");
+    }
+    return this.schedulerInstance;
+  }
+
+  async initialize() {
+    const initialized = await this.applicationServices.initialize();
+    if (!this.schedulerInstance) {
+      const store = new ScheduledJobStore(
+        initialized.services.database as Database.Database
+      );
+      const scheduler = new Scheduler(store);
+      if (isDevelopment() && !this.integrationRegistry.get("scheduler-probe")) {
+        this.integrationRegistry.register(
+          new SchedulerProbePlugin(scheduler, (message) =>
+            log.debug(`Probe fired: ${message}`, "Scheduler")
+          )
+        );
+      }
+      for (const handler of this.integrationRegistry.jobHandlers()) {
+        scheduler.register(handler);
+      }
+      scheduler.start();
+      this.schedulerInstance = scheduler;
+      await this.integrationRegistry.start();
+    }
+    return initialized;
   }
 
   async bindElectron(downloadManager: DownloadManager, openWindow: OpenWindow) {
@@ -76,11 +113,21 @@ export class DigestProcess {
       placementIdByRendererId: this.placementIdByRendererId,
       openWindow,
     });
+    powerMonitor.on("resume", this.wakeScheduler);
+    powerMonitor.on("unlock-screen", this.wakeScheduler);
     this.electronBound = true;
     return initialized;
   }
 
   dispose() {
+    if (this.electronBound) {
+      powerMonitor.removeListener("resume", this.wakeScheduler);
+      powerMonitor.removeListener("unlock-screen", this.wakeScheduler);
+      this.electronBound = false;
+    }
+    this.integrationRegistry.stop();
+    this.schedulerInstance?.stop();
+    this.schedulerInstance = null;
     this.applicationServices.dispose();
   }
 }

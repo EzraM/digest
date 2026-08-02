@@ -40,15 +40,29 @@ export class ScheduledJobStore {
     `).run({ ...job, stateJson: JSON.stringify(job.state), now });
   }
 
-  next(): ScheduledJob | null {
+  next(now = Date.now()): ScheduledJob | null {
     const row = this.db.prepare(`
       SELECT id, owner_id, kind, run_at, state_json, attempts
       FROM scheduled_jobs
-      WHERE lease_expires_at IS NULL OR lease_expires_at < ?
+      WHERE lease_expires_at IS NULL OR lease_expires_at <= ?
       ORDER BY run_at ASC
       LIMIT 1
-    `).get(Date.now()) as ScheduledJobRow | undefined;
+    `).get(now) as ScheduledJobRow | undefined;
     return row ? this.fromRow(row) : null;
+  }
+
+  nextRunAt(now = Date.now()): number | null {
+    const row = this.db.prepare(`
+      SELECT MIN(
+        CASE
+          WHEN lease_expires_at IS NOT NULL AND lease_expires_at > @now
+            THEN lease_expires_at
+          ELSE run_at
+        END
+      ) AS run_at
+      FROM scheduled_jobs
+    `).get({ now }) as { run_at: number | null };
+    return row.run_at;
   }
 
   claimDue(now: number, leaseMs: number): ScheduledJob[] {
@@ -57,7 +71,7 @@ export class ScheduledJobStore {
         SELECT id, owner_id, kind, run_at, state_json, attempts
         FROM scheduled_jobs
         WHERE run_at <= ?
-          AND (lease_expires_at IS NULL OR lease_expires_at < ?)
+          AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
         ORDER BY run_at ASC
       `).all(now, now) as ScheduledJobRow[];
       const leaseExpiresAt = now + leaseMs;
