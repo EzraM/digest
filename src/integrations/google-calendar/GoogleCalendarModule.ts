@@ -1,7 +1,11 @@
 import type Database from "better-sqlite3";
 import { Scheduler } from "../../scheduler/Scheduler";
 import { CONTRIBUTION_POINTS } from "../../services/contributionPoints";
-import { ProcessModuleDefinition } from "../../services/ProcessModule";
+import {
+  moduleIPCService,
+  ProcessModuleDefinition,
+} from "../../services/ProcessModule";
+import { ScopedModuleIPC } from "../../services/ModuleIPCRegistry";
 import { SERVICE_IDS } from "../../services/serviceIds";
 import {
   GoogleAuthorizationProvider,
@@ -36,53 +40,55 @@ export const googleCalendarModule = {
   provides: [
     {
       name: GOOGLE_CALENDAR_SERVICE.name,
-      definition: {
-        version: GOOGLE_CALENDAR_SERVICE.version,
-        dependencies: [
-          {
-            name: GOOGLE_AUTHORIZATION_SERVICE.name,
-            version: `^${GOOGLE_AUTHORIZATION_SERVICE.version}`,
-          },
-          { name: SERVICE_IDS.SCHEDULER, version: "^1.0.0" },
-          { name: SERVICE_IDS.DATABASE, version: "^1.0.0" },
-        ],
-        factory: (dependencies, context): GoogleCalendarRuntime => {
-          const database = dependencies.get<Database.Database>(
-            SERVICE_IDS.DATABASE
-          );
-          const scheduler = dependencies.get<Scheduler>(SERVICE_IDS.SCHEDULER);
-          const authorization = dependencies
-            .get<GoogleAuthorizationProvider>(GOOGLE_AUTHORIZATION_SERVICE.name)
-            .forConsumer({
-              consumerId: "google-calendar",
-              scopes: [
-                "https://www.googleapis.com/auth/calendar.readonly",
-              ],
-            });
-          const projection = new CalendarProjectionStore(database);
-          const meetings = new MeetingJoinService(
-            projection,
-            scheduler,
-            (meeting) =>
-              context.ipc.publish(
-                "meetingReady",
-                googleCalendarProtocol.events.meetingReady,
-                meeting
-              )
-          );
-          return {
-            meetings,
-            plugin: new GoogleCalendarPlugin(
-              authorization,
-              scheduler,
-              new GoogleCalendarSyncService(
-                new GoogleCalendarClient(authorization),
-                projection
-              ),
-              meetings
-            ),
-          };
+      version: GOOGLE_CALENDAR_SERVICE.version,
+      dependencies: [
+        {
+          name: GOOGLE_AUTHORIZATION_SERVICE.name,
+          version: `^${GOOGLE_AUTHORIZATION_SERVICE.version}`,
         },
+        { name: SERVICE_IDS.SCHEDULER, version: "^1.0.0" },
+        { name: SERVICE_IDS.DATABASE, version: "^1.0.0" },
+        moduleIPCService("google-calendar"),
+      ],
+      create: (dependencies): GoogleCalendarRuntime => {
+        const database = dependencies.get<Database.Database>(
+          SERVICE_IDS.DATABASE
+        );
+        const scheduler = dependencies.get<Scheduler>(SERVICE_IDS.SCHEDULER);
+        const ipc = dependencies.get<ScopedModuleIPC>(
+          moduleIPCService("google-calendar").name
+        );
+        const authorization = dependencies
+          .get<GoogleAuthorizationProvider>(GOOGLE_AUTHORIZATION_SERVICE.name)
+          .forConsumer({
+            consumerId: "google-calendar",
+            scopes: [
+              "https://www.googleapis.com/auth/calendar.readonly",
+            ],
+          });
+        const projection = new CalendarProjectionStore(database);
+        const meetings = new MeetingJoinService(
+          projection,
+          scheduler,
+          (meeting) =>
+            ipc.publish(
+              "meetingReady",
+              googleCalendarProtocol.events.meetingReady,
+              meeting
+            ),
+        );
+        return {
+          meetings,
+          plugin: new GoogleCalendarPlugin(
+            authorization,
+            scheduler,
+            new GoogleCalendarSyncService(
+              new GoogleCalendarClient(authorization),
+              projection
+            ),
+            meetings
+          ),
+        };
       },
     },
   ],

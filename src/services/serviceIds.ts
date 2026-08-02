@@ -18,20 +18,3 @@ export const SERVICE_IDS = {
 } as const;
 
 export type ServiceId = (typeof SERVICE_IDS)[keyof typeof SERVICE_IDS];
-
-/**
- * Startup order for eagerly initialized services.
- *
- * Dependencies are still enforced by the container graph, but this sequence
- * makes startup intent explicit and easier to review.
- */
-export const CORE_SERVICE_BOOT_ORDER: readonly ServiceId[] = [
-  SERVICE_IDS.DATABASE,
-  SERVICE_IDS.EVENT_LOGGER,
-  SERVICE_IDS.PROFILE_MANAGER,
-  SERVICE_IDS.DOCUMENT_MANAGER,
-  SERVICE_IDS.DEBUG_EVENT_SERVICE,
-  SERVICE_IDS.ASSET_SERVICE,
-  SERVICE_IDS.SEARCH_INDEX_MANAGER,
-  SERVICE_IDS.BRAVE_SEARCH_SERVICE,
-] as const;

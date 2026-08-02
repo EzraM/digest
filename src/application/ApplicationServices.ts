@@ -1,10 +1,9 @@
 import Database from "better-sqlite3";
 import { blockNoteEditor } from "../domains/notebook-content/application/BlockNoteRuntime";
-import { Container } from "../services/Container";
+import { activateServices, Container } from "../services/Container";
 import {
+  coreServices,
   getServices,
-  initializeAllServices,
-  registerServices,
 } from "../services/ServiceRegistry";
 import { log } from "../utils/mainLogger";
 import { CanonicalDerivedDataCoordinator } from "./CanonicalDerivedDataCoordinator";
@@ -30,8 +29,9 @@ export const createApplicationServices = (): ApplicationServices => {
     if (initialization) return initialization;
 
     initialization = (async () => {
-      registerServices(container);
-      await initializeAllServices(container);
+      log.debug("Starting service initialization", "ServiceRegistry");
+      await activateServices(container, coreServices);
+      log.debug("All services initialized successfully", "ServiceRegistry");
       const services = getServices(container);
       const collaborationDocuments = new CollaborationDocumentService(
         services.database as Database.Database,

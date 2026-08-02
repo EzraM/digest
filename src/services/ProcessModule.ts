@@ -1,46 +1,27 @@
 import {
   Container,
   ResolvedDependencies,
-  ServiceDefinition,
-  ServiceDependency,
+  ServiceCatalog,
+  ServiceReference,
 } from "./Container";
 import { ContributionRegistry } from "./ContributionRegistry";
 import {
   ModuleIPCContext,
   ModuleIPCRegistry,
-  ScopedModuleIPC,
 } from "./ModuleIPCRegistry";
 import { RequestShape } from "./ModuleProtocol";
-
-export interface ServiceReference {
-  readonly name: string;
-  readonly version?: string;
-}
-
-export interface ModuleServiceDefinition<T = unknown>
-  extends Omit<ServiceDefinition<T>, "factory"> {
-  readonly factory: (
-    dependencies: ResolvedDependencies,
-    context: { readonly ipc: ScopedModuleIPC }
-  ) => T | Promise<T>;
-}
-
-export interface ProvidedService<T = unknown> {
-  readonly name: string;
-  readonly definition: ModuleServiceDefinition<T>;
-}
 
 export interface ModuleContribution<T = unknown> {
   readonly point: string;
   readonly id: string;
-  readonly dependencies?: readonly ServiceDependency[];
+  readonly dependencies?: readonly ServiceReference[];
   readonly create: (dependencies: ResolvedDependencies) => T | Promise<T>;
 }
 
 export interface ModuleOperation<Input = unknown, Output = unknown> {
   readonly name: string;
   readonly request: RequestShape<Input, Output>;
-  readonly dependencies?: readonly ServiceDependency[];
+  readonly dependencies?: readonly ServiceReference[];
   readonly handle: (
     dependencies: ResolvedDependencies,
     input: Input,
@@ -49,11 +30,12 @@ export interface ModuleOperation<Input = unknown, Output = unknown> {
 }
 
 /** An inert description of the process capabilities supplied by a module. */
-export interface ProcessModuleDefinition {
+export interface ProcessModuleDefinition extends ServiceCatalog {
   readonly id: string;
-  readonly provides?: readonly ProvidedService[];
-  readonly activates?: readonly ServiceReference[];
   readonly contributes?: readonly ModuleContribution[];
+  // Operation input/output types differ within one module and are retained by
+  // each declaration; the host only needs their common runtime shape.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly operations?: readonly ModuleOperation<any, any>[];
 }
 
@@ -74,13 +56,14 @@ export class ProcessModuleHost {
     }
     this.modules.add(module.id);
     const ipc = this.moduleIPC.forModule(module.id);
+    this.container.register({
+      ...moduleIPCService(module.id),
+      version: "1.0.0",
+      create: () => ipc,
+    });
 
     for (const service of module.provides ?? []) {
-      const { factory, ...definition } = service.definition;
-      this.container.register(service.name, {
-        ...definition,
-        factory: (dependencies) => factory(dependencies, { ipc }),
-      });
+      this.container.register(service);
     }
     this.roots.push(...(module.activates ?? []));
     this.pendingContributions.push(...(module.contributes ?? []));
@@ -121,14 +104,14 @@ export class ProcessModuleHost {
   }
 
   private async resolveDependencies(
-    dependencies: readonly ServiceDependency[] = []
+    dependencies: readonly ServiceReference[] = []
   ): Promise<ResolvedDependencies> {
     const resolved = new Map<string, unknown>();
     for (const dependency of dependencies) {
-      const name = typeof dependency === "string" ? dependency : dependency.name;
-      const version =
-        typeof dependency === "string" ? undefined : dependency.version;
-      resolved.set(name, await this.container.resolve(name, version));
+      resolved.set(
+        dependency.name,
+        await this.container.resolve(dependency.name, dependency.version)
+      );
     }
     return {
       get: <T>(name: string): T => {
@@ -140,3 +123,8 @@ export class ProcessModuleHost {
     };
   }
 }
+
+export const moduleIPCService = (moduleId: string): ServiceReference => ({
+  name: `digest.module-ipc/${moduleId}`,
+  version: "^1.0.0",
+});

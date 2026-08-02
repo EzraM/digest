@@ -1,137 +1,122 @@
-import { Container } from "./Container";
-import { CORE_SERVICE_BOOT_ORDER, SERVICE_IDS } from "./serviceIds";
+import type Database from "better-sqlite3";
 import { DatabaseManager } from "../database/DatabaseManager";
-import { initializeEventLogger } from "./EventLogger";
-import { getDebugEventService, DebugEventService } from "./DebugEventService";
-import { log } from "../utils/mainLogger";
-import { ProfileManager } from "./ProfileManager";
-import { DocumentManager } from "./DocumentManager";
 import { AssetService } from "../domains/assets/application/AssetService";
 import { SqliteAssetStore } from "../domains/assets/adapter/SqliteAssetStore";
-import { SearchIndexManager } from "../domains/search/services/SearchIndexManager";
 import { BraveSearchService } from "../domains/search/services/BraveSearchService";
-import type Database from "better-sqlite3";
+import { SearchIndexManager } from "../domains/search/services/SearchIndexManager";
+import { log } from "../utils/mainLogger";
+import { Container, ServiceCatalog } from "./Container";
+import { DebugEventService, getDebugEventService } from "./DebugEventService";
+import { DocumentManager } from "./DocumentManager";
+import { initializeEventLogger } from "./EventLogger";
+import { ProfileManager } from "./ProfileManager";
+import { SERVICE_IDS } from "./serviceIds";
 
-/**
- * Service registry that defines all application services and their dependencies
- * This is where we explicitly declare the dependency graph
- */
-export function registerServices(container: Container): void {
-  // Database - foundational service with no dependencies
-  container.register(SERVICE_IDS.DATABASE, {
-    version: "1.0.0",
-    factory: async () => {
-      log.debug("Initializing database service", "ServiceRegistry");
-      const dbManager = DatabaseManager.getInstance();
-      await dbManager.initialize();
-      return dbManager.getDatabase();
+/** The core process services and the roots Digest starts eagerly. */
+export const coreServices = {
+  provides: [
+    {
+      name: SERVICE_IDS.DATABASE,
+      version: "1.0.0",
+      create: async () => {
+        log.debug("Initializing database service", "ServiceRegistry");
+        const manager = DatabaseManager.getInstance();
+        await manager.initialize();
+        return manager.getDatabase();
+      },
     },
-  });
-
-  // EventLogger - depends on database
-  container.register(SERVICE_IDS.EVENT_LOGGER, {
-    version: "1.0.0",
-    dependencies: [SERVICE_IDS.DATABASE],
-    factory: async (dependencies) => {
-      log.debug("Initializing EventLogger service", "ServiceRegistry");
-      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
-      return initializeEventLogger(database);
+    {
+      name: SERVICE_IDS.EVENT_LOGGER,
+      version: "1.0.0",
+      dependencies: [{ name: SERVICE_IDS.DATABASE }],
+      create: async (dependencies) => {
+        log.debug("Initializing EventLogger service", "ServiceRegistry");
+        return initializeEventLogger(
+          dependencies.get<Database.Database>(SERVICE_IDS.DATABASE)
+        );
+      },
     },
-  });
-
-  // ProfileManager - depends on database
-  container.register(SERVICE_IDS.PROFILE_MANAGER, {
-    version: "1.0.0",
-    dependencies: [SERVICE_IDS.DATABASE],
-    factory: async (dependencies) => {
-      log.debug("Initializing ProfileManager service", "ServiceRegistry");
-      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
-      return new ProfileManager(database);
+    {
+      name: SERVICE_IDS.PROFILE_MANAGER,
+      version: "1.0.0",
+      dependencies: [{ name: SERVICE_IDS.DATABASE }],
+      create: async (dependencies) => {
+        log.debug("Initializing ProfileManager service", "ServiceRegistry");
+        return new ProfileManager(
+          dependencies.get<Database.Database>(SERVICE_IDS.DATABASE)
+        );
+      },
     },
-  });
-
-  // DocumentManager - depends on database and profileManager
-  container.register(SERVICE_IDS.DOCUMENT_MANAGER, {
-    version: "1.0.0",
-    dependencies: [SERVICE_IDS.DATABASE, SERVICE_IDS.PROFILE_MANAGER],
-    factory: async (dependencies) => {
-      log.debug("Initializing DocumentManager service", "ServiceRegistry");
-      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
-      const profileManager = dependencies.get<ProfileManager>(
-        SERVICE_IDS.PROFILE_MANAGER
-      );
-      return new DocumentManager(database, profileManager);
+    {
+      name: SERVICE_IDS.DOCUMENT_MANAGER,
+      version: "1.0.0",
+      dependencies: [
+        { name: SERVICE_IDS.DATABASE },
+        { name: SERVICE_IDS.PROFILE_MANAGER },
+      ],
+      create: async (dependencies) => {
+        log.debug("Initializing DocumentManager service", "ServiceRegistry");
+        return new DocumentManager(
+          dependencies.get<Database.Database>(SERVICE_IDS.DATABASE),
+          dependencies.get<ProfileManager>(SERVICE_IDS.PROFILE_MANAGER)
+        );
+      },
     },
-  });
-
-  // DebugEventService - depends on eventLogger being available
-  container.register(SERVICE_IDS.DEBUG_EVENT_SERVICE, {
-    version: "1.0.0",
-    dependencies: [SERVICE_IDS.EVENT_LOGGER],
-    factory: async () => {
-      log.debug("Initializing DebugEventService", "ServiceRegistry");
-      // EventLogger is guaranteed to be initialized at this point
-      return getDebugEventService();
+    {
+      name: SERVICE_IDS.DEBUG_EVENT_SERVICE,
+      version: "1.0.0",
+      dependencies: [{ name: SERVICE_IDS.EVENT_LOGGER }],
+      create: async () => {
+        log.debug("Initializing DebugEventService", "ServiceRegistry");
+        return getDebugEventService();
+      },
     },
-  });
-
-  container.register(SERVICE_IDS.ASSET_SERVICE, {
-    version: "1.0.0",
-    dependencies: [SERVICE_IDS.DATABASE],
-    factory: async (dependencies) => {
-      log.debug("Initializing asset capability", "ServiceRegistry");
-      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
-      return new AssetService(new SqliteAssetStore(database));
+    {
+      name: SERVICE_IDS.ASSET_SERVICE,
+      version: "1.0.0",
+      dependencies: [{ name: SERVICE_IDS.DATABASE }],
+      create: async (dependencies) => {
+        log.debug("Initializing asset capability", "ServiceRegistry");
+        return new AssetService(
+          new SqliteAssetStore(
+            dependencies.get<Database.Database>(SERVICE_IDS.DATABASE)
+          )
+        );
+      },
     },
-  });
-
-  // SearchIndexManager - depends on database
-  container.register(SERVICE_IDS.SEARCH_INDEX_MANAGER, {
-    version: "1.0.0",
-    dependencies: [SERVICE_IDS.DATABASE],
-    factory: async (dependencies) => {
-      log.debug("Initializing SearchIndexManager", "ServiceRegistry");
-      const database = dependencies.get<Database.Database>(SERVICE_IDS.DATABASE);
-      // Use FTS5 for full-text search (works offline, no API key required)
-      return SearchIndexManager.initialize(database, {
-        searchProvider: "fts5",
-      });
+    {
+      name: SERVICE_IDS.SEARCH_INDEX_MANAGER,
+      version: "1.0.0",
+      dependencies: [{ name: SERVICE_IDS.DATABASE }],
+      create: async (dependencies) => {
+        log.debug("Initializing SearchIndexManager", "ServiceRegistry");
+        return SearchIndexManager.initialize(
+          dependencies.get<Database.Database>(SERVICE_IDS.DATABASE),
+          { searchProvider: "fts5" }
+        );
+      },
     },
-  });
-
-  // BraveSearchService - no deps; uses getEnvVar("BRAVE_SEARCH_API_KEY")
-  container.register(SERVICE_IDS.BRAVE_SEARCH_SERVICE, {
-    version: "1.0.0",
-    dependencies: [],
-    factory: async () => {
-      log.debug("Initializing BraveSearchService", "ServiceRegistry");
-      return new BraveSearchService();
+    {
+      name: SERVICE_IDS.BRAVE_SEARCH_SERVICE,
+      version: "1.0.0",
+      create: async () => {
+        log.debug("Initializing BraveSearchService", "ServiceRegistry");
+        return new BraveSearchService();
+      },
     },
-  });
+  ],
+  activates: [
+    { name: SERVICE_IDS.DATABASE },
+    { name: SERVICE_IDS.EVENT_LOGGER },
+    { name: SERVICE_IDS.PROFILE_MANAGER },
+    { name: SERVICE_IDS.DOCUMENT_MANAGER },
+    { name: SERVICE_IDS.DEBUG_EVENT_SERVICE },
+    { name: SERVICE_IDS.ASSET_SERVICE },
+    { name: SERVICE_IDS.SEARCH_INDEX_MANAGER },
+    { name: SERVICE_IDS.BRAVE_SEARCH_SERVICE },
+  ],
+} satisfies ServiceCatalog;
 
-}
-
-/**
- * Initialize all core services in dependency order
- * Call this once during app startup
- */
-export async function initializeAllServices(
-  container: Container
-): Promise<void> {
-  log.debug("Starting service initialization", "ServiceRegistry");
-
-  // Resolve services sequentially to avoid race conditions
-  // (Container handles dependencies automatically)
-  for (const serviceId of CORE_SERVICE_BOOT_ORDER) {
-    await container.resolve(serviceId);
-  }
-
-  log.debug("All services initialized successfully", "ServiceRegistry");
-}
-
-/**
- * Get typed service instances (convenience methods)
- */
 export function getServices(container: Container) {
   return {
     database: container.get(SERVICE_IDS.DATABASE),

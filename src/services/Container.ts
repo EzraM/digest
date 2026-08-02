@@ -9,58 +9,64 @@ export interface ResolvedDependencies {
   get<T>(name: string): T;
 }
 
-export type ServiceFactory<T = any> = (
+export interface ServiceReference {
+  readonly name: string;
+  readonly version?: string;
+}
+
+export type ServiceCreator<T = unknown> = (
   dependencies: ResolvedDependencies
 ) => T | Promise<T>;
 
-export type ServiceDependency =
-  | string
-  | { name: string; version?: string };
-
-export interface ServiceDefinition<T = any> {
-  /** Factory function that creates the service instance */
-  factory: ServiceFactory<T>;
+/** An inert declaration interpreted by Container. */
+export interface ServiceDeclaration<T = unknown> {
+  readonly name: string;
+  /** Function that creates the service instance */
+  readonly create: ServiceCreator<T>;
   /** Service names this service depends on */
-  dependencies?: readonly ServiceDependency[];
+  readonly dependencies?: readonly ServiceReference[];
   /** Whether to cache the instance (default: true) */
-  singleton?: boolean;
+  readonly singleton?: boolean;
   /** Optional semantic version for the service API */
-  version?: string;
+  readonly version?: string;
   /** Optional process-lifecycle cleanup. */
-  dispose?: (instance: T) => void | Promise<void>;
+  dispose?(instance: T): void | Promise<void>;
+}
+
+export interface ServiceCatalog {
+  readonly provides?: readonly ServiceDeclaration[];
+  readonly activates?: readonly ServiceReference[];
+}
+
+export async function activateServices(
+  container: Container,
+  catalog: ServiceCatalog
+): Promise<void> {
+  for (const service of catalog.provides ?? []) container.register(service);
+  for (const root of catalog.activates ?? []) {
+    await container.resolve(root.name, root.version);
+  }
 }
 
 export class Container {
-  private definitions = new Map<string, ServiceDefinition>();
-  private instances = new Map<string, any>();
+  private definitions = new Map<string, ServiceDeclaration>();
+  private instances = new Map<string, unknown>();
   private initializing = new Set<string>();
   private resolutionOrder: string[] = [];
 
   /**
    * Register a service with explicit dependencies
    */
-  register<T>(name: string, definition: ServiceDefinition<T>): void {
-    if (this.definitions.has(name)) {
-      throw new Error(`Service already registered: ${name}`);
+  register<T>(declaration: ServiceDeclaration<T>): void {
+    if (this.definitions.has(declaration.name)) {
+      throw new Error(`Service already registered: ${declaration.name}`);
     }
-    if (definition.version && !semver.valid(definition.version)) {
+    if (declaration.version && !semver.valid(declaration.version)) {
       throw new Error(
-        `Invalid version "${definition.version}" for service ${name}`
+        `Invalid version "${declaration.version}" for service ${declaration.name}`
       );
     }
-    this.definitions.set(name, definition);
-  }
-
-  registerInstance<T>(
-    name: string,
-    instance: T,
-    options: { version?: string; dispose?: (instance: T) => void | Promise<void> } = {}
-  ): void {
-    this.register(name, {
-      version: options.version,
-      factory: () => instance,
-      dispose: options.dispose,
-    });
+    this.definitions.set(declaration.name, declaration);
   }
 
   /**
@@ -76,7 +82,7 @@ export class Container {
 
     // Return existing singleton instance
     if (this.instances.has(name)) {
-      return this.instances.get(name);
+      return this.instances.get(name) as T;
     }
 
     const definition = this.definitions.get(name);
@@ -104,13 +110,14 @@ export class Container {
       // Resolve all dependencies first (topological sort)
       const dependencies = new Map<string, unknown>();
       for (const dependency of definition.dependencies ?? []) {
-        const name = typeof dependency === "string" ? dependency : dependency.name;
-        const version = typeof dependency === "string" ? undefined : dependency.version;
-        dependencies.set(name, await this.resolve(name, version));
+        dependencies.set(
+          dependency.name,
+          await this.resolve(dependency.name, dependency.version)
+        );
       }
 
       // Create the service instance
-      const instance = await definition.factory({
+      const instance = await definition.create({
         get: <Dependency>(dependencyName: string): Dependency => {
           if (!dependencies.has(dependencyName)) {
             throw new Error(
@@ -127,7 +134,7 @@ export class Container {
         this.resolutionOrder.push(name);
       }
       
-      return instance;
+      return instance as T;
     } finally {
       this.initializing.delete(name);
     }
@@ -141,7 +148,7 @@ export class Container {
     if (!this.instances.has(name)) {
       throw new Error(`Service not resolved or not a singleton: ${name}`);
     }
-    return instance;
+    return instance as T;
   }
 
   /**
@@ -176,8 +183,8 @@ export class Container {
   getDependencyGraph(): Record<string, string[]> {
     const graph: Record<string, string[]> = {};
     for (const [name, def] of this.definitions) {
-      graph[name] = (def.dependencies ?? []).map((dependency) =>
-        typeof dependency === "string" ? dependency : dependency.name
+      graph[name] = (def.dependencies ?? []).map(
+        (dependency) => dependency.name
       );
     }
     return graph;

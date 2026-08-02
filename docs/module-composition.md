@@ -39,29 +39,32 @@ loader will need to select a distinct entrypoint for each environment.
 
 ### Dependency boundaries
 
-Services declare dependencies by name and optional semantic-version range. A
-module exports that declaration as data, and a factory receives a lookup
-containing only those declared dependencies:
+Core and module services use the same `ServiceDeclaration` record. Services
+declare dependencies by name and optional semantic-version range, and their
+`create` function receives a lookup containing only those dependencies:
 
 ```ts
 export const calendarModule = {
   id: "google-calendar",
   provides: [{
     name: "google.calendar",
-    definition: {
-      dependencies: [
-        { name: "database", version: "^1.0.0" },
-        { name: "digest.scheduler", version: "^1.0.0" },
-        { name: "google.authorization", version: "^1.0.0" },
-      ],
-      factory: (dependencies) => {
-        const database = dependencies.get("database");
-        // An undeclared lookup fails.
-      },
+    dependencies: [
+      { name: "database", version: "^1.0.0" },
+      { name: "digest.scheduler", version: "^1.0.0" },
+      { name: "google.authorization", version: "^1.0.0" },
+    ],
+    create: (dependencies) => {
+      const database = dependencies.get("database");
+      // An undeclared lookup fails.
     },
   }],
 } satisfies ProcessModuleDefinition;
 ```
+
+`coreServices`, `digestProcessServices`, and each process module are service
+catalogs interpreted through the same container API. Their differences are
+composition concerns—modules can additionally declare contributions and IPC
+operations—not different service models.
 
 This makes the dependency declaration an enforced capability boundary within
 the application architecture. It is not a security sandbox: code running in
@@ -122,8 +125,8 @@ only the dependencies it needs, rather than the entire system.
 
 | Component | Digest |
 | --- | --- |
-| System map contains component instances and dependency references. | Container contains service definitions and resolved instances. |
-| Dependencies are injected before lifecycle start. | Declared dependencies are resolved before a service factory runs. |
+| System map contains component instances and dependency references. | Service catalogs contain declarations and activation roots; the container owns resolved instances. |
+| Dependencies are injected before lifecycle start. | Declared dependencies are resolved before a service's `create` function runs. |
 | Components start in dependency order and stop in reverse order. | Services resolve in dependency order and dispose in reverse order. |
 | The system map is an application composition root. | Built-in module catalogs and `ProcessModuleHost` form the composition root. |
 
@@ -149,15 +152,14 @@ export const googleCalendarModule = {
   id: "google-calendar",
   provides: [{
     name: "google.calendar",
-    definition: {
-      version: "1.0.0",
-      dependencies: [
-        { name: "database", version: "^1.0.0" },
-        { name: "digest.scheduler", version: "^1.0.0" },
-        { name: "google.authorization", version: "^1.0.0" },
-      ],
-      factory: createGoogleCalendarRuntime,
-    },
+    version: "1.0.0",
+    dependencies: [
+      { name: "database", version: "^1.0.0" },
+      { name: "digest.scheduler", version: "^1.0.0" },
+      { name: "google.authorization", version: "^1.0.0" },
+      { name: "digest.module-ipc/google-calendar", version: "^1.0.0" },
+    ],
+    create: createGoogleCalendarRuntime,
   }],
   activates: [{ name: "google.calendar", version: "^1.0.0" }],
   contributes: [{
@@ -169,11 +171,13 @@ export const googleCalendarModule = {
 } satisfies ProcessModuleDefinition;
 ```
 
-Factories and handlers remain executable leaf values inside the record. The
-composition itself is inert, inspectable data. Platform capabilities such as
-opening an external URL are ordinary declared services rather than constructor
-arguments used to assemble module objects. A future plugin manifest could be
-an even more restricted, serializable layer above the same model.
+Creation functions and handlers remain executable leaf values inside the
+record. The composition itself is inert, inspectable data. Core startup is a
+`ServiceCatalog` using the same declarations and activation references as a
+module. Platform capabilities such as opening an external URL and a module's
+scoped IPC publisher are ordinary declared services rather than special
+creation arguments. A future plugin manifest could be an even more restricted,
+serializable layer above the same model.
 
 ## Comparison with Visual Studio Code
 
