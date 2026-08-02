@@ -7,32 +7,54 @@ import semver from "semver";
 
 export type ServiceFactory<T = any> = (container: Container) => T | Promise<T>;
 
+export type ServiceDependency =
+  | string
+  | { name: string; version?: string };
+
 export interface ServiceDefinition<T = any> {
   /** Factory function that creates the service instance */
   factory: ServiceFactory<T>;
   /** Array of service names this service depends on */
-  dependencies?: string[];
+  dependencies?: ServiceDependency[];
   /** Whether to cache the instance (default: true) */
   singleton?: boolean;
   /** Optional semantic version for the service API */
   version?: string;
+  /** Optional process-lifecycle cleanup. */
+  dispose?: (instance: T) => void | Promise<void>;
 }
 
 export class Container {
   private definitions = new Map<string, ServiceDefinition>();
   private instances = new Map<string, any>();
   private initializing = new Set<string>();
+  private resolutionOrder: string[] = [];
 
   /**
    * Register a service with explicit dependencies
    */
   register<T>(name: string, definition: ServiceDefinition<T>): void {
+    if (this.definitions.has(name)) {
+      throw new Error(`Service already registered: ${name}`);
+    }
     if (definition.version && !semver.valid(definition.version)) {
       throw new Error(
         `Invalid version "${definition.version}" for service ${name}`
       );
     }
     this.definitions.set(name, definition);
+  }
+
+  registerInstance<T>(
+    name: string,
+    instance: T,
+    options: { version?: string; dispose?: (instance: T) => void | Promise<void> } = {}
+  ): void {
+    this.register(name, {
+      version: options.version,
+      factory: () => instance,
+      dispose: options.dispose,
+    });
   }
 
   /**
@@ -76,7 +98,11 @@ export class Container {
       // Resolve all dependencies first (topological sort)
       if (definition.dependencies) {
         for (const dependency of definition.dependencies) {
-          await this.resolve(dependency);
+          if (typeof dependency === "string") {
+            await this.resolve(dependency);
+          } else {
+            await this.resolve(dependency.name, dependency.version);
+          }
         }
       }
 
@@ -86,6 +112,7 @@ export class Container {
       // Cache singleton instances (default behavior)
       if (definition.singleton !== false) {
         this.instances.set(name, instance);
+        this.resolutionOrder.push(name);
       }
       
       return instance;
@@ -99,7 +126,7 @@ export class Container {
    */
   get<T>(name: string): T {
     const instance = this.instances.get(name);
-    if (!instance) {
+    if (!this.instances.has(name)) {
       throw new Error(`Service not resolved or not a singleton: ${name}`);
     }
     return instance;
@@ -118,6 +145,17 @@ export class Container {
   clear(): void {
     this.instances.clear();
     this.initializing.clear();
+    this.resolutionOrder = [];
+  }
+
+  async dispose(): Promise<void> {
+    for (const name of [...this.resolutionOrder].reverse()) {
+      const definition = this.definitions.get(name);
+      if (definition?.dispose) {
+        await definition.dispose(this.instances.get(name));
+      }
+    }
+    this.clear();
   }
 
   /**
@@ -126,7 +164,9 @@ export class Container {
   getDependencyGraph(): Record<string, string[]> {
     const graph: Record<string, string[]> = {};
     for (const [name, def] of this.definitions) {
-      graph[name] = def.dependencies || [];
+      graph[name] = (def.dependencies ?? []).map((dependency) =>
+        typeof dependency === "string" ? dependency : dependency.name
+      );
     }
     return graph;
   }
