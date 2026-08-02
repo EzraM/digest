@@ -13,6 +13,13 @@ import {
 } from "./browser";
 
 interface ElectronAPI {
+  integrations: {
+    list: () => Promise<import("./integrations").IntegrationsView>;
+    connect: (
+      integrationId: string
+    ) => Promise<import("./integrations").ConnectedIntegrationAccountView>;
+    disconnect: (integrationId: string, accountId: string) => Promise<void>;
+  };
   windows: {
     openRoute: (route: {
       kind: "url" | "doc";

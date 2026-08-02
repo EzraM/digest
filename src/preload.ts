@@ -29,6 +29,13 @@ const EVENTS = {
 } as const;
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  integrations: {
+    list: () => ipcRenderer.invoke("integrations:list"),
+    connect: (integrationId: string) =>
+      ipcRenderer.invoke("integrations:connect", integrationId),
+    disconnect: (integrationId: string, accountId: string) =>
+      ipcRenderer.invoke("integrations:disconnect", integrationId, accountId),
+  },
   windows: {
     openRoute: (route: {
       kind: "url" | "doc";

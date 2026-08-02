@@ -1,4 +1,4 @@
-import { powerMonitor, session } from "electron";
+import { powerMonitor, session, shell } from "electron";
 import type Database from "better-sqlite3";
 import { registerAssetProtocol } from "../domains/assets/adapter/registerAssetProtocol";
 import { HandleRegistry } from "../domains/browser-views/adapter/HandleRegistry";
@@ -18,6 +18,12 @@ import { Scheduler } from "../scheduler/Scheduler";
 import { log } from "../utils/mainLogger";
 import { isDevelopment } from "../config/development";
 import { SchedulerProbePlugin } from "../integrations/development/SchedulerProbePlugin";
+import { SqliteCredentialStore } from "../integrations/CredentialStore";
+import { ElectronSecretEncryption } from "../integrations/ElectronSecretEncryption";
+import { IntegrationAccountStore } from "../integrations/IntegrationAccountStore";
+import { BrowserGoogleOAuthAuthorizer } from "../integrations/google-calendar/GoogleOAuthAuthorizer";
+import { GoogleCalendarPlugin } from "../integrations/google-calendar/GoogleCalendarPlugin";
+import { getEnvVar } from "../config/environment";
 
 export type OpenWindow = (
   initialHash?: string,
@@ -55,6 +61,23 @@ export class DigestProcess {
         initialized.services.database as Database.Database
       );
       const scheduler = new Scheduler(store);
+      if (!this.integrationRegistry.get("google-calendar")) {
+        this.integrationRegistry.register(
+          new GoogleCalendarPlugin(
+            new IntegrationAccountStore(
+              initialized.services.database as Database.Database
+            ),
+            new SqliteCredentialStore(
+              initialized.services.database as Database.Database,
+              new ElectronSecretEncryption()
+            ),
+            new BrowserGoogleOAuthAuthorizer(
+              getEnvVar("GOOGLE_OAUTH_CLIENT_ID"),
+              (url) => shell.openExternal(url)
+            )
+          )
+        );
+      }
       if (isDevelopment() && !this.integrationRegistry.get("scheduler-probe")) {
         this.integrationRegistry.register(
           new SchedulerProbePlugin(scheduler, (message) =>
@@ -112,6 +135,23 @@ export class DigestProcess {
       viewStoreByRendererId: this.viewStoreByRendererId,
       placementIdByRendererId: this.placementIdByRendererId,
       openWindow,
+    });
+    this.ipcRouter.register("integrations:list", {
+      type: "invoke",
+      fn: () => ({
+        integrations: this.integrationRegistry.list(),
+        accounts: this.integrationRegistry.connectedAccounts(),
+      }),
+    });
+    this.ipcRouter.register("integrations:connect", {
+      type: "invoke",
+      fn: (_event, integrationId: string) =>
+        this.integrationRegistry.connect(integrationId),
+    });
+    this.ipcRouter.register("integrations:disconnect", {
+      type: "invoke",
+      fn: (_event, integrationId: string, accountId: string) =>
+        this.integrationRegistry.disconnect(integrationId, accountId),
     });
     powerMonitor.on("resume", this.wakeScheduler);
     powerMonitor.on("unlock-screen", this.wakeScheduler);
