@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Group, Paper, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Paper, Stack, Text } from "@mantine/core";
 import { usePageToolSlot } from "../../context/PageToolSlotContext";
 import { RendererModule } from "../../services/RendererModule";
 import { RendererModuleClient } from "../../services/RendererModuleClient";
@@ -104,7 +104,57 @@ const GoogleCalendarRenderer = (): null => {
   return null;
 };
 
+const GoogleCalendarSettings = () => {
+  const [accounts, setAccounts] = useState<Array<{ id: string; email?: string; displayName: string }>>([]);
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const view = await window.electronAPI.integrations.list();
+    setAccounts(view.accounts.filter((account) => account.integrationId === "google-calendar"));
+  }, []);
+
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  const connect = async () => {
+    setConnecting(true);
+    setError(null);
+    try {
+      await window.electronAPI.integrations.connect("google-calendar");
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Google authorization failed");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  return (
+    <Stack gap="md">
+      {accounts.map((account) => (
+        <Group key={account.id} justify="space-between">
+          <div><Text fw={600}>{account.displayName}</Text><Text size="sm" c="dimmed">{account.email}</Text></div>
+          <Button variant="light" color="red" onClick={async () => { await window.electronAPI.integrations.disconnect("google-calendar", account.id); await refresh(); }}>Disconnect</Button>
+        </Group>
+      ))}
+      {error && <Alert color="red">{error}</Alert>}
+      <Group>
+        <Button onClick={() => void connect()} loading={connecting}>
+          {accounts.length ? "Connect another Google account" : "Enable Google Calendar"}
+        </Button>
+      </Group>
+      <Text size="xs" c="dimmed">Google will ask for read-only Calendar access. This does not give Digest permission to edit events.</Text>
+    </Stack>
+  );
+};
+
 export const googleCalendarRendererModule: RendererModule = {
   id: "google-calendar",
   Root: GoogleCalendarRenderer,
+  settings: [{
+    id: "google-calendar",
+    title: "Google Calendar",
+    description: "Show upcoming events and make meeting links available in Digest.",
+    Panel: GoogleCalendarSettings,
+  }],
 };

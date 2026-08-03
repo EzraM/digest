@@ -43,6 +43,7 @@ import { useDownloadNotebookInsertion } from "./hooks/useDownloadNotebookInserti
 import { DocumentTreeNode } from "./types/documents";
 import { useProfileSelection } from "./hooks/useProfileSelection";
 import { RendererModuleHost } from "./components/renderer/RendererModuleHost";
+import { ProfileSettingsPage } from "./components/settings/ProfileSettingsPage";
 
 const findDocumentTitle = (
   trees: Record<string, DocumentTreeNode[]>,
@@ -70,6 +71,7 @@ const RendererAppContent = () => {
   );
   const [contextualTitleBar, setContextualTitleBar] = useState<React.ReactNode>(null);
   const [isDebugSidebarVisible, setIsDebugSidebarVisible] = useState(false);
+  const [settingsProfileId, setSettingsProfileId] = useState<string | null>(null);
   const {
     profiles,
     documentTrees,
@@ -344,31 +346,13 @@ const RendererAppContent = () => {
     [profiles, activeProfileTree, openDeleteProfileModal]
   );
 
-  const handleToggleJiraLinks = useCallback(
-    async (profileId: string, enabled: boolean) => {
-      const profile = profiles.find((candidate) => candidate.id === profileId);
-      if (!profile || !window.electronAPI?.profiles?.updateSettings) return;
-      await window.electronAPI.profiles.updateSettings({
-        profileId,
-        settings: {
-          ...profile.settings,
-          plugins: {
-            ...profile.settings?.plugins,
-            "builtin.jira-links": {
-              enabled,
-              baseUrl: "https://learning-ally.atlassian.net/browse",
-              projectKeys: ["PD"],
-            },
-          },
-        },
-      });
-    },
-    [profiles]
-  );
-
   const handleReorderProfiles = useCallback(async (profileIds: string[]) => {
     await window.electronAPI.profiles.reorder(profileIds);
   }, []);
+
+  const settingsProfile = profiles.find(
+    (profile) => profile.id === settingsProfileId
+  );
 
   return (
     <MantineProvider theme={theme} defaultColorScheme="auto">
@@ -450,7 +434,7 @@ const RendererAppContent = () => {
               onCreateProfile={handleOpenCreateProfileModal}
               onRenameProfile={handleRenameProfile}
               onDeleteProfile={handleDeleteProfile}
-              onToggleJiraLinks={handleToggleJiraLinks}
+              onOpenSettings={setSettingsProfileId}
               onReorderProfiles={handleReorderProfiles}
               documentTree={activeProfileTree}
               activeDocumentId={activeDocumentId}
@@ -465,7 +449,13 @@ const RendererAppContent = () => {
               onPendingDocumentNamed={handlePendingDocumentNamed}
             />
           }
-          main={
+          main={settingsProfile ? (
+            <ProfileSettingsPage
+              profile={settingsProfile}
+              onClose={() => setSettingsProfileId(null)}
+              onUpdated={() => undefined}
+            />
+          ) : (
             <DocumentProvider
               profileId={activeDocument?.profileId ?? DEFAULT_PROFILE_ID}
               documentId={activeDocumentId}
@@ -480,7 +470,7 @@ const RendererAppContent = () => {
                 }
               />
             </DocumentProvider>
-          }
+          )}
           aside={
             <DebugPane
               isVisible={isDebugSidebarVisible}

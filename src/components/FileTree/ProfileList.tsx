@@ -11,7 +11,7 @@ type ProfileListProps = {
   onCreateProfile: () => void;
   onRenameProfile?: (profileId: string) => void;
   onDeleteProfile?: (profileId: string) => void;
-  onToggleJiraLinks?: (profileId: string, enabled: boolean) => void;
+  onOpenSettings?: (profileId: string) => void;
   onReorderProfiles: (profileIds: string[]) => void;
 };
 
@@ -22,7 +22,7 @@ export const ProfileList = ({
   onCreateProfile,
   onRenameProfile,
   onDeleteProfile,
-  onToggleJiraLinks,
+  onOpenSettings,
   onReorderProfiles,
 }: ProfileListProps) => {
   const [draggedProfileId, setDraggedProfileId] = useState<string | null>(null);
@@ -132,7 +132,7 @@ export const ProfileList = ({
                 profile={profile}
                 onRenameProfile={onRenameProfile}
                 onDeleteProfile={onDeleteProfile}
-                onToggleJiraLinks={onToggleJiraLinks}
+                onOpenSettings={onOpenSettings}
               />
             </div>
           ))}
@@ -146,8 +146,8 @@ export const ProfileActionsMenu = ({
   profile,
   onRenameProfile,
   onDeleteProfile,
-  onToggleJiraLinks,
-}: Pick<ProfileListProps, "onRenameProfile" | "onDeleteProfile" | "onToggleJiraLinks"> & {
+  onOpenSettings,
+}: Pick<ProfileListProps, "onRenameProfile" | "onDeleteProfile" | "onOpenSettings"> & {
   profile: ProfileRecord;
 }) => {
   const canDelete = profile.id !== DEFAULT_PROFILE_ID;
@@ -170,6 +170,11 @@ export const ProfileActionsMenu = ({
         <Menu.Label className="profile-actions-menu__label">
           {profile.name}
         </Menu.Label>
+        {onOpenSettings && (
+          <Menu.Item className="profile-actions-menu__item" onClick={() => onOpenSettings(profile.id)}>
+            Settings
+          </Menu.Item>
+        )}
         {onRenameProfile && (
           <Menu.Item
             className="profile-actions-menu__item"
@@ -185,21 +190,6 @@ export const ProfileActionsMenu = ({
             onClick={() => onDeleteProfile(profile.id)}
           >
             Delete
-          </Menu.Item>
-        )}
-        {onToggleJiraLinks && (
-          <Menu.Item
-            className="profile-actions-menu__item"
-            onClick={() =>
-              onToggleJiraLinks(
-                profile.id,
-                !profile.settings?.plugins?.["builtin.jira-links"]?.enabled
-              )
-            }
-          >
-            {profile.settings?.plugins?.["builtin.jira-links"]?.enabled
-              ? "Disable Jira links"
-              : "Enable Jira links"}
           </Menu.Item>
         )}
       </Menu.Dropdown>
