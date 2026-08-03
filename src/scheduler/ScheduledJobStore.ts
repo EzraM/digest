@@ -65,23 +65,24 @@ export class ScheduledJobStore {
     return row.run_at;
   }
 
-  claimDue(now: number, leaseMs: number): ScheduledJob[] {
+  claimNextDue(now: number, leaseMs: number): ScheduledJob | null {
     return this.db.transaction(() => {
-      const rows = this.db.prepare(`
+      const row = this.db.prepare(`
         SELECT id, owner_id, kind, run_at, state_json, attempts
         FROM scheduled_jobs
         WHERE run_at <= ?
           AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
         ORDER BY run_at ASC
-      `).all(now, now) as ScheduledJobRow[];
+        LIMIT 1
+      `).get(now, now) as ScheduledJobRow | undefined;
+      if (!row) return null;
       const leaseExpiresAt = now + leaseMs;
-      const claim = this.db.prepare(`
+      this.db.prepare(`
         UPDATE scheduled_jobs
         SET lease_expires_at = ?, updated_at = ?
         WHERE id = ?
-      `);
-      for (const row of rows) claim.run(leaseExpiresAt, now, row.id);
-      return rows.map((row) => this.fromRow(row));
+      `).run(leaseExpiresAt, now, row.id);
+      return this.fromRow(row);
     })();
   }
 

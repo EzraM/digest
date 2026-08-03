@@ -54,7 +54,10 @@ describe("MeetingJoinService", () => {
         schedule: <State>(job: Omit<ScheduledJob<State>, "attempts">) =>
           jobs.push(job as Omit<ScheduledJob<unknown>, "attempts">),
       },
-      (action) => actions.push(action),
+      (action) => {
+        actions.push(action);
+        return true;
+      },
       () => 1_000
     );
 
@@ -75,6 +78,53 @@ describe("MeetingJoinService", () => {
     jobs.length = 0;
     service.reconcile("account");
     expect(jobs).toEqual([]);
+    database.close();
+  });
+
+  it("keeps the durable job pending when no renderer can receive it", async () => {
+    const { database, projection } = createProjection();
+    projection.replaceCalendars("account", [
+      { id: "calendar", summary: "Calendar", primary: true },
+    ]);
+    projection.applyDelta(
+      "account",
+      "calendar",
+      {
+        syncToken: "sync",
+        events: [{
+          id: "event",
+          summary: "Planning",
+          start: { dateTime: new Date(601_000).toISOString() },
+          end: { dateTime: new Date(901_000).toISOString() },
+          hangoutLink: "https://meet.google.com/abc-defg-hij",
+        }],
+      },
+      true
+    );
+    const jobs: Array<Omit<ScheduledJob<unknown>, "attempts">> = [];
+    const service = new MeetingJoinService(
+      projection,
+      {
+        schedule: <State>(job: Omit<ScheduledJob<State>, "attempts">) =>
+          jobs.push(job as Omit<ScheduledJob<unknown>, "attempts">),
+      },
+      () => false,
+      () => 1_000
+    );
+    service.reconcile("account");
+
+    const result = await service.jobHandlers[0].run({
+      ...jobs[0],
+      attempts: 0,
+    } as ScheduledJob<{
+      accountId: string;
+      calendarId: string;
+      eventId: string;
+    }>);
+    expect(result).toEqual({ runAt: 61_000, state: jobs[0].state });
+    jobs.length = 0;
+    service.reconcile("account");
+    expect(jobs.length).toBe(1);
     database.close();
   });
 });

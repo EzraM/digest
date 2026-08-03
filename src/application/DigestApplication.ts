@@ -259,6 +259,4 @@ export const openWindowFrom = async (
   );
 };
 
-export const dispose = () => {
-  digestProcess.dispose();
-};
+export const dispose = () => digestProcess.dispose();

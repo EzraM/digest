@@ -5,7 +5,7 @@ import {
   MeetingIdentity,
 } from "./CalendarProjectionStore";
 
-interface MeetingJobState extends MeetingIdentity {}
+type MeetingJobState = MeetingIdentity;
 
 export class MeetingJoinService {
   readonly jobHandlers: JobHandler<MeetingJobState>[] = [
@@ -15,7 +15,7 @@ export class MeetingJoinService {
         const event = this.projection.meeting(job.state);
         const link = event?.conferenceLinks[0];
         if (!event || !link || event.startAt === null) return { complete: true };
-        this.publish({
+        const delivered = this.publish({
           accountId: event.accountId,
           calendarId: event.calendarId,
           eventId: event.eventId,
@@ -23,6 +23,9 @@ export class MeetingJoinService {
           startAt: event.startAt,
           provider: link.provider,
         });
+        if (!delivered) {
+          return { runAt: this.now() + 60_000, state: job.state };
+        }
         this.projection.markMeetingNotified(job.state, this.now());
         return { complete: true };
       },
@@ -32,7 +35,7 @@ export class MeetingJoinService {
   constructor(
     private readonly projection: CalendarProjectionStore,
     private readonly scheduler: Pick<Scheduler, "schedule">,
-    private readonly publish: (action: MeetingAction) => void,
+    private readonly publish: (action: MeetingAction) => boolean,
     private readonly now: () => number = () => Date.now()
   ) {}
 

@@ -162,7 +162,7 @@ describe("Scheduler", () => {
     const clock = new FakeClock(50);
     let runs = 0;
     put(store, 0);
-    expect(store.claimDue(0, 100).length).toBe(1);
+    expect(store.claimNextDue(0, 100)?.id).toBe("job-1");
     const scheduler = new Scheduler(store, 1_000, clock);
     scheduler.register({
       kind: "test.job",
@@ -269,5 +269,98 @@ describe("Scheduler", () => {
     expect(store.next(5_000)).toBe(null);
     scheduler.stop();
     database.close();
+  });
+
+  it("never overlaps drains when wakes outlive a job lease", async () => {
+    const { database, store } = createStore();
+    const clock = new FakeClock();
+    let release: (() => void) | undefined;
+    let active = 0;
+    let maxActive = 0;
+    let runs = 0;
+    put(store, 0);
+    const scheduler = new Scheduler(store, 10, clock);
+    scheduler.register({
+      kind: "test.job",
+      async run() {
+        runs += 1;
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        active -= 1;
+        return { complete: true };
+      },
+    });
+
+    scheduler.start();
+    scheduler.wake();
+    await settle();
+    clock.advanceTo(20);
+    for (let index = 0; index < 20; index += 1) scheduler.wake();
+    await settle();
+    expect(runs).toBe(1);
+    expect(maxActive).toBe(1);
+    release?.();
+    await settle();
+    await scheduler.stop();
+    expect(store.next(20)).toBe(null);
+    database.close();
+  });
+
+  it("fuzzes scheduling, wakes, and clock advances against an exact-once model", async () => {
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const { database, store } = createStore();
+      const clock = new FakeClock();
+      const scheduler = new Scheduler(store, 25, clock);
+      const runs = new Map<string, number>();
+      let randomState = seed;
+      let jobSequence = 0;
+      let now = 0;
+      const random = () => {
+        randomState = (randomState * 1_664_525 + 1_013_904_223) >>> 0;
+        return randomState;
+      };
+      scheduler.register({
+        kind: "fuzz.job",
+        async run(job) {
+          runs.set(job.id, (runs.get(job.id) ?? 0) + 1);
+          if ((random() & 3) === 0) scheduler.wake();
+          return { complete: true };
+        },
+      });
+      scheduler.start();
+
+      for (let step = 0; step < 250; step += 1) {
+        const operation = random() % 4;
+        if (operation <= 1) {
+          const id = `seed-${seed}-job-${jobSequence++}`;
+          scheduler.schedule({
+            id,
+            ownerId: `owner-${random() % 5}`,
+            kind: "fuzz.job",
+            runAt: now + (random() % 30),
+            state: { seed, step },
+          });
+        } else if (operation === 2) {
+          scheduler.wake();
+        } else {
+          now += random() % 20;
+          clock.advanceTo(now);
+        }
+        if ((random() & 7) !== 0) await settle();
+      }
+
+      now += 1_000;
+      clock.advanceTo(now);
+      scheduler.wake();
+      await scheduler.whenIdle();
+      await scheduler.stop();
+      expect(store.next(now)).toBe(null);
+      expect(runs.size).toBe(jobSequence);
+      expect([...runs.values()].every((count) => count === 1)).toBe(true);
+      database.close();
+    }
   });
 });

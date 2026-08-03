@@ -11,7 +11,10 @@ describe("ModuleIPCRegistry", () => {
     const registry = new ModuleIPCRegistry();
     const ipc = registry.forModule("sample");
     const events: unknown[] = [];
-    registry.setPublisher((event) => events.push(event));
+    registry.setPublisher((event) => {
+      events.push(event);
+      return true;
+    });
     ipc.handle(
       "double",
       { input: numberShape, output: numberShape },
@@ -50,5 +53,13 @@ describe("ModuleIPCRegistry", () => {
       validationFailed = true;
     }
     expect(validationFailed).toBe(true);
+  });
+
+  it("reports whether an event had a delivery target", () => {
+    const registry = new ModuleIPCRegistry();
+    const ipc = registry.forModule("sample");
+    expect(ipc.publish("changed", numberShape, 1)).toBe(false);
+    registry.setPublisher(() => true);
+    expect(ipc.publish("changed", numberShape, 2)).toBe(true);
   });
 });

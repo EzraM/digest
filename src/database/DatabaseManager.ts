@@ -48,7 +48,9 @@ export class DatabaseManager {
     migration015,
   ];
 
-  private constructor() {}
+  private constructor() {
+    // Use getInstance() so every process shares one connection and migration state.
+  }
 
   static getInstance(): DatabaseManager {
     if (!DatabaseManager.instance) {

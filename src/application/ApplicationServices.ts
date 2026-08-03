@@ -17,7 +17,7 @@ export interface InitializedApplicationServices {
 export interface ApplicationServices {
   container: Container;
   initialize(): Promise<InitializedApplicationServices>;
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 export const createApplicationServices = (): ApplicationServices => {
@@ -65,6 +65,9 @@ export const createApplicationServices = (): ApplicationServices => {
   return {
     container,
     initialize,
-    dispose: () => derivedDataCoordinator?.dispose(),
+    dispose: async () => {
+      derivedDataCoordinator?.dispose();
+      await container.dispose();
+    },
   };
 };

@@ -28,6 +28,7 @@ export class Scheduler {
   private readonly handlers = new Map<string, JobHandler>();
   private timer: TimerHandle | null = null;
   private running = false;
+  private drain: Promise<void> | null = null;
 
   constructor(
     private readonly store: ScheduledJobStore,
@@ -58,17 +59,22 @@ export class Scheduler {
     this.arm();
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.running = false;
     if (this.timer) this.clock.clearTimeout(this.timer);
     this.timer = null;
+    await this.drain;
+  }
+
+  async whenIdle(): Promise<void> {
+    await this.drain;
   }
 
   wake(): void {
     if (!this.running) return;
     if (this.timer) this.clock.clearTimeout(this.timer);
     this.timer = null;
-    void this.runDue();
+    this.startDrain();
   }
 
   private arm(): void {
@@ -77,14 +83,22 @@ export class Scheduler {
     const nextRunAt = this.store.nextRunAt(now);
     if (nextRunAt === null) return;
     const delay = Math.max(0, Math.min(nextRunAt - now, 2_147_483_647));
-    this.timer = this.clock.setTimeout(() => void this.runDue(), delay);
+    this.timer = this.clock.setTimeout(() => this.startDrain(), delay);
+  }
+
+  private startDrain(): void {
+    if (!this.running || this.drain) return;
+    this.timer = null;
+    this.drain = this.runDue().finally(() => {
+      this.drain = null;
+      this.arm();
+    });
   }
 
   private async runDue(): Promise<void> {
-    if (!this.running) return;
-    this.timer = null;
-    const jobs = this.store.claimDue(this.clock.now(), this.leaseMs);
-    for (const job of jobs) {
+    while (this.running) {
+      const job = this.store.claimNextDue(this.clock.now(), this.leaseMs);
+      if (!job) return;
       const handler = this.handlers.get(job.kind);
       if (!handler) {
         this.store.fail(
@@ -107,6 +121,5 @@ export class Scheduler {
         log.debug(`Scheduled job ${job.id} failed: ${error}`, "Scheduler");
       }
     }
-    this.arm();
   }
 }

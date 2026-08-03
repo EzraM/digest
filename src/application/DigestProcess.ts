@@ -51,6 +51,7 @@ export class DigestProcess {
   private electronBound = false;
   private modulesRegistered = false;
   private schedulerInstance: Scheduler | null = null;
+  private backgroundStarted = false;
   private unpublishModuleEvents: (() => void) | null = null;
   private readonly wakeScheduler = () => this.schedulerInstance?.wake();
 
@@ -82,9 +83,7 @@ export class DigestProcess {
       for (const handler of this.integrationRegistry.jobHandlers()) {
         scheduler.register(handler);
       }
-      scheduler.start();
       this.schedulerInstance = scheduler;
-      await this.integrationRegistry.start();
     }
     return initialized;
   }
@@ -160,29 +159,38 @@ export class DigestProcess {
     powerMonitor.on("resume", this.wakeScheduler);
     powerMonitor.on("unlock-screen", this.wakeScheduler);
     this.electronBound = true;
+    if (!this.backgroundStarted) {
+      await this.integrationRegistry.start();
+      this.scheduler.start();
+      this.backgroundStarted = true;
+    }
     return initialized;
   }
 
-  dispose() {
+  async dispose(): Promise<void> {
     if (this.electronBound) {
       powerMonitor.removeListener("resume", this.wakeScheduler);
       powerMonitor.removeListener("unlock-screen", this.wakeScheduler);
       this.electronBound = false;
     }
-    this.integrationRegistry.stop();
-    this.schedulerInstance?.stop();
+    await this.schedulerInstance?.stop();
+    await this.integrationRegistry.stop();
+    this.backgroundStarted = false;
     this.schedulerInstance = null;
     this.unpublishModuleEvents?.();
     this.unpublishModuleEvents = null;
     this.moduleHost.clear();
-    this.applicationServices.dispose();
+    await this.applicationServices.dispose();
   }
 
-  private publishModuleEvent(event: ModuleEventEnvelope): void {
+  private publishModuleEvent(event: ModuleEventEnvelope): boolean {
+    let delivered = false;
     for (const window of this.windowRegistry.list()) {
       if (!window.rendererView.webContents.isDestroyed()) {
         window.rendererView.webContents.send("modules:event", event);
+        delivered = true;
       }
     }
+    return delivered;
   }
 }

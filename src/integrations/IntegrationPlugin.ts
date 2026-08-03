@@ -20,7 +20,7 @@ export interface IntegrationPlugin {
   jobHandlers: JobHandler[];
   listAccounts?(): ConnectedIntegrationAccount[];
   start?(): void | Promise<void>;
-  stop?(): void;
+  stop?(): void | Promise<void>;
   connect?(): Promise<ConnectedIntegrationAccount>;
   disconnect?(accountId: string): Promise<void>;
 }
@@ -51,8 +51,10 @@ export class IntegrationRegistry {
     for (const plugin of this.plugins.values()) await plugin.start?.();
   }
 
-  stop(): void {
-    for (const plugin of this.plugins.values()) plugin.stop?.();
+  async stop(): Promise<void> {
+    for (const plugin of [...this.plugins.values()].reverse()) {
+      await plugin.stop?.();
+    }
   }
 
   connectedAccounts(): ConnectedIntegrationAccount[] {

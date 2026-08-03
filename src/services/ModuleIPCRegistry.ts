@@ -20,7 +20,7 @@ export interface ScopedModuleIPC {
       context: ModuleIPCContext
     ) => Output | Promise<Output>
   ): Disposable;
-  publish<Payload>(event: string, eventShape: Shape<Payload>, payload: Payload): void;
+  publish<Payload>(event: string, eventShape: Shape<Payload>, payload: Payload): boolean;
 }
 
 interface RegisteredHandler {
@@ -30,7 +30,7 @@ interface RegisteredHandler {
 
 export class ModuleIPCRegistry {
   private readonly handlers = new Map<string, RegisteredHandler>();
-  private publisher: ((event: ModuleEventEnvelope) => void) | null = null;
+  private publisher: ((event: ModuleEventEnvelope) => boolean) | null = null;
 
   forModule(moduleId: string): ScopedModuleIPC {
     if (!moduleId) throw new Error("Module IPC requires a module ID");
@@ -39,16 +39,16 @@ export class ModuleIPCRegistry {
         this.handle(moduleId, method, request, handler),
       publish: (event, eventShape, payload) => {
         const parsed = eventShape.parse(payload);
-        this.publisher?.({
+        return this.publisher?.({
           source: { moduleId },
           name: event,
           payload: parsed,
-        });
+        }) ?? false;
       },
     };
   }
 
-  setPublisher(publisher: (event: ModuleEventEnvelope) => void): () => void {
+  setPublisher(publisher: (event: ModuleEventEnvelope) => boolean): () => void {
     this.publisher = publisher;
     return () => {
       if (this.publisher === publisher) this.publisher = null;

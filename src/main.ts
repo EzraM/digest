@@ -44,17 +44,31 @@ app.on("activate", async () => {
   }
 });
 
-app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
-  dispose();
-
-  try {
-    const dbManager = DatabaseManager.getInstance();
-    if (dbManager.initialized) {
-      dbManager.close();
-      log.debug("Database connection closed", "main");
+let shutdownStarted = false;
+let shutdownComplete = false;
+app.on("before-quit", (event) => {
+  if (shutdownComplete) return;
+  event.preventDefault();
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  void (async () => {
+    globalShortcut.unregisterAll();
+    try {
+      await dispose();
+    } catch (error) {
+      log.debug(`Service cleanup error: ${error}`, "main");
     }
-  } catch (error) {
-    log.debug(`Database cleanup error: ${error}`, "main");
-  }
+    try {
+      const dbManager = DatabaseManager.getInstance();
+      if (dbManager.initialized) {
+        dbManager.close();
+        log.debug("Database connection closed", "main");
+      }
+    } catch (error) {
+      log.debug(`Database cleanup error: ${error}`, "main");
+    } finally {
+      shutdownComplete = true;
+      app.quit();
+    }
+  })();
 });
