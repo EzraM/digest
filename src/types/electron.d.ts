@@ -30,6 +30,7 @@ interface ElectronAPI {
     connect: (
       integrationId: string
     ) => Promise<import("./integrations").ConnectedIntegrationAccountView>;
+    cancelConnect: (integrationId: string) => Promise<void>;
     disconnect: (integrationId: string, accountId: string) => Promise<void>;
   };
   windows: {

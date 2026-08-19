@@ -28,6 +28,7 @@ export const GOOGLE_CALENDAR_SERVICE = {
 interface GoogleCalendarRuntime {
   readonly plugin: GoogleCalendarPlugin;
   readonly meetings: MeetingJoinService;
+  readonly projection: CalendarProjectionStore;
 }
 
 const calendarDependency = {
@@ -67,6 +68,12 @@ export const googleCalendarModule = {
             ],
           });
         const projection = new CalendarProjectionStore(database);
+        const syncService = process.env.DIGEST_E2E === "oauth"
+          ? { sync: async () => undefined }
+          : new GoogleCalendarSyncService(
+              new GoogleCalendarClient(authorization),
+              projection
+            );
         const meetings = new MeetingJoinService(
           projection,
           scheduler,
@@ -79,13 +86,11 @@ export const googleCalendarModule = {
         );
         return {
           meetings,
+          projection,
           plugin: new GoogleCalendarPlugin(
             authorization,
             scheduler,
-            new GoogleCalendarSyncService(
-              new GoogleCalendarClient(authorization),
-              projection
-            ),
+            syncService,
             meetings
           ),
         };
@@ -104,6 +109,32 @@ export const googleCalendarModule = {
     },
   ],
   operations: [
+    {
+      name: "listNotificationCalendars",
+      request: googleCalendarProtocol.requests.listNotificationCalendars,
+      dependencies: [calendarDependency],
+      handle: (dependencies) =>
+        dependencies
+          .get<GoogleCalendarRuntime>(GOOGLE_CALENDAR_SERVICE.name)
+          .projection.calendars(),
+    },
+    {
+      name: "setCalendarNotifications",
+      request: googleCalendarProtocol.requests.setCalendarNotifications,
+      dependencies: [calendarDependency, moduleIPCService("google-calendar")],
+      handle: (dependencies, { accountId, calendarId, enabled }) => {
+        dependencies
+          .get<GoogleCalendarRuntime>(GOOGLE_CALENDAR_SERVICE.name)
+          .projection.setNotificationsEnabled(accountId, calendarId, enabled);
+        dependencies
+          .get<ScopedModuleIPC>(moduleIPCService("google-calendar").name)
+          .publish(
+            "calendarPreferencesChanged",
+            googleCalendarProtocol.events.calendarPreferencesChanged,
+            {}
+          );
+      },
+    },
     {
       name: "readyMeetings",
       request: googleCalendarProtocol.requests.readyMeetings,

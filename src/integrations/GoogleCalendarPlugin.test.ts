@@ -83,6 +83,7 @@ describe("InstalledAppGoogleOAuthAuthorizer", () => {
         if (String(input).endsWith("/token")) {
           const body = init?.body as URLSearchParams;
           expect(body.get("code_verifier")?.length ?? 0).toBe(64);
+          expect(body.get("client_secret")).toBe("desktop-client-secret");
           return new Response(
             JSON.stringify({
               access_token: "access",
@@ -100,7 +101,8 @@ describe("InstalledAppGoogleOAuthAuthorizer", () => {
           }),
           { status: 200 }
         );
-      }
+      },
+      "desktop-client-secret"
     );
 
     const grant = await authorizer.authorize(["openid", "email", calendarScope]);
@@ -109,5 +111,55 @@ describe("InstalledAppGoogleOAuthAuthorizer", () => {
       providerAccountId: "google-user",
       refreshToken: "refresh",
     });
+  });
+
+  it("reports Google's safe OAuth error code without response details", async () => {
+    const authorizer = new InstalledAppGoogleOAuthAuthorizer(
+      "desktop-client-id",
+      async (url) => {
+        const authorizationUrl = new URL(url);
+        const redirectUri = authorizationUrl.searchParams.get("redirect_uri")!;
+        const state = authorizationUrl.searchParams.get("state")!;
+        await fetch(`${redirectUri}?code=sensitive-code&state=${state}`);
+      },
+      async () => new Response(
+        JSON.stringify({
+          error: "redirect_uri_mismatch",
+          error_description: "sensitive callback details",
+        }),
+        { status: 400 }
+      )
+    );
+
+    let message = "";
+    try {
+      await authorizer.authorize(["openid"]);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toBe(
+      "Google token exchange failed (400: redirect_uri_mismatch)"
+    );
+    expect(message).not.toContain("sensitive");
+  });
+
+  it("cancels a pending loopback authorization", async () => {
+    let browserOpened!: () => void;
+    const opened = new Promise<void>((resolve) => { browserOpened = resolve; });
+    const authorizer = new InstalledAppGoogleOAuthAuthorizer(
+      "desktop-client-id",
+      async () => browserOpened()
+    );
+    const authorization = authorizer.authorize(["openid"]);
+    await opened;
+    authorizer.cancel();
+
+    let message = "";
+    try {
+      await authorization;
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toBe("Google authorization cancelled");
   });
 });

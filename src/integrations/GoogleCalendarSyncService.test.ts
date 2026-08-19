@@ -21,6 +21,7 @@ const createProjection = () => {
       time_zone TEXT,
       is_primary INTEGER NOT NULL DEFAULT 0,
       sync_token TEXT,
+      notifications_enabled INTEGER NOT NULL DEFAULT 1,
       updated_at INTEGER NOT NULL,
       PRIMARY KEY(account_id, calendar_id)
     );

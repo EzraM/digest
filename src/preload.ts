@@ -49,6 +49,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     list: () => ipcRenderer.invoke("integrations:list"),
     connect: (integrationId: string) =>
       ipcRenderer.invoke("integrations:connect", integrationId),
+    cancelConnect: (integrationId: string) =>
+      ipcRenderer.invoke("integrations:cancel-connect", integrationId),
     disconnect: (integrationId: string, accountId: string) =>
       ipcRenderer.invoke("integrations:disconnect", integrationId, accountId),
   },

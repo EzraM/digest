@@ -11,16 +11,28 @@ export interface GoogleOAuthGrant {
 
 export interface GoogleOAuthAuthorizer {
   authorize(scopes: readonly string[]): Promise<GoogleOAuthGrant>;
+  cancel?(): void;
   revoke(refreshToken: string): Promise<void>;
 }
 
 type Fetch = typeof fetch;
 
+const oauthErrorCode = async (response: Response): Promise<string | null> => {
+  try {
+    const body = (await response.json()) as { error?: unknown };
+    return typeof body.error === "string" && /^[a-z_]+$/.test(body.error)
+      ? body.error
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 const encode = (value: Buffer): string => value.toString("base64url");
 
 const listenForAuthorizationCode = (
   expectedState: string
-): Promise<{ redirectUri: string; code: Promise<string> }> =>
+): Promise<{ redirectUri: string; code: Promise<string>; cancel(): void }> =>
   new Promise((ready, rejectReady) => {
     let resolveCode!: (code: string) => void;
     let rejectCode!: (error: Error) => void;
@@ -68,6 +80,11 @@ const listenForAuthorizationCode = (
       ready({
         redirectUri: `http://127.0.0.1:${address.port}/oauth/google/callback`,
         code,
+        cancel: () => {
+          server.close();
+          clearTimeout(timeout);
+          rejectCode(new Error("Google authorization cancelled"));
+        },
       });
     });
     const timeout = setTimeout(() => {
@@ -86,7 +103,10 @@ const exchangeCode = async (
     body: new URLSearchParams(parameters),
   });
   if (!tokenResponse.ok) {
-    throw new Error(`Google token exchange failed (${tokenResponse.status})`);
+    const code = await oauthErrorCode(tokenResponse);
+    throw new Error(
+      `Google token exchange failed (${tokenResponse.status}${code ? `: ${code}` : ""})`
+    );
   }
   const tokens = (await tokenResponse.json()) as {
     access_token: string;
@@ -125,10 +145,13 @@ const revokeToken = async (fetcher: Fetch, refreshToken: string): Promise<void> 
 };
 
 export class InstalledAppGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer {
+  private cancelPending: (() => void) | null = null;
+
   constructor(
     private readonly clientId: string,
     private readonly openExternal: (url: string) => Promise<unknown>,
-    private readonly fetcher: Fetch = fetch
+    private readonly fetcher: Fetch = fetch,
+    private readonly clientSecret = ""
   ) {}
 
   async authorize(scopes: readonly string[]): Promise<GoogleOAuthGrant> {
@@ -137,6 +160,7 @@ export class InstalledAppGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer 
     const challenge = encode(createHash("sha256").update(verifier).digest());
     const state = encode(randomBytes(24));
     const callback = await listenForAuthorizationCode(state);
+    this.cancelPending = callback.cancel;
     const authorizationUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authorizationUrl.search = new URLSearchParams({
       client_id: this.clientId,
@@ -149,9 +173,17 @@ export class InstalledAppGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer 
       code_challenge_method: "S256",
       state,
     }).toString();
-    await this.openExternal(authorizationUrl.toString());
-    const code = await callback.code;
-    return this.exchange(code, callback.redirectUri, verifier);
+    try {
+      await this.openExternal(authorizationUrl.toString());
+      const code = await callback.code;
+      return await this.exchange(code, callback.redirectUri, verifier);
+    } finally {
+      if (this.cancelPending === callback.cancel) this.cancelPending = null;
+    }
+  }
+
+  cancel(): void {
+    this.cancelPending?.();
   }
 
   async revoke(refreshToken: string): Promise<void> {
@@ -165,6 +197,7 @@ export class InstalledAppGoogleOAuthAuthorizer implements GoogleOAuthAuthorizer 
   ): Promise<GoogleOAuthGrant> {
     return exchangeCode(this.fetcher, {
       client_id: this.clientId,
+      ...(this.clientSecret ? { client_secret: this.clientSecret } : {}),
       code,
       code_verifier: verifier,
       grant_type: "authorization_code",

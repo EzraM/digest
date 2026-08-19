@@ -8,6 +8,32 @@ import { IntegrationAccountStore } from "../IntegrationAccountStore";
 import { DefaultGoogleAuthorizationProvider } from "./GoogleAuthorizationService";
 import { GoogleAuthorizationStore } from "./GoogleAuthorizationStore";
 import { InstalledAppGoogleOAuthAuthorizer } from "./GoogleOAuthAuthorizer";
+import type { GoogleOAuthAuthorizer } from "./GoogleOAuthAuthorizer";
+
+const createAuthorizer = (
+  clientId: string,
+  clientSecret: string,
+  openExternal: (url: string) => Promise<unknown>
+): GoogleOAuthAuthorizer => {
+  if (process.env.DIGEST_E2E === "oauth") {
+    return {
+      authorize: async (scopes) => ({
+        providerAccountId: "digest-e2e-user",
+        displayName: "Digest E2E User",
+        email: "digest-e2e@example.test",
+        scopes: [...scopes],
+        refreshToken: "digest-e2e-refresh-token",
+      }),
+      revoke: async () => undefined,
+    };
+  }
+  return new InstalledAppGoogleOAuthAuthorizer(
+    clientId,
+    openExternal,
+    fetch,
+    clientSecret
+  );
+};
 
 export const GOOGLE_AUTHORIZATION_SERVICE = {
   name: "google.authorization",
@@ -32,12 +58,16 @@ export const googleAuthorizationModule = {
           (url: string) => Promise<unknown>
         >(SERVICE_IDS.OPEN_EXTERNAL);
         const clientId = getEnvVar("GOOGLE_OAUTH_CLIENT_ID");
+        const clientSecret = getEnvVar("GOOGLE_OAUTH_CLIENT_SECRET");
         return new DefaultGoogleAuthorizationProvider(
           clientId,
           new IntegrationAccountStore(database),
           new GoogleAuthorizationStore(database),
           new SqliteCredentialStore(database, new ElectronSecretEncryption()),
-          new InstalledAppGoogleOAuthAuthorizer(clientId, openExternal)
+          createAuthorizer(clientId, clientSecret, openExternal),
+          fetch,
+          () => Date.now(),
+          clientSecret
         );
       },
     },

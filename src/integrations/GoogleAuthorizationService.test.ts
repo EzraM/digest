@@ -69,6 +69,7 @@ describe("DefaultGoogleAuthorizationProvider", () => {
       decrypt: async (value) => value.toString().replace(/^encrypted:/, ""),
     });
     let refreshScope: string | null = null;
+    let refreshClientSecret: string | null = null;
     const provider = new DefaultGoogleAuthorizationProvider(
       "web-client",
       new IntegrationAccountStore(database),
@@ -77,6 +78,7 @@ describe("DefaultGoogleAuthorizationProvider", () => {
       authorizer,
       async (_input, init) => {
         refreshScope = (init?.body as URLSearchParams).get("scope");
+        refreshClientSecret = (init?.body as URLSearchParams).get("client_secret");
         return new Response(
           JSON.stringify({
             access_token: "calendar-access",
@@ -86,7 +88,8 @@ describe("DefaultGoogleAuthorizationProvider", () => {
           { status: 200 }
         );
       },
-      () => 1_000
+      () => 1_000,
+      "desktop-client-secret"
     );
     const calendar = provider.forConsumer({
       consumerId: "google-calendar",
@@ -102,6 +105,7 @@ describe("DefaultGoogleAuthorizationProvider", () => {
     ).toBe("encrypted:refresh-secret");
     expect(await calendar.accessToken(account.id)).toBe("calendar-access");
     expect(refreshScope).toBe(calendarScope);
+    expect(refreshClientSecret).toBe("desktop-client-secret");
     database.close();
   });
 

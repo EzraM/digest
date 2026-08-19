@@ -260,3 +260,29 @@ export const openWindowFrom = async (
 };
 
 export const dispose = () => digestProcess.dispose();
+
+export const runOAuthE2E = async (): Promise<void> => {
+  const renderer = globalAppView?.webContents;
+  if (!renderer || renderer.isDestroyed()) throw new Error("Digest renderer is unavailable");
+  await renderer.executeJavaScript(`
+    (async () => {
+      const find = (label, selector) => new Promise((resolve, reject) => {
+        const deadline = Date.now() + 15000;
+        const poll = () => {
+          const element = [...document.querySelectorAll(selector)].find((candidate) =>
+            (candidate.getAttribute("aria-label") || candidate.textContent || "").trim() === label
+          );
+          if (element) { resolve(element); return; }
+          if (Date.now() >= deadline) { reject(new Error("Could not find " + label)); return; }
+          setTimeout(poll, 50);
+        };
+        poll();
+      });
+      const click = async (label, selector) => (await find(label, selector)).click();
+      await click("Default settings", "button[aria-label$=' settings']");
+      await click("Settings", "[role='menuitem']");
+      await click("Enable Google Calendar", "button");
+      await find("digest-e2e@example.test", "*");
+    })()
+  `, true);
+};

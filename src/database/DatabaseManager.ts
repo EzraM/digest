@@ -22,6 +22,7 @@ import migration012 from "./migrations/012_add_integration_accounts";
 import migration013 from "./migrations/013_add_calendar_projection";
 import migration014 from "./migrations/014_add_join_delivery_state";
 import migration015 from "./migrations/015_add_google_consumer_grants";
+import migration016 from "./migrations/016_add_calendar_notification_preferences";
 
 /** Singleton database manager that handles initialization and migrations. */
 export class DatabaseManager {
@@ -46,6 +47,7 @@ export class DatabaseManager {
     migration013,
     migration014,
     migration015,
+    migration016,
   ];
 
   private constructor() {
@@ -64,7 +66,9 @@ export class DatabaseManager {
 
     try {
       let dbPath: string;
-      if (isDevelopment()) {
+      if (process.env.DIGEST_DATABASE_PATH) {
+        dbPath = path.resolve(process.env.DIGEST_DATABASE_PATH);
+      } else if (isDevelopment()) {
         const devDbDir = path.join(process.cwd(), "db");
         fs.mkdirSync(devDbDir, { recursive: true });
         dbPath = path.join(devDbDir, "digest.db");

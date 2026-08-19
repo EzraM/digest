@@ -22,6 +22,7 @@ export interface IntegrationPlugin {
   start?(): void | Promise<void>;
   stop?(): void | Promise<void>;
   connect?(): Promise<ConnectedIntegrationAccount>;
+  cancelConnect?(): void;
   disconnect?(accountId: string): Promise<void>;
 }
 
@@ -73,5 +74,11 @@ export class IntegrationRegistry {
     const plugin = this.plugins.get(id);
     if (!plugin?.disconnect) throw new Error(`Integration cannot disconnect: ${id}`);
     await plugin.disconnect(accountId);
+  }
+
+  cancelConnect(id: string): void {
+    const plugin = this.plugins.get(id);
+    if (!plugin?.cancelConnect) throw new Error(`Integration cannot cancel connection: ${id}`);
+    plugin.cancelConnect();
   }
 }

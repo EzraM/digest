@@ -2,7 +2,6 @@ import Database from "better-sqlite3";
 import { extractConferenceLinks } from "./extractConferenceLinks";
 import {
   GoogleCalendarDelta,
-  GoogleCalendarEvent,
   GoogleCalendarSummary,
 } from "./GoogleCalendarClient";
 
@@ -22,6 +21,14 @@ export interface MeetingIdentity {
   accountId: string;
   calendarId: string;
   eventId: string;
+}
+
+export interface ProjectedCalendar {
+  accountId: string;
+  calendarId: string;
+  summary: string;
+  primary: boolean;
+  notificationsEnabled: boolean;
 }
 
 const eventTime = (value?: { date?: string; dateTime?: string }): number | null => {
@@ -80,6 +87,40 @@ export class CalendarProjectionStore {
       WHERE account_id = ? AND calendar_id = ?
     `).get(accountId, calendarId) as { sync_token: string | null } | undefined;
     return row?.sync_token ?? null;
+  }
+
+  calendars(): ProjectedCalendar[] {
+    const rows = this.database.prepare(`
+      SELECT account_id, calendar_id, summary, is_primary, notifications_enabled
+      FROM integration_calendars
+      ORDER BY account_id, is_primary DESC, summary, calendar_id
+    `).all() as Array<{
+      account_id: string;
+      calendar_id: string;
+      summary: string;
+      is_primary: number;
+      notifications_enabled: number;
+    }>;
+    return rows.map((row) => ({
+      accountId: row.account_id,
+      calendarId: row.calendar_id,
+      summary: row.summary,
+      primary: row.is_primary === 1,
+      notificationsEnabled: row.notifications_enabled === 1,
+    }));
+  }
+
+  setNotificationsEnabled(
+    accountId: string,
+    calendarId: string,
+    enabled: boolean
+  ): void {
+    const result = this.database.prepare(`
+      UPDATE integration_calendars
+      SET notifications_enabled = ?, updated_at = ?
+      WHERE account_id = ? AND calendar_id = ?
+    `).run(enabled ? 1 : 0, this.now(), accountId, calendarId);
+    if (result.changes === 0) throw new Error("Unknown Google calendar");
   }
 
   applyDelta(
@@ -154,7 +195,9 @@ export class CalendarProjectionStore {
       SELECT account_id, calendar_id, event_id, title, start_at, end_at,
              all_day, html_link, conference_links_json
       FROM calendar_events
-      WHERE status != 'cancelled' AND start_at >= ? AND start_at <= ?
+      JOIN integration_calendars USING (account_id, calendar_id)
+      WHERE status != 'cancelled' AND notifications_enabled = 1
+        AND start_at >= ? AND start_at <= ?
       ORDER BY start_at, end_at, event_id
     `).all(from, to) as Array<{
       account_id: string;
@@ -186,7 +229,8 @@ export class CalendarProjectionStore {
     to: number
   ): ProjectedCalendarEvent[] {
     return this.queryEvents(
-      `account_id = ? AND join_notified_at IS NULL
+      `calendar_events.account_id = ? AND notifications_enabled = 1
+       AND join_notified_at IS NULL
        AND conference_links_json != '[]' AND start_at >= ? AND start_at <= ?`,
       [accountId, from, to]
     );
@@ -194,7 +238,8 @@ export class CalendarProjectionStore {
 
   meeting(identity: MeetingIdentity): ProjectedCalendarEvent | null {
     return this.queryEvents(
-      "account_id = ? AND calendar_id = ? AND event_id = ?",
+      `calendar_events.account_id = ? AND calendar_events.calendar_id = ?
+       AND event_id = ? AND notifications_enabled = 1`,
       [identity.accountId, identity.calendarId, identity.eventId]
     )[0] ?? null;
   }
@@ -217,6 +262,7 @@ export class CalendarProjectionStore {
       SELECT account_id, calendar_id, event_id, title, start_at, end_at,
              all_day, html_link, conference_links_json
       FROM calendar_events
+      JOIN integration_calendars USING (account_id, calendar_id)
       WHERE status != 'cancelled' AND ${where}
       ORDER BY start_at, end_at, event_id
     `).all(...parameters) as Array<{

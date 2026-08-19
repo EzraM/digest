@@ -94,6 +94,7 @@ out/
 # Environment variables with secrets
 .env.local
 .env.*.local
+creds/
 
 # Development config with secrets (if someone accidentally adds real keys)
 src/config/development.local.ts

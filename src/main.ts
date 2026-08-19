@@ -3,6 +3,7 @@ import {
   dispose,
   openWindow,
   openWindowFrom,
+  runOAuthE2E,
 } from "./application/DigestApplication";
 import { DatabaseManager } from "./database/DatabaseManager";
 import { configureElectron } from "./electron/configureElectron";
@@ -22,8 +23,19 @@ app.on("ready", async () => {
       openWindowFrom(BrowserWindow.getFocusedWindow())
     );
     await openWindow();
+    if (process.env.DIGEST_E2E === "oauth") {
+      await runOAuthE2E();
+      process.stdout.write(
+        "OAuth Electron flow passed: settings → IPC → grant persistence → connected UI.\n"
+      );
+      app.quit();
+    }
   } catch (error) {
     log.debug(`Failed to create window: ${error}`, "main");
+    if (process.env.DIGEST_E2E === "oauth") {
+      process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
+      process.exitCode = 1;
+    }
     app.quit();
   }
 });

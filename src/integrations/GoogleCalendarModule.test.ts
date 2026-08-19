@@ -18,6 +18,17 @@ describe("GoogleCalendarModule", () => {
     const container = new Container();
     const database = new Database(":memory:");
     database.exec(`
+      CREATE TABLE integration_calendars (
+        account_id TEXT NOT NULL,
+        calendar_id TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        time_zone TEXT,
+        is_primary INTEGER NOT NULL DEFAULT 0,
+        sync_token TEXT,
+        notifications_enabled INTEGER NOT NULL DEFAULT 1,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY(account_id, calendar_id)
+      );
       CREATE TABLE calendar_events (
         account_id TEXT NOT NULL,
         calendar_id TEXT NOT NULL,

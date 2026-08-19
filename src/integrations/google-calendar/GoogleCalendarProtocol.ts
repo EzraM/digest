@@ -60,11 +60,66 @@ const joinRequestShape = shape<{ identity: MeetingIdentity }>((value) => {
   };
 });
 
+export interface CalendarNotificationPreference {
+  accountId: string;
+  calendarId: string;
+  summary: string;
+  primary: boolean;
+  notificationsEnabled: boolean;
+}
+
+const booleanField = (value: unknown, field: string): boolean => {
+  if (typeof value !== "boolean") throw new Error(`Expected ${field} to be a boolean`);
+  return value;
+};
+
+const calendarPreferenceShape = shape<CalendarNotificationPreference>((value) => {
+  if (!value || typeof value !== "object") throw new Error("Expected a calendar preference");
+  const candidate = value as Partial<CalendarNotificationPreference>;
+  return {
+    accountId: stringField(candidate.accountId, "accountId"),
+    calendarId: stringField(candidate.calendarId, "calendarId"),
+    summary: stringField(candidate.summary, "summary"),
+    primary: booleanField(candidate.primary, "primary"),
+    notificationsEnabled: booleanField(
+      candidate.notificationsEnabled,
+      "notificationsEnabled"
+    ),
+  };
+});
+
+const calendarPreferencesShape = shape<CalendarNotificationPreference[]>((value) => {
+  if (!Array.isArray(value)) throw new Error("Expected calendar preferences");
+  return value.map((preference) => calendarPreferenceShape.parse(preference));
+});
+
+const setCalendarNotificationsShape = shape<{
+  accountId: string;
+  calendarId: string;
+  enabled: boolean;
+}>((value) => {
+  if (!value || typeof value !== "object") throw new Error("Expected a calendar selection");
+  const candidate = value as { accountId?: unknown; calendarId?: unknown; enabled?: unknown };
+  return {
+    accountId: stringField(candidate.accountId, "accountId"),
+    calendarId: stringField(candidate.calendarId, "calendarId"),
+    enabled: booleanField(candidate.enabled, "enabled"),
+  };
+});
+
 export const googleCalendarProtocol = {
   requests: {
     readyMeetings: {
       input: emptyShape,
       output: meetingActionsShape,
+    },
+    listNotificationCalendars: {
+      input: emptyShape,
+      output: calendarPreferencesShape,
+    },
+    setCalendarNotifications: {
+      input: setCalendarNotificationsShape,
+      output: voidShape,
     },
     join: {
       input: joinRequestShape,
@@ -73,6 +128,7 @@ export const googleCalendarProtocol = {
   },
   events: {
     meetingReady: meetingActionShape,
+    calendarPreferencesChanged: emptyShape,
   },
 } satisfies ModuleProtocolDefinition<
   Record<string, RequestShape<unknown, unknown>>,

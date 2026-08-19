@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Group, Paper, Stack, Text } from "@mantine/core";
+import { Alert, Button, Checkbox, Group, Paper, Stack, Text } from "@mantine/core";
 import { usePageToolSlot } from "../../context/PageToolSlotContext";
 import { RendererModule } from "../../services/RendererModule";
 import { RendererModuleClient } from "../../services/RendererModuleClient";
@@ -35,13 +35,19 @@ const GoogleCalendarRenderer = (): null => {
         meeting,
       ]);
     };
-    const unsubscribe = calendar.on("meetingReady", receive);
-    void calendar.invoke("readyMeetings", {}).then((ready) => {
-      for (const meeting of ready) receive(meeting);
+    const refresh = () => void calendar.invoke("readyMeetings", {}).then((ready) => {
+      if (mounted) setMeetings(ready);
     });
+    const unsubscribeMeeting = calendar.on("meetingReady", receive);
+    const unsubscribePreferences = calendar.on(
+      "calendarPreferencesChanged",
+      refresh
+    );
+    refresh();
     return () => {
       mounted = false;
-      unsubscribe();
+      unsubscribeMeeting();
+      unsubscribePreferences();
     };
   }, [calendar]);
 
@@ -106,13 +112,32 @@ const GoogleCalendarRenderer = (): null => {
 
 const GoogleCalendarSettings = () => {
   const [accounts, setAccounts] = useState<Array<{ id: string; email?: string; displayName: string }>>([]);
+  const [calendars, setCalendars] = useState<Array<{
+    accountId: string;
+    calendarId: string;
+    summary: string;
+    primary: boolean;
+    notificationsEnabled: boolean;
+  }>>([]);
   const [connecting, setConnecting] = useState(false);
+  const [savingCalendar, setSavingCalendar] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const calendar = useMemo(
+    () => new RendererModuleClient<GoogleCalendarProtocol>(
+      "google-calendar",
+      googleCalendarProtocol
+    ),
+    []
+  );
 
   const refresh = useCallback(async () => {
-    const view = await window.electronAPI.integrations.list();
+    const [view, notificationCalendars] = await Promise.all([
+      window.electronAPI.integrations.list(),
+      calendar.invoke("listNotificationCalendars", {}),
+    ]);
     setAccounts(view.accounts.filter((account) => account.integrationId === "google-calendar"));
-  }, []);
+    setCalendars(notificationCalendars);
+  }, [calendar]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -123,11 +148,45 @@ const GoogleCalendarSettings = () => {
       await window.electronAPI.integrations.connect("google-calendar");
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Google authorization failed");
+      const message = cause instanceof Error ? cause.message : "Google authorization failed";
+      if (!message.toLowerCase().includes("cancel")) setError(message);
     } finally {
       setConnecting(false);
     }
   };
+
+  const cancelConnect = async () => {
+    setError(null);
+    try {
+      await window.electronAPI.integrations.cancelConnect("google-calendar");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const setCalendarNotifications = async (
+    accountId: string,
+    calendarId: string,
+    enabled: boolean
+  ) => {
+    const key = `${accountId}:${calendarId}`;
+    setSavingCalendar(key);
+    setError(null);
+    try {
+      await calendar.invoke("setCalendarNotifications", {
+        accountId,
+        calendarId,
+        enabled,
+      });
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not update calendar");
+    } finally {
+      setSavingCalendar(null);
+    }
+  };
+
+  const accountEmail = new Map(accounts.map((account) => [account.id, account.email]));
 
   return (
     <Stack gap="md">
@@ -137,11 +196,42 @@ const GoogleCalendarSettings = () => {
           <Button variant="light" color="red" onClick={async () => { await window.electronAPI.integrations.disconnect("google-calendar", account.id); await refresh(); }}>Disconnect</Button>
         </Group>
       ))}
+      {calendars.length > 0 && (
+        <Stack gap="xs">
+          <Text fw={600}>Meeting notifications</Text>
+          <Text size="sm" c="dimmed">
+            Show the notification bar for meetings from these calendars.
+          </Text>
+          {calendars.map((item) => {
+            const key = `${item.accountId}:${item.calendarId}`;
+            return (
+              <Checkbox
+                key={key}
+                checked={item.notificationsEnabled}
+                disabled={savingCalendar === key}
+                onChange={(event) => void setCalendarNotifications(
+                  item.accountId,
+                  item.calendarId,
+                  event.currentTarget.checked
+                )}
+                label={item.summary}
+                description={`${accountEmail.get(item.accountId) ?? item.accountId}${item.primary ? " · Primary" : ""}`}
+              />
+            );
+          })}
+        </Stack>
+      )}
       {error && <Alert color="red">{error}</Alert>}
       <Group>
-        <Button onClick={() => void connect()} loading={connecting}>
-          {accounts.length ? "Connect another Google account" : "Enable Google Calendar"}
-        </Button>
+        {connecting ? (
+          <Button variant="light" onClick={() => void cancelConnect()}>
+            Cancel authorization
+          </Button>
+        ) : (
+          <Button onClick={() => void connect()}>
+            {accounts.length ? "Connect another Google account" : "Enable Google Calendar"}
+          </Button>
+        )}
       </Group>
       <Text size="xs" c="dimmed">Google will ask for read-only Calendar access. This does not give Digest permission to edit events.</Text>
     </Stack>

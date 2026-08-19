@@ -146,6 +146,11 @@ export class DigestProcess {
       fn: (_event, integrationId: string, accountId: string) =>
         this.integrationRegistry.disconnect(integrationId, accountId),
     });
+    this.ipcRouter.register("integrations:cancel-connect", {
+      type: "invoke",
+      fn: (_event, integrationId: string) =>
+        this.integrationRegistry.cancelConnect(integrationId),
+    });
     this.ipcRouter.register("modules:invoke", {
       type: "invoke",
       fn: (event, moduleId: string, method: string, input: unknown) =>

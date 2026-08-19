@@ -68,6 +68,10 @@ export class GoogleCalendarPlugin implements IntegrationPlugin {
     return { ...account, integrationId: this.manifest.id };
   }
 
+  cancelConnect(): void {
+    this.authorization.cancelConnect?.();
+  }
+
   async disconnect(accountId: string): Promise<void> {
     if (!this.hasAccount(accountId)) return;
     this.scheduler?.removeOwner(accountId);

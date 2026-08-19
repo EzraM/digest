@@ -1,6 +1,9 @@
 import { app, protocol } from "electron";
 
 export const configureElectron = () => {
+  const userDataPath = process.env.DIGEST_USER_DATA_PATH;
+  if (userDataPath) app.setPath("userData", userDataPath);
+
   const remoteDebuggingPort = process.env.DIGEST_REMOTE_DEBUGGING_PORT;
   if (remoteDebuggingPort) {
     if (!/^\d+$/.test(remoteDebuggingPort)) {

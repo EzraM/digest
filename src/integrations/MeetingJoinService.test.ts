@@ -9,6 +9,7 @@ const createProjection = () => {
     CREATE TABLE integration_calendars (
       account_id TEXT NOT NULL, calendar_id TEXT NOT NULL, summary TEXT NOT NULL,
       time_zone TEXT, is_primary INTEGER NOT NULL DEFAULT 0, sync_token TEXT,
+      notifications_enabled INTEGER NOT NULL DEFAULT 1,
       updated_at INTEGER NOT NULL, PRIMARY KEY(account_id, calendar_id)
     );
     CREATE TABLE calendar_events (
@@ -125,6 +126,41 @@ describe("MeetingJoinService", () => {
     jobs.length = 0;
     service.reconcile("account");
     expect(jobs.length).toBe(1);
+    database.close();
+  });
+
+  it("does not schedule or show meetings from disabled calendars", () => {
+    const { database, projection } = createProjection();
+    projection.replaceCalendars("account", [
+      { id: "calendar", summary: "Calendar", primary: true },
+    ]);
+    projection.applyDelta(
+      "account",
+      "calendar",
+      {
+        syncToken: "sync",
+        events: [{
+          id: "event",
+          summary: "Planning",
+          start: { dateTime: new Date(601_000).toISOString() },
+          hangoutLink: "https://meet.google.com/abc-defg-hij",
+        }],
+      },
+      true
+    );
+    projection.setNotificationsEnabled("account", "calendar", false);
+    const jobs: Array<Omit<ScheduledJob<unknown>, "attempts">> = [];
+    const service = new MeetingJoinService(
+      projection,
+      { schedule: (job) => jobs.push(job) },
+      () => true,
+      () => 1_000
+    );
+
+    service.reconcile("account");
+    expect(jobs).toEqual([]);
+    expect(service.upcoming(0, 1_000_000)).toEqual([]);
+    expect(projection.calendars()[0].notificationsEnabled).toBe(false);
     database.close();
   });
 });

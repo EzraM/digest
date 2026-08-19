@@ -13,6 +13,7 @@ export interface GoogleAuthorization {
   connect(): Promise<StoredIntegrationAccount>;
   accessToken(accountId: string): Promise<string>;
   disconnect(accountId: string): Promise<void>;
+  cancelConnect?(): void;
 }
 
 export interface GoogleAuthorizationProvider {
@@ -42,7 +43,8 @@ export class DefaultGoogleAuthorizationProvider
     private readonly credentials: CredentialStore,
     private readonly authorizer: GoogleOAuthAuthorizer,
     private readonly fetcher: Fetch = fetch,
-    private readonly now: () => number = () => Date.now()
+    private readonly now: () => number = () => Date.now(),
+    private readonly clientSecret = ""
   ) {}
 
   forConsumer(request: {
@@ -58,6 +60,7 @@ export class DefaultGoogleAuthorizationProvider
       accessToken: (accountId) =>
         this.accessToken(request.consumerId, accountId, scopes),
       disconnect: (accountId) => this.disconnect(request.consumerId, accountId),
+      cancelConnect: () => this.authorizer.cancel?.(),
     };
   }
 
@@ -127,6 +130,7 @@ export class DefaultGoogleAuthorizationProvider
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: this.clientId,
+        ...(this.clientSecret ? { client_secret: this.clientSecret } : {}),
         refresh_token: refreshToken,
         grant_type: "refresh_token",
         scope: declaredScopes.join(" "),
