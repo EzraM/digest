@@ -2,11 +2,13 @@ import { Menu, MenuItemConstructorOptions } from "electron";
 
 type OpenWindow = () => Promise<void>;
 type OpenNotebook = () => void;
+type RequestBookmark = () => void;
 
 export const applicationMenuTemplate = (
   openWindow: OpenWindow,
   platform: NodeJS.Platform = process.platform,
-  openNotebook: OpenNotebook = () => undefined
+  openNotebook: OpenNotebook = () => undefined,
+  requestBookmark: RequestBookmark = () => undefined
 ): MenuItemConstructorOptions[] => [
   ...(platform === "darwin"
     ? [
@@ -28,6 +30,11 @@ export const applicationMenuTemplate = (
         accelerator: "CmdOrCtrl+L",
         click: openNotebook,
       },
+      {
+        label: "Bookmark Page",
+        accelerator: "CmdOrCtrl+D",
+        click: requestBookmark,
+      },
       { type: "separator" },
       platform === "darwin"
         ? { role: "close" as const }
@@ -41,10 +48,16 @@ export const applicationMenuTemplate = (
 
 export const configureApplicationMenu = (
   openWindow: OpenWindow,
-  openNotebook: OpenNotebook
+  openNotebook: OpenNotebook,
+  requestBookmark: RequestBookmark
 ): void => {
   const menu = Menu.buildFromTemplate(
-    applicationMenuTemplate(openWindow, process.platform, openNotebook)
+    applicationMenuTemplate(
+      openWindow,
+      process.platform,
+      openNotebook,
+      requestBookmark
+    )
   );
   Menu.setApplicationMenu(menu);
 };

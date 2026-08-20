@@ -37,4 +37,21 @@ describe("applicationMenuTemplate", () => {
     openNotebook?.click?.(undefined as never, undefined as never, undefined as never);
     expect(calls).toBe(1);
   });
+
+  it("requests a bookmark from Cmd+D", () => {
+    let calls = 0;
+    const template = applicationMenuTemplate(
+      async () => undefined,
+      "darwin",
+      () => undefined,
+      () => { calls += 1; }
+    );
+    const fileMenu = template.find((item) => item.label === "File");
+    const submenu = fileMenu?.submenu as Electron.MenuItemConstructorOptions[];
+    const bookmarkPage = submenu.find((item) => item.label === "Bookmark Page");
+
+    expect(bookmarkPage?.accelerator).toBe("CmdOrCtrl+D");
+    bookmarkPage?.click?.(undefined as never, undefined as never, undefined as never);
+    expect(calls).toBe(1);
+  });
 });

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { forwardRef, useRef } from "react";
 import { useClipCapture } from "../../hooks/useClipCapture";
 
 const BookmarkIcon = ({ filled }: { filled: boolean }) => (
@@ -30,7 +30,7 @@ type AddPageButtonProps = {
   onInteractionEnd?: () => void;
 };
 
-export const AddPageButton = ({
+export const AddPageButton = forwardRef<HTMLButtonElement, AddPageButtonProps>(({
   viewId,
   disabled = false,
   busy = false,
@@ -40,7 +40,7 @@ export const AddPageButton = ({
   onSelectionAdded,
   onInteractionStart,
   onInteractionEnd,
-}: AddPageButtonProps) => {
+}, ref) => {
   const { isCapturing, captureSelection } = useClipCapture();
   const requestInFlightRef = useRef(false);
 
@@ -81,6 +81,7 @@ export const AddPageButton = ({
 
   return (
     <button
+      ref={ref}
       className={className}
       type="button"
       onClick={handleAdd}
@@ -95,4 +96,6 @@ export const AddPageButton = ({
       {isBusy ? <span aria-hidden="true">…</span> : <BookmarkIcon filled={filled} />}
     </button>
   );
-};
+});
+
+AddPageButton.displayName = "AddPageButton";

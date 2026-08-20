@@ -21,7 +21,8 @@ app.on("ready", async () => {
   try {
     configureApplicationMenu(
       () => openWindowFrom(BrowserWindow.getFocusedWindow()),
-      () => BrowserWindow.getFocusedWindow()?.webContents.send("browser:open-notebook")
+      () => BrowserWindow.getFocusedWindow()?.webContents.send("browser:open-notebook"),
+      () => BrowserWindow.getFocusedWindow()?.webContents.send("browser:request-bookmark")
     );
     await openWindow();
     if (process.env.DIGEST_E2E === "oauth") {

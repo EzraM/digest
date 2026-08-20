@@ -102,6 +102,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.on("browser:open-notebook", handler);
       return () => ipcRenderer.removeListener("browser:open-notebook", handler);
     },
+    onRequestBookmark: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on("browser:request-bookmark", handler);
+      return () => ipcRenderer.removeListener("browser:request-bookmark", handler);
+    },
   },
   addBlockEvent: (e: { type: "open" | "close" }) => {
     log.debug(`Sending event: block-menu:${e.type}`, "preload");

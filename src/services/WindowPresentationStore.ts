@@ -112,13 +112,20 @@ export class WindowPresentationStore {
         this.eventDisposers.get(id)?.();
         const handleShortcut = (event: ElectronEvent, input: Input) => {
           if (
-            input.type === "keyDown" &&
-            (input.meta || input.control) &&
-            input.key.toLowerCase() === "l"
-          ) {
-            event.preventDefault();
-            rendererWebContents.send("browser:open-notebook");
-          }
+            input.type !== "keyDown" ||
+            (!input.meta && !input.control) ||
+            input.alt ||
+            input.shift
+          ) return;
+
+          const channel = {
+            l: "browser:open-notebook",
+            d: "browser:request-bookmark",
+          }[input.key.toLowerCase()];
+          if (!channel) return;
+
+          event.preventDefault();
+          rendererWebContents.send(channel);
         };
         view.webContents.on("before-input-event", handleShortcut);
         const disposeViewEvents = this.events.attach(

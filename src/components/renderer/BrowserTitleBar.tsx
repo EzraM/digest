@@ -111,11 +111,19 @@ export const BrowserTitleBar = ({
 }: BrowserTitleBarProps) => {
   const [actionHint, setActionHint] = useState("Open notebook");
   const bookmarkInputRef = useRef<HTMLInputElement>(null);
+  const bookmarkButtonRef = useRef<HTMLButtonElement>(null);
   const bookmark = usePageBookmark(notebookAddress, notebookWriter);
 
   useEffect(
     () => window.electronAPI.browser.onOpenNotebook(onReturn),
     [onReturn]
+  );
+
+  useEffect(
+    () => window.electronAPI.browser.onRequestBookmark(
+      () => bookmarkButtonRef.current?.click()
+    ),
+    []
   );
 
   useEffect(() => {
@@ -174,6 +182,7 @@ export const BrowserTitleBar = ({
       >
         <span className="browser-load-control">
           <AddPageButton
+            ref={bookmarkButtonRef}
             viewId={viewId}
             disabled={bookmark.phase === "naming" || bookmark.phase === "saving" || bookmark.phase === "error"}
             busy={bookmark.phase === "saving"}

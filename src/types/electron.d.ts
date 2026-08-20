@@ -68,6 +68,7 @@ interface ElectronAPI {
     getPageInfo: (viewId: string) => Promise<BrowserPageInfo>;
     getLivePages: () => Promise<LivePagesProjection>;
     onOpenNotebook: (callback: () => void) => () => void;
+    onRequestBookmark: (callback: () => void) => () => void;
   };
   addBlockEvent: (e: { type: "open" | "close" }) => void;
   onBrowserInitialized: (
