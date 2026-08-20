@@ -113,6 +113,11 @@ export const BrowserTitleBar = ({
   const bookmarkInputRef = useRef<HTMLInputElement>(null);
   const bookmark = usePageBookmark(notebookAddress, notebookWriter);
 
+  useEffect(
+    () => window.electronAPI.browser.onOpenNotebook(onReturn),
+    [onReturn]
+  );
+
   useEffect(() => {
     if (bookmark.phase === "naming") bookmarkInputRef.current?.focus();
   }, [bookmark.phase]);

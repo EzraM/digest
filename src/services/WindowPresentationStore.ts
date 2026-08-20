@@ -1,4 +1,10 @@
-import { BrowserWindow, WebContents, WebContentsView } from "electron";
+import {
+  BrowserWindow,
+  Event as ElectronEvent,
+  Input,
+  WebContents,
+  WebContentsView,
+} from "electron";
 import { randomUUID } from "node:crypto";
 import { ViewWorld, emptyWorld } from "../domains/browser-views/core/types";
 import { Command } from "../domains/browser-views/core/commands";
@@ -104,9 +110,29 @@ export class WindowPresentationStore {
     ) => {
         // When a view is created, attach event listeners
         this.eventDisposers.get(id)?.();
+        const handleShortcut = (event: ElectronEvent, input: Input) => {
+          if (
+            input.type === "keyDown" &&
+            (input.meta || input.control) &&
+            input.key.toLowerCase() === "l"
+          ) {
+            event.preventDefault();
+            rendererWebContents.send("browser:open-notebook");
+          }
+        };
+        view.webContents.on("before-input-event", handleShortcut);
+        const disposeViewEvents = this.events.attach(
+          id,
+          view,
+          (cmd) => this.dispatch(cmd),
+          profileId
+        );
         this.eventDisposers.set(
           id,
-          this.events.attach(id, view, (cmd) => this.dispatch(cmd), profileId)
+          () => {
+            view.webContents.removeListener("before-input-event", handleShortcut);
+            disposeViewEvents();
+          }
         );
         // Attach download handling to the view's session
         if (this.downloadManager) {

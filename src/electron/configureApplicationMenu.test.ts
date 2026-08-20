@@ -21,4 +21,20 @@ describe("applicationMenuTemplate", () => {
 
     expect(template[0].role).toBe("appMenu");
   });
+
+  it("opens the notebook from Cmd+L", () => {
+    let calls = 0;
+    const template = applicationMenuTemplate(
+      async () => undefined,
+      "darwin",
+      () => { calls += 1; }
+    );
+    const fileMenu = template.find((item) => item.label === "File");
+    const submenu = fileMenu?.submenu as Electron.MenuItemConstructorOptions[];
+    const openNotebook = submenu.find((item) => item.label === "Open Notebook");
+
+    expect(openNotebook?.accelerator).toBe("CmdOrCtrl+L");
+    openNotebook?.click?.(undefined as never, undefined as never, undefined as never);
+    expect(calls).toBe(1);
+  });
 });

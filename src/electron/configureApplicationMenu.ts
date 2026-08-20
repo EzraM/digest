@@ -1,10 +1,12 @@
 import { Menu, MenuItemConstructorOptions } from "electron";
 
 type OpenWindow = () => Promise<void>;
+type OpenNotebook = () => void;
 
 export const applicationMenuTemplate = (
   openWindow: OpenWindow,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  openNotebook: OpenNotebook = () => undefined
 ): MenuItemConstructorOptions[] => [
   ...(platform === "darwin"
     ? [
@@ -21,6 +23,11 @@ export const applicationMenuTemplate = (
         accelerator: "CmdOrCtrl+N",
         click: () => void openWindow(),
       },
+      {
+        label: "Open Notebook",
+        accelerator: "CmdOrCtrl+L",
+        click: openNotebook,
+      },
       { type: "separator" },
       platform === "darwin"
         ? { role: "close" as const }
@@ -32,7 +39,12 @@ export const applicationMenuTemplate = (
   { role: "windowMenu" },
 ];
 
-export const configureApplicationMenu = (openWindow: OpenWindow): void => {
-  const menu = Menu.buildFromTemplate(applicationMenuTemplate(openWindow));
+export const configureApplicationMenu = (
+  openWindow: OpenWindow,
+  openNotebook: OpenNotebook
+): void => {
+  const menu = Menu.buildFromTemplate(
+    applicationMenuTemplate(openWindow, process.platform, openNotebook)
+  );
   Menu.setApplicationMenu(menu);
 };

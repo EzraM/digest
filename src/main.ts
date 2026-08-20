@@ -19,8 +19,9 @@ configureElectron();
 app.on("ready", async () => {
   log.debug("App ready, creating window and setting up services", "main");
   try {
-    configureApplicationMenu(() =>
-      openWindowFrom(BrowserWindow.getFocusedWindow())
+    configureApplicationMenu(
+      () => openWindowFrom(BrowserWindow.getFocusedWindow()),
+      () => BrowserWindow.getFocusedWindow()?.webContents.send("browser:open-notebook")
     );
     await openWindow();
     if (process.env.DIGEST_E2E === "oauth") {

@@ -97,6 +97,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("browser:get-page-info", viewId),
     getLivePages: (): Promise<LivePagesProjection> =>
       ipcRenderer.invoke("browser:get-live-pages"),
+    onOpenNotebook: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on("browser:open-notebook", handler);
+      return () => ipcRenderer.removeListener("browser:open-notebook", handler);
+    },
   },
   addBlockEvent: (e: { type: "open" | "close" }) => {
     log.debug(`Sending event: block-menu:${e.type}`, "preload");
