@@ -27,6 +27,8 @@ function fakeView(url: string): WebContentsView {
   const webContents = {
     isDestroyed: () => false,
     getURL: () => url,
+    on: () => undefined,
+    removeListener: () => undefined,
   } as unknown as WebContents;
   return { webContents } as WebContentsView;
 }
